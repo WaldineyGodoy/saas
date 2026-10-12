@@ -58,8 +58,9 @@ export default function Login() {
         </Card>
 
         <Text style={[type.bodySm, { color: colors.inkMuted, textAlign: 'center' }]}>
-          Use o mesmo e-mail cadastrado no seu contrato B2W.
+          Já é cliente? Use o mesmo e-mail cadastrado no seu contrato B2W.
         </Text>
+        <Button label="Ainda não sou cliente: criar conta" icon="person-add" variant="secondary" onPress={() => router.push('/criar-conta')} />
         <Button label="Política de privacidade" variant="ghost" onPress={() => WebBrowser.openBrowserAsync(PRIVACIDADE_URL)} style={{ alignSelf: 'center', minHeight: 36 }} />
       </ScrollView>
     </KeyboardAvoidingView>

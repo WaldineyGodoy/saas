@@ -1,15 +1,12 @@
 import { useQueryClient } from '@tanstack/react-query';
-import * as DocumentPicker from 'expo-document-picker';
-import { File } from 'expo-file-system';
-import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
-import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useState } from 'react';
-import { Alert, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { Button, Card, Divider, Empty, Icon, KeyValue, Loading, Screen, SectionLabel } from '../../components/ui';
 import { gerarTermoAditivo, lerConta, usePlanosParaUc, type PlanoUc } from '../../lib/api';
-import { contaParaPedido, LIGACAO, mensagemDeErro, PDF_MAXIMO_BYTES, tamanhoReduzido, type ContaLida } from '../../lib/conta';
+import { escolherFoto as pegarFoto, escolherPdf as pegarPdf, fotografar as tirarFoto, type Arquivo } from '../../lib/captura';
+import { contaParaPedido, LIGACAO, mensagemDeErro, type ContaLida } from '../../lib/conta';
 import { fmtPct } from '../../lib/format';
 import { colors, radius, type } from '../../theme/tokens';
 
@@ -30,7 +27,7 @@ export default function NovaUc() {
   const [erro, setErro] = useState('');
   const planos = usePlanosParaUc(etapa === 'plano' ? conta?.concessionaria : undefined);
 
-  const ler = async (obterArquivo: () => Promise<{ base64: string; tipo: 'image/jpeg' | 'application/pdf' } | null>) => {
+  const ler = async (obterArquivo: () => Promise<Arquivo | null>) => {
     setErro('');
     try {
       const arquivo = await obterArquivo();
@@ -47,39 +44,9 @@ export default function NovaUc() {
     }
   };
 
-  // Reduz a foto (celulares tiram 12 MP ou mais) e manda em JPEG.
-  const fotoEmBase64 = async (asset: ImagePicker.ImagePickerAsset) => {
-    const ctx = ImageManipulator.manipulate(asset.uri);
-    const tamanho = tamanhoReduzido(asset.width, asset.height);
-    if (tamanho) ctx.resize(tamanho);
-    const imagem = await ctx.renderAsync();
-    const salva = await imagem.saveAsync({ format: SaveFormat.JPEG, compress: 0.85, base64: true });
-    if (!salva.base64) throw new Error('Não foi possível preparar a foto.');
-    return { base64: salva.base64, tipo: 'image/jpeg' as const };
-  };
-
-  const fotografar = () => ler(async () => {
-    const permissao = await ImagePicker.requestCameraPermissionsAsync();
-    if (!permissao.granted) {
-      Alert.alert('Câmera bloqueada', 'Libere o acesso à câmera nas configurações do celular, ou escolha uma foto da galeria.');
-      return null;
-    }
-    const r = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 1 });
-    return r.canceled ? null : fotoEmBase64(r.assets[0]!);
-  });
-
-  const escolherFoto = () => ler(async () => {
-    const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });
-    return r.canceled ? null : fotoEmBase64(r.assets[0]!);
-  });
-
-  const escolherPdf = () => ler(async () => {
-    const r = await DocumentPicker.getDocumentAsync({ type: 'application/pdf', copyToCacheDirectory: true });
-    if (r.canceled) return null;
-    const pdf = r.assets[0]!;
-    if (pdf.size && pdf.size > PDF_MAXIMO_BYTES) throw new Error('PDF grande demais. Envie a conta em PDF da distribuidora (normalmente menos de 1 MB).');
-    return { base64: await new File(pdf.uri).base64(), tipo: 'application/pdf' as const };
-  });
+  const fotografar = () => ler(tirarFoto);
+  const escolherFoto = () => ler(pegarFoto);
+  const escolherPdf = () => ler(pegarPdf);
 
   const abrirTermo = async (url: string) => {
     await WebBrowser.openBrowserAsync(url);

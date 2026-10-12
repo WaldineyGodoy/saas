@@ -688,6 +688,10 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
                                     />
                                 </div>
 
+                                {lead?.qualificacao?.investimento && (
+                                    <QualificacaoInvestimento q={lead.qualificacao.investimento} />
+                                )}
+
                                 <div>
                                     <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b', fontWeight: 600 }}>Originador</label>
                                     <select
@@ -1140,6 +1144,28 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
                     isInline={true}
                 />
             )}
+        </div>
+    );
+}
+
+// Respostas do app em "Ter renda com usinas e eletropostos" (20261011b): o
+// ponto de partida da conversa do especialista com o investidor.
+const FORMAS_INVESTIMENTO = {
+    usinas: 'Usinas solares', eletropostos: 'Eletropostos', cotas: 'Cotas de usina', consorcio: 'Consórcio',
+    financiamento: 'Financiamento', arrendamento: 'Arrendamento de área', vagas: 'Locação de vagas',
+};
+
+function QualificacaoInvestimento({ q }) {
+    const formas = (q.interesses || []).map(c => FORMAS_INVESTIMENTO[c] || c).join(', ');
+    const local = [q.cidade, q.uf].filter(Boolean).join('/');
+    return (
+        <div style={{ gridColumn: '1 / -1', background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: '8px', padding: '0.75rem 1rem', fontSize: '0.9rem', color: '#065f46' }}>
+            <div style={{ fontWeight: 700, marginBottom: '0.3rem' }}>Qualificação do investidor (app)</div>
+            {formas && <div><strong>Quer investir em:</strong> {formas}</div>}
+            {q.faixa && <div><strong>Faixa:</strong> {q.faixa}</div>}
+            {local && <div><strong>Local:</strong> {local}</div>}
+            {q.mensagem && <div><strong>Mensagem:</strong> {q.mensagem}</div>}
+            {q.em && <div style={{ color: '#047857', marginTop: '0.3rem', fontSize: '0.8rem' }}>Enviado em {new Date(q.em).toLocaleString('pt-BR')}</div>}
         </div>
     );
 }

@@ -5,11 +5,13 @@ import {
     urlTermos, textoWhatsappContrato, textoOriginador,
 } from '../_shared/onboarding-regras.ts'
 import { htmlEmailContrato } from '../_shared/email-contrato.ts'
+import { montarPdfAdesao } from '../_shared/pdf-adesao.ts'
 
 /**
  * Fecha a adesao publica sem passar por admin (v4).
  *
- * POST { token, pdf_base64, paginas_termo }
+ * POST { token, pdf_base64, paginas_termo }   (pagina publica: PDF do navegador)
+ * POST { token, gerar_no_servidor: true }      (app: PDF montado aqui, mesmo texto)
  *   200 { success, signature_link, contrato_url, contrato_url_curta, reenviado, avisos }
  *   400 paginas_termo/pdf invalidos | 401 token | 409 { error, faltantes } | 502 { error: 'contrato_indisponivel' }
  *
@@ -133,7 +135,8 @@ serve(async (req) => {
 
     try {
         const body = await req.json().catch(() => ({}));
-        const { token, pdf_base64, paginas_termo } = body ?? {};
+        const { token, gerar_no_servidor } = body ?? {};
+        let { pdf_base64, paginas_termo } = body ?? {};
 
         // 1. Token -> assinante
         if (!token || typeof token !== 'string') {
@@ -243,6 +246,24 @@ serve(async (req) => {
                 reenviado: true,
                 avisos
             });
+        }
+
+        // App (sem navegador para capturar): o termo e montado aqui, com o
+        // mesmo texto e as mesmas folhas da pagina publica (_shared/termo-adesao.js).
+        if (gerar_no_servidor === true) {
+            const [{ data: ucsContrato }, { data: marca }] = await Promise.all([
+                supabaseAdmin.from('consumer_units')
+                    .select('numero_uc, concessionaria, desconto_assinante, dia_vencimento, address, created_at')
+                    .eq('subscriber_id', subscriber_id)
+                    .order('created_at', { ascending: true }),
+                supabaseAdmin.from('branding_settings').select('company_name, primary_color, logo_url').limit(1).maybeSingle(),
+            ]);
+            const gerado = await montarPdfAdesao(sub, (ucsContrato ?? []).map((u: any) => ({
+                numero_uc: u.numero_uc, concessionaria: u.concessionaria, desconto_assinante: u.desconto_assinante,
+                dia_vencimento: u.dia_vencimento, cidade: u.address?.cidade, uf: u.address?.uf,
+            })), marca ?? {});
+            pdf_base64 = gerado.base64;
+            paginas_termo = gerado.paginasTermo;
         }
 
         // Validacao do corpo so e necessaria quando vamos criar o documento

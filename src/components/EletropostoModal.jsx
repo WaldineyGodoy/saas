@@ -11,7 +11,10 @@ import {
     montarPayloadEletroposto,
     mensagemErroEletroposto,
     casaBusca,
+    geocodificarEndereco,
 } from '../lib/eletropostos';
+
+const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || '';
 
 const ABAS = [
     { id: 'dados', label: 'Dados' },
@@ -34,6 +37,8 @@ const estadoInicial = (e) => ({
     cidade: e?.endereco?.cidade || '',
     uf: e?.endereco?.uf || '',
     ibge: e?.endereco?.ibge || '',
+    lat: Number.isFinite(Number(e?.endereco?.lat)) && e?.endereco?.lat != null ? Number(e.endereco.lat) : null,
+    lng: Number.isFinite(Number(e?.endereco?.lng)) && e?.endereco?.lng != null ? Number(e.endereco.lng) : null,
     qtd_carregadores: e?.qtd_carregadores ?? '',
     potencia_kw: e?.potencia_kw ?? '',
     tipo_recarga: e?.tipo_recarga || '',
@@ -165,7 +170,9 @@ export default function EletropostoModal({ eletroposto, somenteLeitura = false, 
 
         setSalvando(true);
         try {
-            const payload = montarPayloadEletroposto(form);
+            // Coordenadas do endereço atual; se a Mapbox não achar, mantém as que já havia.
+            const ponto = await geocodificarEndereco(form, MAPBOX_TOKEN);
+            const payload = montarPayloadEletroposto(ponto ? { ...form, ...ponto } : form);
             const { data, error } = idSalvo
                 ? await supabase.from('eletropostos').update(payload).eq('id', idSalvo).select('id').single()
                 : await supabase.from('eletropostos').insert(payload).select('id').single();

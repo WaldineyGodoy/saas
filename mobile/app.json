@@ -2,7 +2,7 @@
   "expo": {
     "name": "B2W Energia",
     "slug": "b2w-energia",
-    "version": "1.0.0",
+    "version": "1.6.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -53,12 +53,15 @@
       "predictiveBackGestureEnabled": false,
       "package": "br.com.b2wenergia.app",
       "permissions": [
-        "android.permission.CAMERA"
+        "android.permission.CAMERA",
+        "android.permission.ACCESS_COARSE_LOCATION"
       ],
       "blockedPermissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.WRITE_EXTERNAL_STORAGE"
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION"
       ]
     },
     "web": {
@@ -69,6 +72,12 @@
       "expo-font",
       "expo-secure-store",
       "expo-web-browser",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Sua localização é usada para mostrar os eletropostos B2W perto de você."
+        }
+      ],
       [
         "expo-splash-screen",
         {

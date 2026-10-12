@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Badge, Card, Empty, ErrorState, Hero, Icon, Loading, Metric, Row, Screen, SearchInput, SectionLabel } from '../../components/ui';
+import { BotaoConvite, ConviteRodape } from '../../components/Convites';
 import { useMinhasUsinas, usePerfil } from '../../lib/api';
 import { enderecoCurto, fmtBRL, fmtCiclo, fmtKwh, fmtPct, primeiroNome } from '../../lib/format';
 import { usinaStatus } from '../../lib/status';
@@ -23,7 +24,8 @@ export default function Invest() {
       <SectionLabel title="Portfólio de usinas" aside={`${usinas.data?.length ?? 0} cadastradas`} />
       {usinas.isLoading ? <Loading /> : usinas.error ? <ErrorState error={usinas.error} onRetry={() => usinas.refetch()} /> : lista.length === 0 ? (
         <Empty icon="solar-power" title={busca ? 'Nenhuma usina encontrada' : 'Nenhuma usina no seu portfólio'}
-          text={busca ? undefined : perfil.data?.supplier ? 'Suas usinas aparecem aqui após a conexão.' : 'Este login não está vinculado a um cadastro de investidor.'} />
+          text={busca ? undefined : perfil.data?.supplier ? 'Suas usinas aparecem aqui após a conexão.' : 'Tenha renda com a energia gerada pela sua usina ou eletroposto.'}
+          action={busca ? undefined : <BotaoConvite label="Ter renda com usinas e eletropostos" icon="solar-power" />} />
       ) : lista.map((u) => {
         const [label, tone] = usinaStatus(u.status);
         const eficiencia = Number(u.geracao_estimada_kwh) > 0 && u.geracao_mes_kwh != null
@@ -59,6 +61,9 @@ export default function Invest() {
           </Card>
         );
       })}
+      {(usinas.data ?? []).length > 0 ? (
+        <ConviteRodape titulo="Amplie seu portfólio" texto="Adquira uma nova usina ou um eletroposto e aumente sua renda com energia." botao="Quero uma nova usina" icon="solar-power" />
+      ) : null}
     </Screen>
   );
 }

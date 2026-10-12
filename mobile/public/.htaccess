@@ -1,0 +1,22 @@
+# Webapp B2W Energia (apps.b2wenergia.com.br, Hostinger).
+# Pagina unica: rotas do app (/login, /i/<id>, /indicacao...) caem no index.html.
+Options -Indexes
+RewriteEngine On
+RewriteBase /
+RewriteCond %{HTTPS} off
+RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+RewriteRule ^ /index.html [L]
+
+# index.html sempre fresco (versao nova aparece sem limpar cache); arquivos
+# com hash no nome podem ficar em cache longo.
+<IfModule mod_headers.c>
+  <FilesMatch "^index\.html$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
+  <FilesMatch "\.(js|css|png|ttf|woff2?)$">
+    Header set Cache-Control "public, max-age=604800"
+  </FilesMatch>
+</IfModule>

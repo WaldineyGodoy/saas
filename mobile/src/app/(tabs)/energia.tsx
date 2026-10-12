@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useMemo, useState } from 'react';
 import { Badge, Button, Card, Empty, ErrorState, Hero, ListItem, Loading, Metric, Row, Screen, SearchInput, SectionLabel } from '../../components/ui';
+import { BotaoConvite, ConviteRodape, useDestinoAssinarEnergia } from '../../components/Convites';
 import { useMeusPedidosUc, useMinhasUcs, usePerfil } from '../../lib/api';
 import { enderecoCurto, fmtBRL, fmtKwh, primeiroNome } from '../../lib/format';
 import { pedidoUcStatus, ucStatus } from '../../lib/status';
@@ -16,6 +17,7 @@ export default function Energia() {
   const pedidos = useMeusPedidosUc(ehAssinante);
   const pendentes = (pedidos.data ?? []).filter((p) => p.situacao !== 'uc_criada');
   const [busca, setBusca] = useState('');
+  const assinar = useDestinoAssinarEnergia();
 
   const tot = useMemo(() => {
     const l = ucs.data ?? [];
@@ -45,7 +47,10 @@ export default function Energia() {
         <Empty
           icon="bolt"
           title={busca ? 'Nenhuma UC encontrada' : 'Nenhuma UC no seu nome'}
-          text={busca ? 'Confira o número ou endereço digitado.' : perfil.data?.subscriber ? 'Suas unidades aparecem aqui assim que forem ativadas.' : 'Este login ainda não está vinculado a um contrato de assinatura.'}
+          text={busca ? 'Confira o número ou endereço digitado.' : perfil.data?.subscriber ? 'Suas unidades aparecem aqui assim que forem ativadas.' : 'Economize na conta de luz todo mês, sem obra e sem instalar nada.'}
+          action={busca || perfil.data?.subscriber ? undefined : (
+            <BotaoConvite label={perfil.data?.lead ? 'Continuar minha adesão' : 'Assinar energia'} icon="bolt" destino={assinar} />
+          )}
         />
       ) : (
         lista.map((u) => {
@@ -96,6 +101,9 @@ export default function Energia() {
           </Text>
           <Button label="Adicionar UC pela conta de luz" icon="photo-camera" variant="secondary" onPress={() => router.push('/energia/nova-uc')} />
         </Card>
+      ) : null}
+      {ehAssinante ? (
+        <ConviteRodape titulo="Usinas e eletropostos para assinantes" texto="Além de economizar, tenha renda com energia: cotas de usina, consórcio, financiamento ou um eletroposto." botao="Ter renda com usinas e eletropostos" />
       ) : null}
     </Screen>
   );
