@@ -37,6 +37,7 @@ DECLARE
   v_status text;
   v_erro   text;
   v_state  text;
+  v_plano_sbx uuid;
 BEGIN
   -- ================================================================
   -- 0) fn_papel_interno() nao pode divergir de src/lib/papeis.js
@@ -80,8 +81,11 @@ BEGIN
 
   INSERT INTO public.subscribers (originator_id) VALUES (v_orig) RETURNING id INTO v_sub;
 
-  INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status)
-  VALUES (v_sub, v_usina, 'consumidora', 'ativo') RETURNING id INTO v_uc;
+  INSERT INTO public.planos_assinatura_energia (nome, tipo_recompensa, gestao_percentual, piso_fornecedor_pct, recorrente_config)
+  VALUES ('SANDBOX invoices_pagamento_admin', 'recorrente', 10, 50, '{"regras_multinivel": {"b2w": {"niveis": {"L1": "10", "L2": "10", "L3": "10", "L4": "10"}, "max_niveis": 4}}}'::jsonb)
+  RETURNING id INTO v_plano_sbx;
+  INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, plano_assinatura_id)
+  VALUES (v_sub, v_usina, 'consumidora', 'ativo', v_plano_sbx) RETURNING id INTO v_uc;
 
   INSERT INTO public.invoices (uc_id, mes_referencia, vencimento, valor_a_pagar, valor_concessionaria, status)
   VALUES (v_uc, date_trunc('month', current_date)::date, current_date + 10, v_base, 0, 'a_vencer')

@@ -18,7 +18,11 @@ Estado real em 27/09/2026:
 
 ## §1 A matriz
 
-Base de cálculo líquida = **tarifa bruta da concessionária − Fio B − desconto do assinante**. Tudo abaixo incide sobre ela.
+Base de cálculo = **kWh compensado × (tarifa × (1 − desconto/100) − Fio B)**. Tudo abaixo incide sobre ela. O desconto incide sobre a tarifa cheia, e só depois se tira o Fio B — é o que o simulador da usina e `fn_tarifa_fornecedor` já fazem; algebricamente é o `tarifa − Fio B − desconto` do documento oficial, com o desconto em R$/kWh.
+
+**Fontes, decididas pelo dono em 29/09/2026 (Task 12 do plano):** o kWh vem de `invoices.consumo_compensado`; **tarifa e Fio B vêm do cadastro da concessionária** (tabela `Concessionaria`, editada no modal da concessionária), nunca de `invoices.fio_b_apurado` (zero nas 60 faturas pagas) nem de `invoices.tarifa_concessionaria` (ausente em 40); o desconto vem do plano.
+
+A regra por trás: *se houve energia compensada, a comissão é devida* — mesmo que a conta do assinante esteja zerada ou negativa por outros débitos (parcelamento, iluminação pública, consumo excedente não compensado). Entre 27/09 e 29/09 a base foi `valor_a_pagar − valor_concessionaria`, e as migrações `20260928i`/`20260929b`/`20260929c` a implementam; o que a derrubou foi `valor_concessionaria` trazer a conta inteira e abatê-la da base, zerando ou negativando a recompensa em **10 das 60 faturas pagas** que tinham energia compensada. (As **25** que esta linha citou em 29/09 mediam outra coisa: faturas que cobraram energia sem kWh compensado — repasse puro da conta, que não gera recompensa em modelo nenhum.)
 
 **Os níveis são relativos a quem recebe** (decisão do dono, 27/09/2026), não à profundidade absoluta da UC: cada beneficiário olha a distância entre ele e a UC que gerou a fatura. Por fatura, cada papel paga no máximo um beneficiário.
 
@@ -33,7 +37,7 @@ Base de cálculo líquida = **tarifa bruta da concessionária − Fio B − desc
 
 - **Assinante Conect** recebe só pela indicação direta (`max_niveis: 1`), um por fatura: quem indicou aquela UC.
 - **Dedução total por fatura:** 16% no pior caso (PPE direto), contra o teto de 22,3% que o piso do fornecedor permite na tarifa Cosern de referência.
-- **Trava anti-déficit:** o líquido do fornecedor nunca fica abaixo do piso contratual (50% da tarifa bruta, configurável por plano). Se ficar, corta na ordem Assinante Conect → Parceiro Power → Líder, grava o corte na fatura e alerta no CRM. A B2W nunca fica negativa.
+- **Trava anti-déficit:** o líquido do fornecedor nunca fica abaixo do piso contratual (50% da **tarifa bruta**, configurável por plano — decisão reafirmada pelo dono em 30/09/2026, quando o código foi corrigido para deixar de aplicar o percentual sobre a base líquida). O teto de dedução é `base − kWh × tarifa_bruta × piso_pct/100`, nunca negativo. Com a Cosern e desconto de 20% isso dá 15,8% da base, **abaixo** dos 16% de uma venda direta de PPE: nessa configuração a trava corta. Se ficar, corta na ordem Assinante Conect → Parceiro Power → Líder, grava o corte na fatura e alerta no CRM. A B2W nunca fica negativa.
 - **Vigência:** vitalícia enquanto a UC estiver ativa e adimplente **e** o recebedor estiver ativo. Sem trava de 48 meses.
 
 ### §1.1 Cargos de parceiro (hierarquia)

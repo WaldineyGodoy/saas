@@ -169,6 +169,13 @@ function conferir(campos, { valorPortal, refAlvo }) {
 
 const numero = (v) => (v == null || v === '' ? 0 : Number(v) || 0);
 
+// Ausente fica nulo: zero numa tarifa seria lido como "a conta cobrou zero".
+const numeroOuNulo = (v) => {
+    if (v == null || v === '') return null;
+    const n = Number(v);
+    return Number.isFinite(n) && n > 0 ? n : null;
+};
+
 /**
  * Converte a saída da parse-invoice nas colunas de `invoices`.
  * Só fatos da conta — nada que dependa do contrato do assinante.
@@ -186,6 +193,12 @@ function paraInvoice(campos) {
         data_leitura_anterior: campos.data_leitura_anterior || null,
         vencimento_concessionaria: campos.vencimento || null,
         linha_digitavel: campos.linha_digitavel || null,
+        // Preços unitários impressos na conta (R$/kWh). O faturamento e o
+        // razão usam estes, não o cadastro; fio_b_apurado é derivado no banco.
+        te_apurado: numeroOuNulo(campos.te_apurado),
+        tusd_apurado: numeroOuNulo(campos.tusd_apurado),
+        tusd_consumo_unit: numeroOuNulo(campos.tusd_consumo_unit),
+        tusd_compensado_unit: numeroOuNulo(campos.tusd_compensado_unit),
     };
 }
 

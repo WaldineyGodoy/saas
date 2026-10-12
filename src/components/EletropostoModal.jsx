@@ -79,7 +79,8 @@ export default function EletropostoModal({ eletroposto, somenteLeitura = false, 
         (async () => {
             const [planos, originadores, suppliers, ucs, ocupadas] = await Promise.all([
                 supabase.from('planos_assinatura_energia').select('id, nome, ativo')
-                    .eq('recorrente_config->>categoria_plano', 'eletroposto').order('nome'),
+                    .eq('recorrente_config->>categoria_plano', 'eletroposto')
+                    .eq('status', 'ativo').order('nome'),   // versao antiga so fica se ja for a atual
                 supabase.from('originators_v2').select('id, name').order('name'),
                 supabase.from('suppliers').select('id, name, status').order('name'),
                 supabase.from('consumer_units')

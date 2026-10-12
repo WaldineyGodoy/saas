@@ -259,7 +259,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
     }, [formData.status]);
 
     const fetchPlanos = async () => {
-        const { data } = await supabase.from('planos_assinatura_energia').select('id, nome, desconto_assinante').order('nome');
+        const { data } = await supabase.from('planos_assinatura_energia').select('id, nome, desconto_assinante, status').order('nome');
         setPlanos(data || []);
     };
 
@@ -918,6 +918,16 @@ Qualquer dúvida, é só responder esta mensagem.`;
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+
+        // Mesma regra de fn_consumer_units_plano_obrigatorio (20261010a).
+        const STATUS_EXIGE_PLANO = ['ativo', 'em_atraso', 'em_transf_titularidade'];
+        if (!formData.plano_assinatura_id
+            && formData.tipo_unidade !== 'geradora'
+            && STATUS_EXIGE_PLANO.includes(formData.status)) {
+            showAlert('Escolha o plano de assinatura da UC antes de colocá-la em operação.', 'error');
+            return;
+        }
+
         setLoading(true);
 
         try {
@@ -2557,14 +2567,21 @@ Qualquer dúvida, é só responder esta mensagem.`;
                                                 </div>
                                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem' }}>
                                                     <div>
-                                                        <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Plano de Serviço</label>
+                                                        <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Plano de Serviço *</label>
                                                         <select
                                                             value={formData.plano_assinatura_id}
                                                             onChange={e => setFormData({ ...formData, plano_assinatura_id: e.target.value })}
                                                             style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none' }}
                                                         >
-                                                            <option value="">Nenhum Plano (Usará fallback manual)</option>
-                                                            {planos.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
+                                                            <option value="">Selecione o plano de assinatura (obrigatório para a UC em operação)</option>
+                                                            {/* Só versão ativa; o plano atual da UC aparece mesmo se for versão antiga. */}
+                                                            {planos
+                                                                .filter(p => p.status === 'ativo' || p.id === formData.plano_assinatura_id)
+                                                                .map(p => (
+                                                                    <option key={p.id} value={p.id}>
+                                                                        {p.nome}{p.status === 'somente_contratos' ? ' (versão antiga — somente contratos)' : ''}
+                                                                    </option>
+                                                                ))}
                                                         </select>
                                                     </div>
                                                 </div>
