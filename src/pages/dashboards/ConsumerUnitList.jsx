@@ -158,6 +158,8 @@ const getStatusBadgeStyle = (status) => {
             return { bg: '#ffe4e6', text: '#b91c1c', label: 'Em Atraso' };
         case 'desconectado':
             return { bg: '#f3e8ff', text: '#6b21a8', label: 'Desconectado' };
+        case 'desligado_por_tt':
+            return { bg: '#ede9fe', text: '#5b21b6', label: 'Desligado por TT' };
         case 'cancelado':
             return { bg: '#fee2e2', text: '#991b1b', label: 'Cancelado' };
         case 'cancelado_inadimplente':

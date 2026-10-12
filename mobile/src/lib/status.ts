@@ -33,6 +33,7 @@ const UC: Record<string, [string, Tone]> = {
   em_atraso: ['Em atraso', 'bad'],
   sem_geracao: ['Sem geração', 'warn'],
   desconectado: ['Desconectada', 'warn'],
+  desligado_por_tt: ['Desligada por troca de titular', 'neutral'],
   cancelado: ['Cancelada', 'neutral'],
   cancelado_inadimplente: ['Cancelada', 'neutral'],
 };

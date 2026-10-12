@@ -62,6 +62,7 @@ export default function UCInvoicesModal({ uc, onClose }) {
             'atrasado': { color: '#991b1b', bg: '#fee2e2', label: 'Atrasado', icon: AlertCircle },
             'em_transf_titularidade': { color: '#5b21b6', bg: '#f5f3ff', label: 'Em Transf. de Titularidade', icon: Clock },
             'desconectado': { color: '#be123c', bg: '#fff1f2', label: 'Desconectado', icon: X },
+            'desligado_por_tt': { color: '#5b21b6', bg: '#f5f3ff', label: 'Desligado por TT', icon: X },
             'ag_emissao_boleto': { color: '#1e40af', bg: '#eff6ff', label: 'Sem Faturamento', icon: FileText },
             'cancelado': { color: '#475569', bg: '#f1f5f9', label: 'Cancelado', icon: X },
         };
