@@ -2573,7 +2573,7 @@ Qualquer dúvida, é só responder esta mensagem.`;
                                                             onChange={e => setFormData({ ...formData, plano_assinatura_id: e.target.value })}
                                                             style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none' }}
                                                         >
-                                                            <option value="">Nenhum Plano (Usará fallback manual)</option>
+                                                            <option value="">Selecione o plano de assinatura (obrigatório para a UC em operação)</option>
                                                             {/* Só versão ativa; o plano atual da UC aparece mesmo se for versão antiga. */}
                                                             {planos
                                                                 .filter(p => p.status === 'ativo' || p.id === formData.plano_assinatura_id)
