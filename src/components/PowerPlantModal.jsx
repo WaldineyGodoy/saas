@@ -2953,6 +2953,9 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
         }
     };
 
+    // O retrato das UCs (prioridade ou porcentagem) é montado no banco por
+    // fn_gerar_lista_rateio, a mesma função que a troca de titularidade usa.
+    // Por isso o cálculo parte dos dados SALVOS, não do que está na tela.
     const handleCreateRateioCard = async () => {
         if (!usina?.id) {
             showAlert('Salve a usina antes de criar uma Lista de Rateio.', 'warning');
@@ -2964,105 +2967,29 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
         }
 
         const confirmed = await showConfirm(
-            'Criar Lista de Rateio',
-            `Criar um card de Lista de Rateio para a usina "${formData.name}"?\n\nSerão incluídas apenas UCs Ativas, Em Atraso e Ag. Conexão (${selectedUCs.filter(uc => uc.tipo_unidade === 'geradora' || ['ativo', 'em_atraso', 'aguardando_conexao'].includes(uc.status)).length} de ${selectedUCs.length} UC(s)).`,
-            'Sim, Criar',
+            `Gerar a Lista de Rateio da usina "${formData.name}"?\n\nO cálculo usa os dados SALVOS da usina e das UCs: se alterou a ordem de prioridade, o tipo de rateio ou o saldo remanescente, salve antes. Entram as UCs Ativas, Em Atraso e Ag. Conexão, mais a geradora. Se já existir um card "Criada" desta usina, ele é atualizado em vez de duplicado.`,
+            'Gerar Lista de Rateio',
+            'Sim, Gerar',
             'Cancelar'
         );
         if (!confirmed) return;
 
-        // Only include UCs with allowed statuses (+ geradora is always included)
-        const ALLOWED_RATEIO_STATUSES = ['ativo', 'em_atraso', 'aguardando_conexao'];
-        const eligibleUCs = selectedUCs.filter(uc =>
-            uc.tipo_unidade === 'geradora' || ALLOWED_RATEIO_STATUSES.includes(uc.status)
-        );
-
-        if (eligibleUCs.length === 0) {
-            showAlert('Nenhuma UC elegível (Ativa, Em Atraso ou Ag. Conexão) para criar a lista.', 'warning');
-            return;
-        }
-
-        // Build the same processedUCs logic as handleGenerateList
-        const geradora = eligibleUCs.find(u => u.tipo_unidade === 'geradora');
-        const beneficiarias = eligibleUCs.filter(u => u.tipo_unidade !== 'geradora');
-        const sortedUCs = geradora ? [geradora, ...beneficiarias] : beneficiarias;
-        const isPorcentagem = formData.rateio_type === 'porcentagem';
-        let processedUCs = [];
-
-        if (isPorcentagem) {
-            let currentTotalPrc = 0;
-            let saldoRemanescenteIndex = -1;
-            const totalCapacity = Number(formData.geracao_estimada_kwh) || 1;
-
-            sortedUCs.forEach((uc, idx) => {
-                if (uc.saldo_remanescente) saldoRemanescenteIndex = idx;
-            });
-            if (saldoRemanescenteIndex === -1) {
-                const geradoraIdx = sortedUCs.findIndex(uc => uc.tipo_unidade === 'geradora');
-                saldoRemanescenteIndex = geradoraIdx !== -1 ? geradoraIdx : 0;
-            }
-
-            for (let i = 0; i < sortedUCs.length; i++) {
-                const uc = { ...sortedUCs[i] };
-                const kWhVal = Number(uc.franquia) || 0;
-                const prcVal = (kWhVal / totalCapacity) * 100;
-                if (currentTotalPrc + prcVal <= 100) {
-                    currentTotalPrc += prcVal;
-                    uc.calculatedPercentage = prcVal;
-                    processedUCs.push(uc);
-                } else if (currentTotalPrc < 100) {
-                    uc.calculatedPercentage = 100 - currentTotalPrc;
-                    currentTotalPrc = 100;
-                    processedUCs.push(uc);
-                    break;
-                } else break;
-            }
-            if (currentTotalPrc < 100 && processedUCs.length > 0) {
-                const targetId = sortedUCs[saldoRemanescenteIndex]?.id;
-                const targetInProcessed = processedUCs.findIndex(u => u.id === targetId);
-                if (targetInProcessed !== -1) {
-                    processedUCs[targetInProcessed].calculatedPercentage = (processedUCs[targetInProcessed].calculatedPercentage || 0) + (100 - currentTotalPrc);
-                } else {
-                    processedUCs[0].calculatedPercentage = (processedUCs[0].calculatedPercentage || 0) + (100 - currentTotalPrc);
-                }
-            }
-        } else {
-            processedUCs = sortedUCs.map((uc, idx) => ({ ...uc, prioridade: idx + 1 }));
-        }
-
-        // Build snapshot with relevant fields only
-        const ucsSnapshot = processedUCs.map(uc => {
-            const sub = subscribers.find(s => s.id === uc.subscriber_id);
-            return {
-                id: uc.id,
-                numero_uc: uc.numero_uc,
-                tipo_unidade: uc.tipo_unidade,
-                status: uc.status,
-                franquia: uc.franquia,
-                consumo_medio_kwh: uc.consumo_medio_kwh,
-                cpf_cnpj: uc.cpf_cnpj_fatura || sub?.cpf_cnpj || '',
-                saldo_remanescente: uc.saldo_remanescente,
-                prioridade: uc.prioridade,
-                calculatedPercentage: uc.calculatedPercentage
-            };
-        });
-
         try {
-            const now = new Date().toISOString();
-            const { error } = await supabase.from('rateio_lists').insert({
-                usina_id: usina.id,
-                usina_name: formData.name,
-                concessionaria: formData.concessionaria,
-                unidade_geradora: formData.unidade_geradora,
-                qtd_ucs: processedUCs.length,
-                ucs_snapshot: ucsSnapshot,
-                rateio_type: formData.rateio_type,
-                status: 'criada',
-                status_dates: { criada_at: now }
-            });
-
+            const { data: cardId, error } = await supabase.rpc('fn_gerar_lista_rateio', { p_usina_id: usina.id, p_origem: 'manual' });
             if (error) throw error;
-            showAlert(`Lista de Rateio criada com ${processedUCs.length} UC(s)! Acesse o menu "Lista de Rateio" para acompanhar.`, 'success');
+
+            if (!cardId) {
+                // null: ou há lista em processamento na concessionária, ou nenhuma UC elegível.
+                const { data: u } = await supabase.from('usinas').select('lista_rateio_pendente').eq('id', usina.id).maybeSingle();
+                showAlert(
+                    u?.lista_rateio_pendente
+                        ? 'Esta usina já tem uma lista em processamento na concessionária. O card novo é criado sozinho quando ela for concluída, reprovada ou cancelada.'
+                        : 'Nenhuma UC elegível (Ativa, Em Atraso ou Ag. Conexão) para criar a lista.',
+                    'warning'
+                );
+                return;
+            }
+            showAlert('Lista de Rateio gerada. Acompanhe no menu "Lista de Rateio".', 'success');
         } catch (err) {
             console.error('Error creating rateio card:', err);
             showAlert('Erro ao criar Lista de Rateio: ' + err.message, 'error');
