@@ -1021,6 +1021,47 @@ Qualquer dúvida, é só responder esta mensagem.`;
                 throw new Error('Para faturar consumo de terceiro é preciso vincular o assinante que será cobrado.');
             }
 
+            // Autoconsumo remoto: a UC só entra na usina com o titular da conta
+            // igual ao da UG. Se ainda não é, o cadastro nasce SEM usina e a
+            // troca de titularidade é iniciada logo depois de salvar; a UC só é
+            // vinculada quando a TT conclui (fn_concluir_tt).
+            let usinaParaTT = null;
+            if (payload.usina_id && payload.tipo_unidade !== 'geradora' && !consumerUnit?.usina_id) {
+                const usinaAlvo = usinas.find(u => u.id === payload.usina_id);
+                if (usinaAlvo?.modalidade === 'auto_consumo_remoto') {
+                    const { data: ug } = await supabase
+                        .from('consumer_units')
+                        .select('numero_uc, titular_fatura_id')
+                        .eq('usina_id', payload.usina_id).eq('tipo_unidade', 'geradora')
+                        .limit(1).maybeSingle();
+                    const soDigitos = (v) => (v || '').replace(/\D/g, '');
+                    const docDe = (id) => soDigitos(subscribers.find(sub => sub.id === id)?.cpf_cnpj);
+                    const docUC = docDe(payload.titular_fatura_id);
+                    const docUG = docDe(ug?.titular_fatura_id);
+                    const mesmoTitular = ug?.titular_fatura_id && payload.titular_fatura_id
+                        && (ug.titular_fatura_id === payload.titular_fatura_id || (docUC && docUC === docUG));
+                    if (ug?.titular_fatura_id && !mesmoTitular) {
+                        if (!payload.titular_fatura_id) {
+                            throw new Error('Informe o titular da conta de energia da UC (o cedente da troca de titularidade).');
+                        }
+                        if (!payload.plano_assinatura_id) {
+                            throw new Error('Escolha o plano de assinatura da UC: durante a troca de titularidade ela fica "Em Transf. de Titularidade", que exige plano.');
+                        }
+                        const nomeUC = subscribers.find(sub => sub.id === payload.titular_fatura_id)?.name || 'titular da UC';
+                        const nomeUG = subscribers.find(sub => sub.id === ug.titular_fatura_id)?.name || 'titular da UG';
+                        const ok = await showConfirm(
+                            `A conta de energia desta UC está em ${nomeUC} e a UG ${ug.numero_uc} da usina ${usinaAlvo.name} está em ${nomeUG}. Em autoconsumo remoto a UC só pode ser vinculada depois da troca de titularidade. Salvar a UC e iniciar a troca agora?`,
+                            'Troca de titularidade necessária',
+                            'Salvar e iniciar TT',
+                            'Voltar'
+                        );
+                        if (!ok) { setLoading(false); return; }
+                        usinaParaTT = payload.usina_id;
+                        payload.usina_id = null;
+                    }
+                }
+            }
+
             let result;
             if (consumerUnit?.id) {
                 result = await supabase.from('consumer_units').update(payload).eq('id', consumerUnit.id).select().single();
@@ -1029,6 +1070,19 @@ Qualquer dúvida, é só responder esta mensagem.`;
             }
 
             if (result.error) throw result.error;
+
+            if (usinaParaTT) {
+                const { error: ttError } = await supabase.rpc('fn_iniciar_tt', { p_uc_id: result.data.id, p_usina_id: usinaParaTT });
+                if (ttError) {
+                    showAlert(`UC salva, mas a troca de titularidade não foi iniciada: ${ttError.message}. Inicie pelo painel "Troca de titularidade" da UC.`, 'warning');
+                } else {
+                    showAlert('UC salva e troca de titularidade iniciada. A UC será vinculada à usina quando a TT concluir.', 'success');
+                    // O RPC mudou a UC (status, usina_destino_id): devolve a linha atual.
+                    const { data: atual } = await supabase.from('consumer_units').select('*').eq('id', result.data.id).maybeSingle();
+                    if (atual) result.data = atual;
+                }
+            }
+
             onSave(result.data);
             onClose();
         } catch (error) {

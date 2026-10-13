@@ -52,6 +52,8 @@ export default function TrocaTitularidadePanel({ uc, usinas, subscribers, onUcAt
     const [tt, setTt] = useState(null);
     const [eventos, setEventos] = useState([]);
     const [ugNumero, setUgNumero] = useState('');
+    // Lista de rateio gerada por esta TT (a distribuidora só compensa a UC depois dela).
+    const [rateio, setRateio] = useState(null);
     const [carregando, setCarregando] = useState(true);
     const [agindo, setAgindo] = useState(false);
 
@@ -93,8 +95,17 @@ export default function TrocaTitularidadePanel({ uc, usinas, subscribers, onUcAt
             ]);
             setEventos(ev.data || []);
             setUgNumero(ug.data?.numero_uc || '');
+            if (atual.rateio_list_id) {
+                const { data: rl } = await supabase.from('rateio_lists')
+                    .select('status, protocolo, prazo_limite, alerta_prazo, motivo_reprovacao')
+                    .eq('id', atual.rateio_list_id).maybeSingle();
+                setRateio(rl || null);
+            } else {
+                setRateio(null);
+            }
         } else {
             setEventos([]);
+            setRateio(null);
         }
         setCarregando(false);
     }, [ucId]);
@@ -265,6 +276,24 @@ export default function TrocaTitularidadePanel({ uc, usinas, subscribers, onUcAt
                         <div style={{ background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: '8px', padding: '0.8rem', fontSize: '0.82rem', color: '#047857', lineHeight: 1.5, display: 'flex', gap: '0.4rem' }}>
                             <CheckCircle size={15} style={{ minWidth: 15, marginTop: 2 }} />
                             <span>Concluída em {fmtData(tt.data_conclusao)}. A UC antiga ({tt.numero_uc_origem}) segue como registro "Desligado por TT", acompanhada por cerca de 90 dias para a conta final.</span>
+                        </div>
+                    )}
+
+                    {tt.status === 'concluida' && (
+                        <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '8px', padding: '0.8rem', fontSize: '0.82rem', color: '#92400e', lineHeight: 1.5 }}>
+                            <div style={{ fontWeight: 700 }}>Lista de Rateio (alteração da lista de compensação na concessionária)</div>
+                            {rateio ? (
+                                <div>
+                                    {{ criada: 'Card criado — falta enviar a solicitação à concessionária e registrar o protocolo.',
+                                       processando: `Solicitação ${rateio.protocolo || ''} em análise na concessionária${rateio.prazo_limite ? ` (prazo até ${fmtData(rateio.prazo_limite)})` : ''}.`,
+                                       concluida: 'Aprovada: a UC foi ativada.',
+                                       reprovada: `Reprovada${rateio.motivo_reprovacao ? `: ${rateio.motivo_reprovacao}` : ''}. Corrija o cadastro e refaça a lista.`,
+                                       cancelada: 'Card cancelado.' }[rateio.status] || rateio.status}
+                                </div>
+                            ) : (
+                                <div>Ainda sem card: a usina tem uma lista em processamento na concessionária. O card novo nasce quando ela fechar.</div>
+                            )}
+                            <div style={{ color: '#a16207' }}>Enquanto a lista não for aprovada, a UC fica em Aguardando Conexão.</div>
                         </div>
                     )}
 
