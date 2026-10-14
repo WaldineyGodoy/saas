@@ -267,3 +267,34 @@ export async function gerarContratoAdesao(token: string): Promise<string> {
 export type MeuOriginador = { id: string; name: string; short_url: string | null; ativo: boolean } | null;
 export const useMeuOriginador = (enabled = true) =>
   useQuery({ queryKey: ['meu-originador'], queryFn: () => rpc<MeuOriginador>('app_meu_originador'), enabled });
+
+// ---------------------------------------------------------------------------
+// Adesão assistida: o Parceiro Power cadastra um novo assinante para a rede
+// dele (Home Connect). O contrato é do cliente e vai para o WhatsApp e o
+// e-mail dele; o originador é sempre o parceiro logado.
+
+export type DadosAdesaoCliente = DadosAdesao & { email: string };
+
+export const criarAdesaoCliente = (dados: DadosAdesaoCliente) =>
+  rpc<{ subscriber_id: string; onboarding_token: string }>('app_criar_adesao_cliente', { p_dados: dados });
+
+export type AdesaoCliente = (NonNullable<MinhaAdesao> & { nome?: string; email?: string | null; phone?: string | null }) | null;
+
+/** Adesão de um cliente do parceiro (etapa, documentos que faltam, token). */
+export const useAdesaoCliente = (subscriberId?: string) =>
+  useQuery({
+    queryKey: ['adesao-cliente', subscriberId],
+    queryFn: () => rpc<AdesaoCliente>('app_adesao_cliente', { p_subscriber_id: subscriberId }),
+    enabled: Boolean(subscriberId),
+  });
+
+export type ClienteParceiro = {
+  id: string; tipo: 'assinante' | 'lead'; name: string; status: string;
+  etapa: 'interessado' | 'adesao' | 'assinatura' | string;
+  numero_uc: string | null; cidade: string | null; uf: string | null;
+  consumo_kwh: number | null; comissao: number; criado_em: string;
+};
+
+/** Rede do Parceiro Power: clientes (com etapa e comissão) e interessados. */
+export const useRedeParceiro = (enabled = true) =>
+  useQuery({ queryKey: ['rede-parceiro'], queryFn: () => rpc<ClienteParceiro[]>('app_rede_parceiro'), enabled });

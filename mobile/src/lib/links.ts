@@ -46,6 +46,21 @@ export const textoConviteParceiro = (nome: string | undefined | null, link: stri
     + `sem obra e sem instalar nada. Faça sua simulação e assine pelo meu link: ${link}`;
 };
 
+/** Mensagem do parceiro para o cliente assinar o contrato da adesão
+ *  assistida (o link é o da Autentique, em nome do cliente). */
+export const textoContratoCliente = (cliente: string | undefined | null, link: string) => {
+  if (!link) return '';
+  const n = primeiro(cliente);
+  return `${n ? `Oi, ${n}!` : 'Oi!'} Sua adesão à energia por assinatura da B2W Energia está pronta. `
+    + `Falta só você assinar o contrato, pelo celular: ${link}`;
+};
+
+/** wa.me para um celular do banco (DDD + número, sem o 55). */
+export const whatsappPara = (celular: string | null | undefined, texto: string) => {
+  const d = String(celular ?? '').replace(/\D/g, '');
+  return `https://wa.me/${d.length >= 10 ? `55${d}` : ''}?text=${encodeURIComponent(texto)}`;
+};
+
 /** QR do carregador: `https://crm.b2wenergia.com.br/recarga?posto=<uuid>&conector=<n>`.
  *  Aceita tambem so o UUID do posto (ID digitado a mao). */
 export const parseQrRecarga = (raw: string): { posto: string; conector: string } | null => {

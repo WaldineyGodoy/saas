@@ -70,6 +70,7 @@ function RootStack() {
         <Stack.Screen name="scan" options={{ title: 'Escanear carregador', presentation: 'modal' }} />
         <Stack.Screen name="indicacao" options={{ title: 'Indicação' }} />
         <Stack.Screen name="adesao" options={{ title: 'Adesão' }} />
+        <Stack.Screen name="adesao-cliente" options={{ title: 'Novo assinante' }} />
         <Stack.Screen name="comecar" options={{ title: 'Começar' }} />
         <Stack.Screen name="parceiro" options={{ title: 'Parceiro Power' }} />
         <Stack.Screen name="investir" options={{ title: 'B2W Invest' }} />
