@@ -34,6 +34,18 @@ export const textoIndicacao = (nome: string | undefined, link: string) => {
     + `Faça sua simulação e assine pelo meu link: ${link}`;
 };
 
+/** Link do Parceiro Power: o curto do encurtador (o que ele já divulga) ou,
+ *  enquanto ele não sai, a rota do webapp, que aceita convite de parceiro. */
+export const linkParceiro = (o?: { id: string; short_url: string | null } | null) =>
+  !o?.id ? '' : o.short_url || `https://apps.b2wenergia.com.br/i/${o.id}`;
+
+export const textoConviteParceiro = (nome: string | undefined | null, link: string) => {
+  if (!link) return '';
+  const n = primeiro(nome);
+  return `${n ? `Oi! Aqui é ${n}, parceiro da B2W Energia.` : 'Oi!'} Você pode economizar na conta de luz com energia limpa, `
+    + `sem obra e sem instalar nada. Faça sua simulação e assine pelo meu link: ${link}`;
+};
+
 /** QR do carregador: `https://crm.b2wenergia.com.br/recarga?posto=<uuid>&conector=<n>`.
  *  Aceita tambem so o UUID do posto (ID digitado a mao). */
 export const parseQrRecarga = (raw: string): { posto: string; conector: string } | null => {

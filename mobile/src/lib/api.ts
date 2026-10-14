@@ -262,3 +262,8 @@ export async function gerarContratoAdesao(token: string): Promise<string> {
   }
   return data.signature_link as string;
 }
+
+/** Cadastro de Parceiro Power da conta (id e link de indicação), ou null. */
+export type MeuOriginador = { id: string; name: string; short_url: string | null; ativo: boolean } | null;
+export const useMeuOriginador = (enabled = true) =>
+  useQuery({ queryKey: ['meu-originador'], queryFn: () => rpc<MeuOriginador>('app_meu_originador'), enabled });

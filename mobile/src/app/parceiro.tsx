@@ -9,6 +9,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { cadastrarParceiro, type DadosParceiro } from '../lib/api';
 import { buscarCep, documentoValido, soDigitos, tipoDocumento } from '../lib/documento';
 import { celularBR } from '../lib/indicacao';
+import { linkParceiro } from '../lib/links';
 import { colors, space, type } from '../theme/tokens';
 
 type TipoPix = 'documento' | 'email' | 'telefone' | 'aleatoria';
@@ -25,8 +26,6 @@ const VANTAGENS: { icon: IconName; texto: string }[] = [
   { icon: 'notifications-active', texto: 'Aviso no WhatsApp a cada novo cliente' },
 ];
 
-/** Link que o parceiro divulga: o webapp aceita o convite de originador (20261011a). */
-const linkDoParceiro = (id: string) => `https://apps.b2wenergia.com.br/i/${id}`;
 
 /**
  * Ser um Parceiro Power (decisão do dono, 11/10/2026). Mesmos campos do
@@ -93,7 +92,7 @@ export default function Parceiro() {
   };
 
   if (pronto) {
-    const link = linkDoParceiro(pronto);
+    const link = linkParceiro({ id: pronto, short_url: null });
     return (
       <Screen>
         <Hero kicker="Parceiro Power" title="Bem-vindo, parceiro!" subtitle="Seu cadastro foi feito. Divulgue seu link: cada cliente que assinar por ele fica com você." />

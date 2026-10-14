@@ -2,9 +2,9 @@ import { Text } from 'react-native';
 import { BotaoConvite, ConviteRodape } from '../../../components/Convites';
 import { LinkIndicacao } from '../../../components/LinkIndicacao';
 import { Badge, Card, Empty, ErrorState, Hero, Loading, Metric, Row, Screen, SectionLabel } from '../../../components/ui';
-import { useMeusEletropostos, usePerfil } from '../../../lib/api';
+import { useMeuOriginador, useMeusEletropostos, usePerfil } from '../../../lib/api';
 import { enderecoCurto, fmtBRL, fmtKwh, fmtPct } from '../../../lib/format';
-import { linkIndicacao, STATUS_PODE_INDICAR, textoIndicacao } from '../../../lib/links';
+import { linkIndicacao, linkParceiro, STATUS_PODE_INDICAR, textoConviteParceiro, textoIndicacao } from '../../../lib/links';
 import { eletropostoStatus } from '../../../lib/status';
 import { colors, type } from '../../../theme/tokens';
 
@@ -13,6 +13,8 @@ export default function DriveConnect() {
   const postos = useMeusEletropostos();
   const sub = perfil.data?.subscriber ?? null;
   const link = sub && STATUS_PODE_INDICAR.includes(sub.status) ? linkIndicacao(sub) : '';
+  const parceiro = useMeuOriginador(Boolean(perfil.data?.originator));
+  const linkPar = linkParceiro(parceiro.data);
   const kwh = (postos.data ?? []).reduce((a, p) => a + (Number(p.kwh_mes) || 0), 0);
   const receita = (postos.data ?? []).reduce((a, p) => a + (Number(p.receita_mes) || 0) * ((Number(p.percentual) || 0) / 100), 0);
 
@@ -52,8 +54,10 @@ export default function DriveConnect() {
       <SectionLabel title="Indique motoristas" />
       {link ? (
         <LinkIndicacao link={link} texto={textoIndicacao(sub?.name, link)} />
+      ) : linkPar ? (
+        <LinkIndicacao titulo="Seu link de Parceiro Power" bonus="Comissão por cliente" link={linkPar} texto={textoConviteParceiro(parceiro.data?.name, linkPar)} />
       ) : (
-        <Empty icon="person-add" title="Link de indicação indisponível" text="O link é liberado para assinantes com contrato assinado." />
+        <Empty icon="person-add" title="Link de indicação indisponível" text="O link é liberado para assinantes com contrato assinado e para Parceiros Power." />
       )}
       {(postos.data ?? []).length > 0 ? (
         <ConviteRodape titulo="Amplie sua rede de recarga" texto="Adquira mais um eletroposto e aumente sua renda com cada recarga." botao="Quero mais um eletroposto" icon="ev-station" />
