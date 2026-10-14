@@ -178,6 +178,37 @@ serve(async (req) => {
             }
         }
     }
+    // Preço unitário (R$/kWh, com tributos) impresso na conta -- a 2ª coluna
+    // numérica depois de "kWh". É a tarifa que a concessionária cobrou e a que
+    // o boleto do assinante e o razão usam; o cadastro serve só de referência.
+    //   Consumo-TUSD        kWh 2.288,00  0,64966059 1.486,42 ...
+    //   G2Comp.oUC-nM-TUSD  kWh 2.288,00- 0,43390830 992,78- ...
+    // A diferença TUSD consumo − TUSD compensado é o Fio B que a concessionária
+    // cobrou (GD2). Reajuste no meio do ciclo imprime duas linhas do mesmo
+    // item com preços diferentes: média ponderada pela quantidade.
+    const unitarioPonderado = (re: RegExp, item: string): number | null => {
+        let qtdTotal = 0;
+        let valorTotal = 0;
+        for (const m of fullText.matchAll(re)) {
+            if (m[1].toUpperCase() !== item) continue;
+            const qtd = Math.abs(parseValue(m[2]));
+            const unit = Math.abs(parseValue(m[3]));
+            if (qtd <= 0 || unit <= 0) continue;
+            qtdTotal += qtd;
+            valorTotal += qtd * unit;
+        }
+        return qtdTotal > 0 ? Number((valorTotal / qtdTotal).toFixed(8)) : null;
+    };
+    const consumoRe = /Consumo-(TUSD|TE)\s*kWh\s*([\d.,]+)-?\s+([\d.,]+)/gi;
+    const compensadoRe = /G[12]Comp\.[mo]UC-[no]M-(TUSD|TE)\s*kWh\s*([\d.,]+)-?\s+([\d.,]+)/gi;
+
+    const tusd_consumo_unit = unitarioPonderado(consumoRe, 'TUSD');
+    const te_consumo_unit = unitarioPonderado(consumoRe, 'TE');
+    const tusd_compensado_unit = unitarioPonderado(compensadoRe, 'TUSD');
+    const tarifa_conta = tusd_consumo_unit != null && te_consumo_unit != null
+        ? Number((tusd_consumo_unit + te_consumo_unit).toFixed(8))
+        : null;
+
        // Linha Digitável: Estratégia imbatível -> Limpar todos os espaços do documento inteiro e procurar a sequência de 44 a 48 dígitos que começa com '8' (Padrão Arrecadação)
     let linha_digitavel = null;
     const allNumbersText = fullText.replace(/[\s\.\-\n\r\t_]/g, '');
@@ -236,7 +267,12 @@ serve(async (req) => {
         linha_digitavel: linha_digitavel,
         energia_injetada: energia_injetada,
         consumo_compensado: consumo_compensado,
-        saldo_kwh: saldo_kwh
+        saldo_kwh: saldo_kwh,
+        tarifa_conta: tarifa_conta,
+        te_apurado: te_consumo_unit,
+        tusd_apurado: tusd_consumo_unit,
+        tusd_consumo_unit: tusd_consumo_unit,
+        tusd_compensado_unit: tusd_compensado_unit
     };
 
     return new Response(JSON.stringify(result), {

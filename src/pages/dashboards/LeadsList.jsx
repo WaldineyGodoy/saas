@@ -660,6 +660,9 @@ export default function LeadsList() {
                         phone: leadToConvert.phone,
                         cnpj: leadToConvert.cpf_cnpj,
                         lead_id: leadToConvert.id,
+                        // o banco copia o originador do lead (20261010d); aqui
+                        // ele so aparece na tela desde a abertura do modal
+                        originator_id: leadToConvert.originator_id,
                         address: {
                             cep: leadToConvert.cep,
                             logradouro: leadToConvert.rua,

@@ -14,8 +14,10 @@
 - Testes SQL: bloco `DO $$ … $$` terminando em `RAISE EXCEPTION 'SANDBOX_OK'`; rodar pelo MCP `execute_sql`; **sucesso = erro `SANDBOX_OK`**. Nunca deixar resíduo.
 - **Dinheiro real:** o razão de produção (`ledger_entries`) não pode ganhar, perder ou alterar lançamento por causa deste trabalho. Toda verificação compara a impressão digital (contagem + soma) antes e depois.
 - **Substituição direta:** o motor antigo de comissão (`originators_v2.split_commission`) deixa de ser lido. Os R$ 135,91 já lançados na conta 2.1.2 (8 lançamentos, abr–ago/2026) ficam intactos.
-- Percentuais (níveis **relativos a quem recebe**): B2W 10% fixo; Líder 1% nos níveis 1–3; PPE 5%/2%; PPP 4%/2%; PPF 2%/2%; Assinante Conect 2% só no nível 1. Piso do fornecedor: 50% da tarifa bruta, configurável por plano.
-- PPP com licença anual vencida: **recorrência suspensa (0%) e o valor vai para a B2W**, não para o fornecedor (decisão do dono, 27/09/2026).
+- **Base de cálculo — decisão revista pelo dono em 29/09/2026 (Task 12).** A base passa a ser `kWh compensado × (tarifa × (1 − desconto/100) − Fio B)`: *"as comissões serão sobre a energia compensada. Se houve energia compensada a comissão é devida, mesmo que a conta do assinante esteja zerada ou negativa devido a outros débitos, como parcelamentos, IP, e consumo excedente que não foi compensado."* **Tarifa e Fio B vêm do cadastro da concessionária** (`Concessionaria`, editado no modal da concessionária); o desconto vem do plano.
+  - A decisão anterior (27/09, após a Task 1) era `invoices.valor_a_pagar − invoices.valor_concessionaria`, e foi ela que as Tasks 4 a 6 implementaram. O que a derrubou: `valor_concessionaria` traz a conta **inteira** (IP, parcelamento, consumo não compensado) e é abatida da base, enquanto a fatura cobra só a compensada. Em **10 das 60 faturas pagas** isso zera ou nega a base mesmo tendo havido energia compensada. (O número **25**, que esta linha trouxe até 29/09, media outra coisa — faturas que *cobraram* energia sem ter kWh compensado, que são repasse puro da conta e não geram recompensa em modelo nenhum.)
+- Percentuais (níveis **relativos a quem recebe**): B2W 10% fixo; Líder 1% nos níveis 1–3; PPE 5%/2%; PPP 4%/2%; PPF 2%/2%; Assinante Conect 2% só no nível 1. Piso do fornecedor: 50% da **tarifa bruta**, configurável por plano (dono, 30/09/2026 — o código aplicava sobre a base líquida e o teto saía mais que o dobro do contratual). Teto de dedução = `GREATEST(round(base,2) − round(kWh × tarifa_bruta × piso_pct/100, 2), 0)`. A 20% de desconto na Cosern o teto dá 15,8% da base contra os 16% de uma venda direta de PPE, então a trava **corta** — comportamento novo, aceito pelo dono.
+- **Supressão sempre vai para a B2W** (decisões do dono, 27/09/2026): PPP com licença anual vencida tem a recorrência suspensa (0%), e o mesmo vale para recebedor inativo (originador, líder ou assinante indicador). Em todos esses casos o percentual é absorvido pela B2W, nunca pelo fornecedor.
 - PPE: promoção automática ao ser PPP com 1000 assinantes ativos na rede; rebaixamento nunca é automático.
 - Bônus Start: até 3 faturas, configurável por plano; pode não existir.
 - Commits terminam com `Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>`.
@@ -123,13 +125,13 @@ Regras: percentual = `regras[papel].niveis['L'||nivel]`, zero quando `nivel > ma
 **Interface produzida:** `fn_participantes_recompensa(p_uc uuid) returns jsonb` — array no formato que a Task 4 consome.
 
 Regras:
-- **Assinante Conect:** dono da UC apontada por `indicado_por_uc_id`; nível 1 sempre; só entra se o assinante dele estiver `ativo`.
-- **Parceiro:** originador do assinante da UC (`subscribers.originator_id`); nível = 1 quando a UC não veio de indicação, 2 quando veio (um salto), 3+ conforme a cadeia, com teto de 50 saltos; só entra se `status` do originador for ativo; `cargo` define o percentual; **PPP com `licenca_status = 'vencida'` entra com `suspenso: true`** (recorrência suspensa; o motor manda o percentual dele para a B2W).
-- **Líder:** `lider_id` do parceiro; nível = o mesmo nível do parceiro; só entra se ativo.
-- **Pergunta ao dono antes do Step 3:** quando o recebedor está **inativo** (originador, líder ou assinante do Conect), o percentual dele fica com o fornecedor ou é absorvido pela B2W, como na licença vencida? Não implementar sem essa resposta.
+- **Assinante Conect:** dono da UC apontada por `indicado_por_uc_id`; nível 1 sempre; entra com `suspenso: true` se o assinante dele não estiver `ativo`.
+- **Parceiro:** originador do assinante da UC (`subscribers.originator_id`); nível = 1 quando a UC não veio de indicação, 2 quando veio (um salto), 3+ conforme a cadeia, com teto de 50 saltos; entra com `suspenso: true` se o `status` do originador não for ativo; `cargo` define o percentual; **PPP com licença vencida entra com `suspenso: true`** — a checagem compara `licenca_vencimento < current_date` (o `licenca_status` gravado só reflete a última escrita da linha e pode envelhecer) (recorrência suspensa; o motor manda o percentual dele para a B2W).
+- **Líder:** `lider_id` do parceiro; nível = o mesmo nível do parceiro; entra com `suspenso: true` se inativo.
+- **Recebedor inativo** (originador, líder ou assinante do Conect): entra com `suspenso: true`, como a licença vencida — o percentual é absorvido pela B2W.
 - Sem assinante, sem originador ou com UC geradora: array vazio.
 
-- [ ] **Step 1: teste primeiro** com fixture de rede: venda direta; indicação em 1 salto; cadeia de 4 saltos; originador inativo; PPP com licença vencida; assinante do Conect inativo; UC sem originador.
+- [ ] **Step 1: teste primeiro** com fixture de rede: venda direta; indicação em 1 salto; cadeia de 4 saltos; originador inativo (suspenso, não ausente); PPP com licença vencida; assinante do Conect inativo; UC sem originador.
 - [ ] **Step 2:** RED. **Step 3:** implementação. **Step 4:** GREEN.
 - [ ] **Step 5:** commit `feat(recompensas): resolucao de participantes na arvore de indicacao`.
 
@@ -190,3 +192,111 @@ Regras:
 - Link de indicação do assinante (short_url, raiz, `p_indicador_assinante_id` na RPC de adesão).
 - Eletropostos.
 - Baixa do repasse ao originador no razão.
+
+---
+
+### Task 9: Alinhar a tela de Planos à matriz acordada (decisão do dono, 28/09/2026)
+
+Motivo: `PlanModal.jsx` ainda grava as chaves legadas (`associacao`, `embaixador`, `coordenador`, `assinante`) e defaults divergentes de `ppf` e `assinante_conect`. No próximo salvamento pela tela, a normalização da Task 3 se perde e o motor passa a pagar errado.
+
+**Files:**
+- Modify: `src/pages/settings/components/PlanModal.jsx` (e `EletropostoPlanModal.jsx` se compartilhar a matriz)
+- Create: `tests/plano-matriz.test.js` (Vitest, regras puras)
+
+**Interfaces:**
+- Extrair para `src/lib/planoRecompensas.js`: `CARGOS = ['lider','ppe','ppp','ppf','assinante_conect']`, `MATRIZ_PADRAO` (ppe 5/2/0/0, ppp 4/2/0/0, ppf 2/2/0/0, lider 1/1/1/0, b2w 10/10/10/10, assinante_conect 2/0/0/0), `MAX_NIVEIS` (ppe/ppp/ppf 2, lider 3, b2w 4, assinante_conect 1), `normalizarRecorrenteConfig(cfg)` → objeto sem chaves legadas, com `regras_multinivel` completo e `regras` derivado do nível 1.
+- O modal passa a ler e gravar por essas funções; nenhum default divergente no componente.
+
+- [ ] **Step 1:** coordenar com a sessão dona do arquivo (ver ledger) e conferir `git log -3 -- src/pages/settings/components/PlanModal.jsx`; se houver alteração não commitada de outra sessão, PARAR e reportar.
+- [ ] **Step 2:** testes Vitest de `normalizarRecorrenteConfig` (remove legadas, completa níveis faltantes, respeita valor já salvo dentro do `max_niveis`, zera acima do `max_niveis`) → RED.
+- [ ] **Step 3:** implementar `src/lib/planoRecompensas.js` → GREEN.
+- [ ] **Step 4:** ligar o modal ao módulo, sem mexer no layout; `npm run build`.
+- [ ] **Step 5:** salvar um plano pela tela em ambiente local e conferir por SELECT que o JSON gravado continua normalizado (se não houver como logar, descrever o teste manual para o dono).
+- [ ] **Step 6:** commit `fix(recompensas): tela de planos grava a matriz acordada`.
+
+---
+
+### Task 10: anon não escolhe o próprio cargo (achado da Task 5)
+
+Motivo: a guarda `fn_originador_guarda_campos_sensiveis` retorna cedo quando `auth.uid()` é nulo — condição pensada para `service_role`, mas que também vale para o cadastro público (`anon`). Com a policy `originators_v2_anon_signup`, qualquer pessoa pode se cadastrar como embaixador já gravando `cargo='ppe'` (5% de recorrência), `lider_id` e licença. Antes da Task 2 isso não pagava nada; com o motor ligado, paga.
+
+**Files:** Create `supabase/migrations/20260928f_anon_sem_cargo.sql`, `supabase/tests/split_anon_sem_cargo.test.sql`
+
+**Regras:**
+- Distinguir `service_role` de `anon` na guarda: usar `current_setting('request.jwt.claims', true)::jsonb->>'role'` (ou `current_user`/`auth.role()`), em vez de tratar `auth.uid() IS NULL` como contexto confiável.
+- No INSERT vindo de `anon` (ou de qualquer papel não interno), normalizar em silêncio: `cargo := 'ppf'`, `lider_id := NULL`, licença zerada, além do que já é normalizado hoje (`split_commission`, `short_url`).
+- `service_role` e papel interno seguem podendo gravar o que quiserem.
+- Nada muda no cadastro público em si: quem se cadastra continua virando originador, só não escolhe a própria faixa.
+
+- [ ] **Step 1: teste primeiro** — simular `anon` (`set_config('role','anon')` + claims sem `sub`) inserindo com `cargo='ppe'`, `lider_id` e licença: as três devem sair normalizadas; `service_role` inserindo com `cargo='ppe'` mantém; papel interno idem; o cadastro público existente continua funcionando (INSERT com as colunas do formulário). RED antes.
+- [ ] **Step 2:** migração, aplicar, GREEN.
+- [ ] **Step 3:** conferir que os 8 originadores reais seguem em `ppf` e que nenhum ganhou `lider_id`.
+- [ ] **Step 4:** commit `fix(seguranca): cadastro publico nao escolhe cargo nem licenca`.
+
+---
+
+### Task 11: Bônus Start (decisões do dono, 28/09/2026)
+
+Motivo: a Task 6 detecta e congela o Start, mas aplica a recorrência, porque `start_config.regras` traz um percentual único por cargo, sem nível, e nos planos salvos ele soma 100% da base contra um piso de 50%.
+
+**Regras decididas:**
+- O percentual do Start vale **somente no nível 1** (venda direta).
+- A fonte do comportamento é `planos_assinatura_energia.tipo_recompensa`, e o dono fixou os três tipos em 29/09/2026:
+  - **`start` — somente bônus.** Na fatura elegível paga o Start; em **todas as outras faturas** da UC parceiro, líder e Conect não recebem nada (sobra a gestão da B2W, que é fixa, e o fornecedor com o residual).
+  - **`recorrente` — somente recorrência.** `start_config` é ignorado por inteiro.
+  - **`ambos` (híbrido) — Start + recorrência.** Na fatura elegível o nível 1 recebe o Start e o nível 2+ segue a recorrência; nas demais faturas, recorrência normal.
+- O **Start é isento do piso do fornecedor**: nas faturas elegíveis não há corte, mesmo que o fornecedor receba menos que o piso ou nada. O congelamento na fatura tem de deixar isso explícito (`piso_ignorado: true`), para o investidor poder auditar.
+- Elegibilidade: `start_config.faturas_elegiveis` contém o ordinal da fatura paga daquela UC (1, 2 ou 3).
+
+**Files:** Create `supabase/migrations/20260929d_bonus_start.sql` (o `a` do nome original foi tomado; `20260929b` e `c` são o fix round da Task 6), `supabase/tests/split_bonus_start.test.sql`
+
+- [ ] **Step 1: teste primeiro** — plano `start` com fatura elegível: parceiro nível 1 recebe o percentual do Start, líder idem, fornecedor pode ficar abaixo do piso e nada é cortado; parceiro nível 2 não recebe nada; plano `ambos` com fatura elegível: nível 1 no Start e nível 2 na recorrência; plano `recorrente` ignora `start_config`; fatura fora de `faturas_elegiveis` cai na recorrência; o congelamento grava `bonus_start` com ordinal, regras e `piso_ignorado`.
+- [ ] **Step 2:** RED. **Step 3:** migração (só o gatilho muda; o motor puro continua com a mesma assinatura — passe o teto como `NULL`? **não**: o motor recusa teto nulo, então passe um teto igual à base, que na prática não corta, e registre no congelamento que o piso foi ignorado). **Step 4:** aplicar, GREEN, razão intacto.
+- [ ] **Step 5:** commit `feat(recompensas): bonus start no nivel 1, isento do piso`.
+
+---
+
+### Task 12: Base sobre a energia compensada (decisão do dono, 29/09/2026)
+
+Motivo: a base de hoje (`valor_a_pagar − valor_concessionaria`) abate da recompensa a conta inteira da concessionária, que inclui iluminação pública, parcelamento e consumo não compensado. Em 10 das 60 faturas pagas ela fica zerada ou negativa **tendo havido energia compensada**. Decisão do dono: *"se houve energia compensada a comissão é devida"*.
+
+**Fórmula:** `base = kWh compensado × (tarifa × (1 − desconto/100) − Fio B)`. O desconto incide sobre a **tarifa cheia**, e só depois se tira o Fio B — é o que `PowerPlantModal.jsx` e `fn_tarifa_fornecedor` já fazem. Algebricamente é o `tarifa − Fio B − desconto` do documento oficial com o desconto expresso em R$/kWh.
+
+**Fontes (nesta ordem, e nenhuma outra):**
+- `kWh compensado` = `invoices.consumo_compensado`.
+- `tarifa` e `Fio B` = **cadastro da concessionária** (`Concessionaria`, resolvida por concessionária + UF + classe/grupo; as colunas por classe `_B2`, `_B3`, `_A` já existem). O dono: *"o valor do Fio B deve estar cadastrado em configuração, conta de energia no modal da concessionária"*. **Nunca** `invoices.fio_b_apurado`, que é zero nas 60 faturas pagas, nem `invoices.tarifa_concessionaria`, ausente em 40 delas.
+- `desconto do assinante` = **o plano** (`planos_assinatura_energia`), que já é a fonte de desconto desde a Task 3.
+- Hoje as 19 UCs ativas são todas Neoenergia Cosern, e as 143 linhas dessa concessionária têm Fio B preenchido.
+
+**Efeito:** a conta da concessionária deixa de abater a base. Ela continua lançada no razão como obrigação separada (2.1.3.01) — as duas obrigações na mesma linha de `invoices` já eram separadas no razão. O repasse ao fornecedor passa a ser calculado sobre a base nova.
+
+**Files:** Create `supabase/migrations/20260929e_base_energia_compensada.sql`, `supabase/tests/split_base_compensada.test.sql`
+
+- [ ] **Step 1: teste primeiro** — resolução de tarifa/Fio B pela concessionária e classe da UC; base com desconto do plano; fatura com compensação e conta da concessionária maior que a cobrança (o caso das 25) paga recompensa; fatura sem compensação não paga nada; UC de concessionária sem cadastro ou sem Fio B **falha com motivo gravado na fatura**, nunca calcula com zero em silêncio; a soma da transação continua fechando em zero exato, inclusive com centavo quebrado.
+- [ ] **Step 2:** RED, com a mensagem de falha verbatim.
+- [ ] **Step 3:** `fn_base_recompensa_fatura(p_invoice)` isolada e testável, e o gatilho passando a usá-la; o congelamento grava a base, a fórmula, o kWh, a tarifa, o Fio B e o desconto usados, para o investidor auditar.
+- [ ] **Step 4:** aplicar, GREEN, razão de produção intacto; rodar também `split_gatilho`, `split_bonus_start` e `invoice_paid_ledger_definer`.
+- [ ] **Step 5:** commit `feat(recompensas): base sobre a energia compensada`.
+
+**Fora desta tarefa (para o dono):** as faturas já pagas não são recalculadas — o motor novo vale das próximas em diante, como as Tasks 4 a 6. O campo de Fio B no modal da concessionária, se ainda não estiver na tela, é tarefa de frontend.
+
+---
+
+### Task 13: o rombo de caixa vira conta a receber do assinante (decisão do dono, 29/09/2026)
+
+Motivo: com a Task 12 a base (energia compensada) deixou de ser o mesmo número que o caixa da fatura (`valor_a_pagar − valor_concessionaria`). Alguém tem de absorver a diferença, senão o razão não fecha. A Task 12 entregou isso caindo no **fornecedor**: numa fatura real (assinante pagou R$ 398,78, conta da concessionária R$ 766,98, 428 kWh compensados, base R$ 351,69) o investidor era debitado em R$ 413,92 por um débito que é do assinante — parcelamento, iluminação pública e consumo não compensado.
+
+**Decisão do dono:** a diferença **vira conta a receber do assinante**. A B2W adiantou um débito que não é dela; o fornecedor recebe o repasse calculado sobre a base.
+
+- **Conta nova:** `1.1.2 — Contas a Receber de Assinantes`, tipo `asset` (o código está livre, entre `1.1.1 Bancos` e `1.1.3 Adiantamentos a Investidores`).
+- **Fornecedor volta a ser o residual da BASE**, que é o que o motor puro devolve (`fornecedor_base`), e não mais o residual do caixa.
+- **O lançamento que fecha a transação** passa a ser `base − caixa` em `1.1.2`, com `reference_type = 'subscriber'`: positivo quando o assinante ainda deve, negativo quando ele está adiantado. É o saldo do ciclo com aquele assinante.
+- O congelamento grava o valor e o sinal, para a tela do assinante poder mostrar o saldo.
+
+**Files:** Create `supabase/migrations/20260929f_conta_receber_assinante.sql`, `supabase/tests/split_conta_receber.test.sql`
+
+- [ ] **Step 1: teste primeiro** — fatura em que a conta supera a cobrança (o caso das 10): fornecedor recebe o residual da base e **não** é debitado do rombo; `1.1.2` recebe a diferença com o assinante como referência; soma da transação em zero exato. Fatura normal (caixa maior que a base): o sinal se inverte e `1.1.2` fica negativa. Fatura sem compensação: base zero, `1.1.2` absorve o caixa inteiro. Centavo quebrado continua fechando em zero. E os quatro testes que já existem continuam `SANDBOX_OK`.
+- [ ] **Step 2:** RED com a mensagem verbatim. **Step 3:** migração (conta nova + `CREATE OR REPLACE` do gatilho a partir do corpo da `20260929e`). **Step 4:** aplicar, GREEN, razão de produção intacto.
+- [ ] **Step 5:** commit `feat(recompensas): rombo de caixa vira conta a receber do assinante`.
+
+**Fora desta tarefa (para o dono):** a rotina de cobrança desse saldo e a tela onde ele aparece. A conta `1.1.2` vai acumular saldo sem consumidor, como aconteceu com a `2.1.6` — vale decidir quem lê.

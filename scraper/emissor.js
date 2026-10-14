@@ -189,14 +189,18 @@ async function reconferir(item) {
     return soma;
 }
 
-/** Auditoria por fatura. Aviso passa e fica registrado; erro barra o ciclo. */
+/**
+ * Auditoria por fatura. Aviso passa e fica registrado; bloqueio barra o ciclo.
+ * A fn_auditar_fatura devolve 'bloqueio' ou 'aviso', nunca 'erro': comparar só
+ * com 'erro' deixava todo bloqueio passar (corrigido em 12/10/2026).
+ */
 async function auditar(item) {
     const avisos = [];
     for (const id of item.invoice_ids) {
         const { data, error } = await supabase.rpc('fn_auditar_fatura', { p_invoice_id: id });
         if (error) throw new Error(`auditoria falhou: ${error.message}`);
         for (const achado of data || []) {
-            if (achado.severidade === 'erro') {
+            if (achado.severidade === 'bloqueio' || achado.severidade === 'erro') {
                 throw new Error(`auditoria barrou: ${achado.mensagem}`);
             }
             avisos.push(achado.mensagem);

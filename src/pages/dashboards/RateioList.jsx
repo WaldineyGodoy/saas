@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { useUI } from '../../contexts/UIContext';
 import { useBranding } from '../../contexts/BrandingContext';
 import RateioListModal from '../../components/RateioListModal';
+import { ALERTA_PRAZO } from '../../lib/rateioPrazo';
 import {
     FileText, Clock, CheckCircle, Zap, Users, Calendar, Hash,
     Search, LayoutList, Columns, RefreshCw, Trash2, AlertTriangle, XCircle
@@ -209,6 +210,24 @@ function KanbanCard({ rateio, onClick, onDelete, isOverlay }) {
                         </div>
                     </div>
                 </div>
+                    {(rateio.origem === 'tt' || (rateio.status === 'processando' && ALERTA_PRAZO[rateio.alerta_prazo])) && (
+                        <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', marginTop: '0.4rem' }}>
+                            {rateio.origem === 'tt' && (
+                                <span style={{ fontSize: '0.62rem', fontWeight: 700, color: '#5b21b6', background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: '999px', padding: '0.05rem 0.5rem' }}>TT</span>
+                            )}
+                            {rateio.status === 'processando' && ALERTA_PRAZO[rateio.alerta_prazo] && (
+                                <span style={{
+                                    fontSize: '0.62rem', fontWeight: 700,
+                                    color: ALERTA_PRAZO[rateio.alerta_prazo].color,
+                                    background: ALERTA_PRAZO[rateio.alerta_prazo].bg,
+                                    border: `1px solid ${ALERTA_PRAZO[rateio.alerta_prazo].border}`,
+                                    borderRadius: '999px', padding: '0.05rem 0.5rem'
+                                }}>
+                                    {ALERTA_PRAZO[rateio.alerta_prazo].label}
+                                </span>
+                            )}
+                        </div>
+                    )}
             </div>
         </div>
     );
@@ -365,6 +384,40 @@ export default function RateioList() {
 
         if (!newStatus || !activeRateio || activeRateio.status === newStatus) return;
 
+        // Concluir, reprovar e iniciar processamento têm regra própria no banco
+        // (ativação das UCs, prazo de 15 dias, motivo). O resto é só mover o card.
+        if (['concluida', 'reprovada', 'processando'].includes(newStatus)) {
+            try {
+                if (newStatus === 'processando') {
+                    if (!(activeRateio.protocolo || '').trim()) {
+                        showAlert('Abra o card e salve o protocolo da solicitação antes de iniciar o processamento.', 'warning');
+                        return;
+                    }
+                    const { error } = await supabase.rpc('fn_rateio_registrar_protocolo', { p_rateio_id: active.id, p_protocolo: activeRateio.protocolo });
+                    if (error) throw error;
+                } else if (newStatus === 'reprovada') {
+                    const motivo = window.prompt('Motivo da reprovação / cancelamento pela distribuidora:', '');
+                    if (motivo === null) return;
+                    const { error } = await supabase.rpc('fn_rateio_reprovar', { p_rateio_id: active.id, p_motivo: motivo.trim() || null });
+                    if (error) throw error;
+                } else {
+                    const { data, error } = await supabase.rpc('fn_rateio_concluir', { p_rateio_id: active.id });
+                    if (error) throw error;
+                    const falhas = data?.falhas || [];
+                    showAlert(
+                        falhas.length
+                            ? `Concluída. ${data.ucs_ativadas} UC(s) ativada(s); ${falhas.length} falharam: ${falhas.map(f => `${f.uc} (${f.erro})`).join('; ')}`
+                            : `Concluída! ${data?.ucs_ativadas || 0} UC(s) ativada(s).`,
+                        falhas.length ? 'warning' : 'success'
+                    );
+                }
+            } catch (err) {
+                showAlert('Erro ao atualizar status: ' + err.message, 'error');
+            }
+            fetchRateios();
+            return;
+        }
+
         const now = new Date().toISOString();
         const newStatusDates = {
             ...(activeRateio.status_dates || {}),
@@ -380,18 +433,7 @@ export default function RateioList() {
                 .from('rateio_lists')
                 .update({ status: newStatus, status_dates: newStatusDates, updated_at: now })
                 .eq('id', active.id);
-
             if (error) throw error;
-
-            // If dragged to 'concluida', activate UCs
-            if (newStatus === 'concluida' && activeRateio.usina_id) {
-                const ucIds = (activeRateio.ucs_snapshot || [])
-                    .filter(uc => !['ativo', 'cancelado', 'cancelado_inadimplente'].includes(uc.status))
-                    .map(uc => uc.id).filter(Boolean);
-                if (ucIds.length > 0) {
-                    await supabase.from('consumer_units').update({ status: 'ativo' }).in('id', ucIds);
-                }
-            }
         } catch (err) {
             console.error('Error updating status:', err);
             fetchRateios();

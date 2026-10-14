@@ -244,7 +244,7 @@ export default function PowerPlantList() {
                 .select(`
                     *,
                     supplier:supplier_id (name),
-                    consumer_units (*)
+                    consumer_units!consumer_units_usina_id_fkey (*)
                 `)
                 .order('created_at', { ascending: false });
 

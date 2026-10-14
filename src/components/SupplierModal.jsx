@@ -64,6 +64,19 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
     // so, e o razao deixava de somar zero — origem do desequilibrio historico.
     const [manualEntryCounterAccount, setManualEntryCounterAccount] = useState('2.1.4');
     const [counterAccounts, setCounterAccounts] = useState([]);
+
+    // Originador que trouxe o fornecedor (spec do plano de usina, decisao
+    // 6b): as usinas dele herdam, e o split paga o que o plano de cada uma
+    // preve. So admin altera (fn_suppliers_originador_admin).
+    const [originadores, setOriginadores] = useState([]);
+    useEffect(() => {
+        supabase.from('originators_v2').select('id, name, cargo, ativo').order('name')
+            .then(({ data, error }) => {
+                if (error) console.error('Erro ao carregar originadores:', error);
+                else setOriginadores(data || []);
+            });
+    }, []);
+    const ehAdmin = ['admin', 'super_admin'].includes(profile?.role);
     const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
     const extratoPrintRef = useRef(null);
@@ -79,6 +92,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
         legal_partner_cpf: '',
         pix_key: '',
         pix_key_type: 'cpf', // Default
+        originator_id: '',
         // Address fields
         cep: '',
         rua: '',
@@ -103,6 +117,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                 legal_partner_cpf: supplier.legal_partner_cpf || '',
                 pix_key: supplier.pix_key || '',
                 pix_key_type: supplier.pix_key_type || 'cpf',
+                originator_id: supplier.originator_id || '',
                 cep: supplier.address?.cep || '',
                 rua: supplier.address?.logradouro || supplier.address?.rua || '',
                 numero: supplier.address?.numero || '',
@@ -693,6 +708,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
         legal_partner_cpf: formData.legal_partner_cpf,
         pix_key: formData.pix_key,
         pix_key_type: formData.pix_key_type,
+        originator_id: formData.originator_id || null,
         address: {
             cep: formData.cep,
             logradouro: formData.rua,
@@ -1250,6 +1266,30 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                             />
                                         </div>
                                     </div>
+                                </div>
+
+                                <div style={sectionStyle}>
+                                    <h4 style={{ margin: '0 0 1.5rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b' }}>
+                                        Originador
+                                    </h4>
+                                    <label style={labelStyle}>Quem trouxe este fornecedor</label>
+                                    <select
+                                        style={inputStyle}
+                                        value={formData.originator_id}
+                                        disabled={!ehAdmin}
+                                        onChange={e => setFormData({ ...formData, originator_id: e.target.value })}
+                                    >
+                                        <option value="">Sem originador</option>
+                                        {originadores.map(o => (
+                                            <option key={o.id} value={o.id} disabled={!o.ativo && o.id !== formData.originator_id}>
+                                                {o.name}{o.cargo ? ` · ${o.cargo}` : ''}{o.ativo ? '' : ' (inativo)'}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <p style={{ margin: '0.5rem 0 0', fontSize: '0.78rem', color: '#64748b' }}>
+                                        As usinas deste fornecedor herdam o originador. Ele recebe o que o Plano de Usina de cada uma prevê; sem originador, essa parte fica para a associação.
+                                        {!ehAdmin && ' Só admin altera.'}
+                                    </p>
                                 </div>
 
                                 <div style={sectionStyle}>

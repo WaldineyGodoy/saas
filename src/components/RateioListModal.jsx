@@ -9,6 +9,7 @@ import {
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import HistoryTimeline from './HistoryTimeline';
+import RateioAcompanhamento from './RateioAcompanhamento';
 
 const STATUS_CONFIG = {
     criada: {
@@ -83,6 +84,7 @@ function getUCStatusBadge(status) {
         vinculado: { bg: '#ede9fe', color: '#6d28d9', label: 'Vinculado' },
         aguardando_conexao: { bg: '#fef9c3', color: '#92400e', label: 'Ag. Conexão' },
         desconectado: { bg: '#fee2e2', color: '#991b1b', label: 'Desconectado' },
+        desligado_por_tt: { bg: '#ede9fe', color: '#5b21b6', label: 'Desligado por TT' },
         cancelado: { bg: '#f1f5f9', color: '#64748b', label: 'Cancelado' },
         cancelado_inadimplente: { bg: '#fee2e2', color: '#991b1b', label: 'Canc. Inadim.' },
     };
@@ -129,6 +131,9 @@ export default function RateioListModal({ rateio, onClose, onUpdated }) {
     };
 
     /* ── Update Status ────────────────────────────────────────── */
+    // Concluir, reprovar e iniciar o processamento passam por RPC: elas fazem o
+    // que o front fazia (ativar UCs) e também o que ele não fazia (prazo de 15
+    // dias, motivo da reprovação, histórico, card da usina que estava na fila).
     const handleUpdateStatus = async (targetStatus) => {
         const targetCfg = STATUS_CONFIG[targetStatus];
         if (!targetCfg) return;
@@ -137,57 +142,59 @@ export default function RateioListModal({ rateio, onClose, onUpdated }) {
         let confirmMsg = `Deseja alterar o status para "${targetCfg.label}"?`;
 
         if (isFinishing) {
-            confirmMsg = `Ao marcar como Concluída, todas as UCs vinculadas que não estiverem ativas serão automaticamente ativadas. Confirmar?`;
+            confirmMsg = 'Ao marcar como Concluída, as UCs desta lista que ainda não compensam (Ag. Conexão, Vinculado, Em Ativação) serão ativadas. UCs Em Atraso e canceladas não são alteradas. Confirmar?';
         } else if (targetStatus === 'cancelada') {
-            confirmMsg = `Tem certeza que deseja Cancelar esta lista de rateio?`;
+            confirmMsg = 'Tem certeza que deseja Cancelar esta lista de rateio?';
         } else if (targetStatus === 'reprovada') {
-            confirmMsg = `Deseja marcar esta lista de rateio como Reprovada?`;
+            confirmMsg = 'Deseja marcar esta lista de rateio como Reprovada? Se a distribuidora cancelou por divergência de dados, corrija o cadastro e crie a lista de novo.';
+        } else if (targetStatus === 'processando') {
+            if (!(protocolo || '').trim()) {
+                showAlert('Informe e salve o protocolo da solicitação antes de iniciar o processamento.', 'warning');
+                return;
+            }
+            confirmMsg = `Registrar o protocolo ${protocolo} e iniciar o acompanhamento? A distribuidora tem até 15 dias para concluir.`;
         }
 
-        const confirmed = await showConfirm('Alterar Status', confirmMsg, 'Sim, Confirmar', 'Cancelar');
+        const confirmed = await showConfirm(confirmMsg, 'Alterar Status', 'Sim, Confirmar', 'Cancelar');
         if (!confirmed) return;
+
+        let motivo = null;
+        if (targetStatus === 'reprovada') {
+            motivo = window.prompt('Motivo da reprovação / cancelamento pela distribuidora:', '');
+            if (motivo === null) return;
+        }
 
         setLoading(true);
         try {
-            const now = new Date().toISOString();
-            const newStatusDates = {
-                ...statusDates,
-                [`${targetStatus}_at`]: now
-            };
-
-            const { error } = await supabase
-                .from('rateio_lists')
-                .update({
-                    status: targetStatus,
-                    status_dates: newStatusDates,
-                    updated_at: now
-                })
-                .eq('id', rateio.id);
-
-            if (error) throw error;
-
-            // Trigger: when concluded → activate non-active UCs
-            if (isFinishing && rateio.usina_id) {
-                const ucIds = ucs
-                    .filter(uc => !['ativo', 'cancelado', 'cancelado_inadimplente'].includes(uc.status))
-                    .map(uc => uc.id)
-                    .filter(Boolean);
-
-                if (ucIds.length > 0) {
-                    const { error: ucError } = await supabase
-                        .from('consumer_units')
-                        .update({ status: 'ativo' })
-                        .in('id', ucIds);
-
-                    if (ucError) {
-                        showAlert('Status atualizado, mas houve erro ao ativar algumas UCs.', 'warning');
-                    } else {
-                        showAlert(`Status → Concluída! ${ucIds.length} UC(s) ativada(s).`, 'success');
-                    }
-                } else {
-                    showAlert('Status atualizado para Concluída!', 'success');
-                }
+            if (isFinishing) {
+                const { data, error } = await supabase.rpc('fn_rateio_concluir', { p_rateio_id: rateio.id });
+                if (error) throw error;
+                const falhas = data?.falhas || [];
+                showAlert(
+                    falhas.length
+                        ? `Concluída. ${data.ucs_ativadas} UC(s) ativada(s); ${falhas.length} não puderam ser ativadas: ${falhas.map(f => `${f.uc} (${f.erro})`).join('; ')}`
+                        : `Status → Concluída! ${data?.ucs_ativadas || 0} UC(s) ativada(s).`,
+                    falhas.length ? 'warning' : 'success'
+                );
+            } else if (targetStatus === 'reprovada') {
+                const { error } = await supabase.rpc('fn_rateio_reprovar', { p_rateio_id: rateio.id, p_motivo: (motivo || '').trim() || null });
+                if (error) throw error;
+                showAlert('Status → "Reprovada"!', 'success');
+            } else if (targetStatus === 'processando') {
+                const { error } = await supabase.rpc('fn_rateio_registrar_protocolo', { p_rateio_id: rateio.id, p_protocolo: protocolo.trim() });
+                if (error) throw error;
+                showAlert('Status → "Processando". Prazo de 15 dias registrado.', 'success');
             } else {
+                const now = new Date().toISOString();
+                const { error } = await supabase
+                    .from('rateio_lists')
+                    .update({
+                        status: targetStatus,
+                        status_dates: { ...statusDates, [`${targetStatus}_at`]: now },
+                        updated_at: now
+                    })
+                    .eq('id', rateio.id);
+                if (error) throw error;
                 showAlert(`Status → "${targetCfg.label}"!`, 'success');
             }
 
@@ -430,6 +437,8 @@ export default function RateioListModal({ rateio, onClose, onUpdated }) {
                             </div>
                         ))}
                     </div>
+
+                    <RateioAcompanhamento rateio={rateio} />
 
                     {/* ── Protocolo Field ───────────────────────────────── */}
                     <div style={{

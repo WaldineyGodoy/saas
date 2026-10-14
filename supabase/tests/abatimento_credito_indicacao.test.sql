@@ -14,6 +14,7 @@ DECLARE
   v_conect uuid; v_f1 uuid; v_f2 uuid; v_f3 uuid; v_g1 uuid; v_g2 uuid; v_h1 uuid; v_h2 uuid;
   v_a1 uuid; v_n1 uuid; v_n2 uuid; v_n3 uuid; v_x uuid;
   v_ret jsonb; v_num numeric; v_txt text; v_ids uuid[]; v_total numeric; v_cnt int;
+  v_plano_sbx uuid;
 BEGIN
   SELECT id INTO v_conect FROM public.ledger_accounts WHERE code = '2.1.6';
   IF NOT EXISTS (SELECT 1 FROM public.ledger_accounts WHERE code = '3.1.5') THEN
@@ -28,21 +29,24 @@ BEGIN
   VALUES ('Teste Abatimento Outro', '52998224725', 'abat.outro@example.test', '5511999990012', 'ativo')
   RETURNING id INTO v_outro;
 
+  INSERT INTO public.planos_assinatura_energia (nome, tipo_recompensa, gestao_percentual, piso_fornecedor_pct, recorrente_config)
+  VALUES ('SANDBOX abatimento_credito_indicacao', 'recorrente', 10, 50, '{"regras_multinivel": {"b2w": {"niveis": {"L1": "10", "L2": "10", "L3": "10", "L4": "10"}, "max_niveis": 4}}}'::jsonb)
+  RETURNING id INTO v_plano_sbx;
   INSERT INTO public.consumer_units (subscriber_id, numero_uc, titular_conta, cpf_cnpj_fatura, tipo_ligacao,
-    status, modalidade, desconto_assinante, dia_vencimento)
-  VALUES (v_ind, 'TST-ABAT-0001', 'Teste', '11144477735', 'monofasico', 'ativo', 'geracao_compartilhada', 0.20, 10)
+    status, modalidade, desconto_assinante, dia_vencimento, plano_assinatura_id)
+  VALUES (v_ind, 'TST-ABAT-0001', 'Teste', '11144477735', 'monofasico', 'ativo', 'geracao_compartilhada', 0.20, 10, v_plano_sbx)
   RETURNING id INTO v_uc1;
   INSERT INTO public.consumer_units (subscriber_id, numero_uc, titular_conta, cpf_cnpj_fatura, tipo_ligacao,
-    status, modalidade, desconto_assinante, dia_vencimento)
-  VALUES (v_ind, 'TST-ABAT-0002', 'Teste', '11144477735', 'monofasico', 'ativo', 'geracao_compartilhada', 0.20, 10)
+    status, modalidade, desconto_assinante, dia_vencimento, plano_assinatura_id)
+  VALUES (v_ind, 'TST-ABAT-0002', 'Teste', '11144477735', 'monofasico', 'ativo', 'geracao_compartilhada', 0.20, 10, v_plano_sbx)
   RETURNING id INTO v_uc2;
   INSERT INTO public.consumer_units (subscriber_id, numero_uc, titular_conta, cpf_cnpj_fatura, tipo_ligacao,
-    status, modalidade, desconto_assinante, dia_vencimento)
-  VALUES (v_ind, 'TST-ABAT-0003', 'Teste', '11144477735', 'monofasico', 'ativo', 'geracao_compartilhada', 0.20, 5)
+    status, modalidade, desconto_assinante, dia_vencimento, plano_assinatura_id)
+  VALUES (v_ind, 'TST-ABAT-0003', 'Teste', '11144477735', 'monofasico', 'ativo', 'geracao_compartilhada', 0.20, 5, v_plano_sbx)
   RETURNING id INTO v_uc3;
   INSERT INTO public.consumer_units (subscriber_id, numero_uc, titular_conta, cpf_cnpj_fatura, tipo_ligacao,
-    status, modalidade, desconto_assinante, dia_vencimento)
-  VALUES (v_outro, 'TST-ABAT-0009', 'Teste', '52998224725', 'monofasico', 'ativo', 'geracao_compartilhada', 0.20, 10)
+    status, modalidade, desconto_assinante, dia_vencimento, plano_assinatura_id)
+  VALUES (v_outro, 'TST-ABAT-0009', 'Teste', '52998224725', 'monofasico', 'ativo', 'geracao_compartilhada', 0.20, 10, v_plano_sbx)
   RETURNING id INTO v_uc_outro;
 
   -- credito de R$ 30,00 na 2.1.6, como o gatilho do razao lanca

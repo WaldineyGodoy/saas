@@ -12,6 +12,34 @@ const MESES = { 'JAN': '01', 'FEV': '02', 'MAR': '03', 'ABR': '04', 'MAI': '05',
 // As quebras importam para separar nome, documento e as linhas do endereço.
 export const textoDosItens = (items) => items.map(item => item.str + (item.hasEOL ? '\n' : ' ')).join('');
 
+// Preços unitários (R$/kWh, com tributos) impressos na conta -- a mesma regra
+// da Edge Function parse-invoice, para o robô e a tela lerem a mesma tarifa.
+//   Consumo-TUSD        kWh 2.288,00  0,64966059 1.486,42 ...
+//   G2Comp.oUC-nM-TUSD  kWh 2.288,00- 0,43390830 992,78- ...
+// Duas linhas do mesmo item (reajuste no meio do ciclo): média ponderada.
+export const unitariosDaConta = (texto) => {
+    const ponderado = (re, item) => {
+        let qtdTotal = 0;
+        let valorTotal = 0;
+        for (const m of texto.matchAll(re)) {
+            if (m[1].toUpperCase() !== item) continue;
+            const qtd = Math.abs(parseValue(m[2]) || 0);
+            const unit = Math.abs(parseValue(m[3]) || 0);
+            if (qtd <= 0 || unit <= 0) continue;
+            qtdTotal += qtd;
+            valorTotal += qtd * unit;
+        }
+        return qtdTotal > 0 ? Number((valorTotal / qtdTotal).toFixed(8)) : null;
+    };
+    const consumoRe = /Consumo-(TUSD|TE)\s*kWh\s*([\d.,]+)-?\s+([\d.,]+)/gi;
+    const compensadoRe = /G[12]Comp\.[mo]UC-[no]M-(TUSD|TE)\s*kWh\s*([\d.,]+)-?\s+([\d.,]+)/gi;
+    return {
+        teApurado: ponderado(consumoRe, 'TE'),
+        tusdApurado: ponderado(consumoRe, 'TUSD'),
+        tusdCompensadoUnit: ponderado(compensadoRe, 'TUSD'),
+    };
+};
+
 // Compara identificadores de UC ignorando pontuação e zeros à esquerda:
 // "1.979.118.032-02" vira "197911803202" e "007030839166" vira "7030839166".
 export const normalizarUc = (valor) => String(valor ?? '').replace(/\D/g, '').replace(/^0+/, '');
@@ -368,6 +396,7 @@ export const parseEnergyBillText = (fullText, ucsDoCadastro = null) => {
         outrosLancamentos: somaOutros,
         linhaDigitavel: linhaDigitavelText,
         pixString: pixStringText,
-        isUcMatch: isUcMatch
+        isUcMatch: isUcMatch,
+        ...unitariosDaConta(cleanText),
     };
 };

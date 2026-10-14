@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../../lib/supabase';
 import { useUI } from '../../../contexts/UIContext';
+import { ehRecusaDeNovaVersao, textoConfirmaNovaVersao, AVISO_VERSAO_ANTIGA } from '../../../lib/planoAssinaturaVersao';
 
 const formatCurrencyUnit = (val, decimals = 4) => {
     const num = Number(val) || 0;
@@ -105,6 +106,15 @@ export default function EletropostoPlanModal({
     const [loading, setLoading] = useState(false);
     const [activeLevelView, setActiveLevelView] = useState('L1');
 
+    // Lastro: versão antiga (somente contratos) não é oferecida, a não ser que
+    // seja o lastro já gravado no plano em edição (o select precisa casar o valor).
+    const lastroAtualId = planToEdit?.recorrente_config?.plano_assinatura_vinculado?.id;
+    const planosLastro = useMemo(
+        () => subscriptionPlans.filter(p =>
+            p.status !== 'somente_contratos' || (lastroAtualId && String(p.id) === String(lastroAtualId))),
+        [subscriptionPlans, lastroAtualId]
+    );
+
     // Plano de Assinatura Vinculado (Lastro do Eletroposto)
     const [selectedSubPlanId, setSelectedSubPlanId] = useState('');
     const [planoVinculadoNome, setPlanoVinculadoNome] = useState('Plano Ultra 15%');
@@ -159,7 +169,8 @@ export default function EletropostoPlanModal({
             setTarifaOrigem(Number(vinc.tarifa_bruta_concessionaria ?? 1.0300));
             setDescontoOrigemPct(Number(vinc.desconto_plano_pct ?? 15));
             setValorLastroPlano(String(lastro.tarifa_bruta ?? vinc.valor_lastro_eletroposto ?? '0.8755'));
-            setPisoFornecedorPct(String(lastro.piso_fornecedor_pct ?? '50'));
+            // A coluna é a fonte que o motor lê; o lastro é só o retrato da tela.
+            setPisoFornecedorPct(String(planToEdit.piso_fornecedor_pct ?? lastro.piso_fornecedor_pct ?? '50'));
 
             if (recCfg.regras_multinivel) {
                 setRegrasMultinivel(recCfg.regras_multinivel);
@@ -184,7 +195,7 @@ export default function EletropostoPlanModal({
                 });
             }
         } else {
-            const defaultSubPlan = subscriptionPlans.find(p => p.ativo) || subscriptionPlans[0] || null;
+            const defaultSubPlan = planosLastro.find(p => p.ativo) || planosLastro[0] || null;
             const info = extractSubscriptionPlanLastro(defaultSubPlan);
 
             setNome('');
@@ -208,7 +219,7 @@ export default function EletropostoPlanModal({
                 3: { b2w: '0', lider: '0', ppe: '0', ppp: '0', ppf: '0', assinante_conect: '0' }
             });
         }
-    }, [planToEdit, isOpen, subscriptionPlans]);
+    }, [planToEdit, isOpen, planosLastro]);
 
     const handleSelectSubscriptionPlan = (e) => {
         const subId = e.target.value;
@@ -493,6 +504,9 @@ export default function EletropostoPlanModal({
             ativo,
             recompensas_ativo: recompensasAtivo,
             tipo_recompensa: tipoRecompensa,
+            // handle_invoice_paid_ledger lê o piso desta coluna, nunca de
+            // recorrente_config.lastro_tarifario.
+            piso_fornecedor_pct: calc.pctPisoFornecedor,
             start_config: {
                 faturas_elegiveis: faturasElegiveisStart,
                 regras: {
@@ -542,8 +556,22 @@ export default function EletropostoPlanModal({
                     .update(payload)
                     .eq('id', planToEdit.id);
 
-                if (error) throw error;
-                showAlert('Plano de Eletroposto atualizado com sucesso!', 'success');
+                if (error) {
+                    // Plano com eletroposto/UC: o banco recusa mudar número e
+                    // pede nova versão (20261010c). O antigo mantém os eletropostos.
+                    // Versão antiga (somente contratos) não gera versão: orienta e para.
+                    if (ehRecusaDeNovaVersao(error) && planToEdit.status === 'somente_contratos') {
+                        showAlert(AVISO_VERSAO_ANTIGA, 'warning');
+                        return;
+                    }
+                    if (!ehRecusaDeNovaVersao(error) || !window.confirm(textoConfirmaNovaVersao(planToEdit.nome))) throw error;
+                    const { error: verErr } = await supabase
+                        .rpc('fn_planos_assinatura_nova_versao', { p_origem: planToEdit.id, p_dados: payload });
+                    if (verErr) throw verErr;
+                    showAlert('Nova versão do plano de eletroposto criada. Os eletropostos atuais continuam na versão antiga até serem movidos.', 'success');
+                } else {
+                    showAlert('Plano de Eletroposto atualizado com sucesso!', 'success');
+                }
             } else {
                 const { error } = await supabase
                     .from('planos_assinatura_energia')
@@ -750,6 +778,15 @@ export default function EletropostoPlanModal({
                     </button>
                 </div>
 
+                {planToEdit?.status === 'somente_contratos' && (
+                    <div style={{
+                        padding: '0.7rem 2rem', background: '#fef3c7', color: '#92400e',
+                        borderBottom: '1px solid #fcd34d', fontSize: '0.82rem', fontWeight: 600
+                    }}>
+                        {AVISO_VERSAO_ANTIGA}
+                    </div>
+                )}
+
                 <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
                     <div className="crm-scrollbar" style={{
                         padding: '1.65rem 2rem', overflowY: 'auto', flex: 1,
@@ -868,12 +905,12 @@ export default function EletropostoPlanModal({
                                             background: '#ffffff', boxSizing: 'border-box', fontWeight: 600, cursor: 'pointer'
                                         }}
                                     >
-                                        {subscriptionPlans.length === 0 && (
+                                        {planosLastro.length === 0 && (
                                             <option value="">
                                                 Referência Padrão ({planoVinculadoNome} — Lastro R$ {formatCurrencyUnit(valorLastroPlano, 4)}/kWh)
                                             </option>
                                         )}
-                                        {subscriptionPlans.map(subPlan => {
+                                        {planosLastro.map(subPlan => {
                                             const info = extractSubscriptionPlanLastro(subPlan);
                                             return (
                                                 <option key={subPlan.id} value={subPlan.id}>

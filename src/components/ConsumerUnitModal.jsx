@@ -25,6 +25,7 @@ import { dividirEmPaginasTransferencia, gerarPdfTransferenciaBase64, montarTermo
 import SubscriberModal from './SubscriberModal';
 import PowerPlantModal from './PowerPlantModal';
 import InvoiceSummaryModal from './InvoiceSummaryModal';
+import TrocaTitularidadePanel from './TrocaTitularidadePanel';
 
 export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDelete, defaultSection = 'geral' }) {
     // Ao encerrar uma UC, o robo para de buscar conta dela -- mas a
@@ -246,7 +247,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
     // Dispara o pedido de prazo quando o status MUDA para encerrado. Comparar
     // com o valor anterior evita abrir o modal so por abrir uma UC ja encerrada.
     useEffect(() => {
-        const ENCERRADOS = ['desconectado', 'cancelado', 'cancelado_inadimplente'];
+        const ENCERRADOS = ['desconectado', 'desligado_por_tt', 'cancelado', 'cancelado_inadimplente'];
         const antes = statusAnterior.current;
         statusAnterior.current = formData.status;
         if (antes === null || antes === formData.status) return;
@@ -259,7 +260,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
     }, [formData.status]);
 
     const fetchPlanos = async () => {
-        const { data } = await supabase.from('planos_assinatura_energia').select('id, nome, desconto_assinante').order('nome');
+        const { data } = await supabase.from('planos_assinatura_energia').select('id, nome, desconto_assinante, status').order('nome');
         setPlanos(data || []);
     };
 
@@ -628,6 +629,24 @@ Qualquer dúvida, é só responder esta mensagem.`;
         }
     };
 
+    // A TT muda a UC no banco (status, titular, número, usina). Sem espelhar
+    // aqui, o próximo "Salvar" do modal regravaria os valores de antes dela.
+    const aplicarUcAtualizadaPelaTT = (uc) => {
+        statusAnterior.current = uc.status;
+        setFormData(prev => ({
+            ...prev,
+            status: uc.status || prev.status,
+            usina_id: uc.usina_id || '',
+            numero_uc: uc.numero_uc || '',
+            titular_conta: uc.titular_conta || '',
+            titular_fatura_id: uc.titular_fatura_id || '',
+            cpf_cnpj_fatura: uc.cpf_cnpj_fatura || '',
+            numero_uc_anterior: uc.numero_uc_anterior || '',
+            titular_anterior_id: uc.titular_anterior_id || '',
+            data_troca_titularidade: uc.data_troca_titularidade || ''
+        }));
+    };
+
     useEffect(() => {
         if (consumerUnit) {
             setFormData({
@@ -918,6 +937,16 @@ Qualquer dúvida, é só responder esta mensagem.`;
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+
+        // Mesma regra de fn_consumer_units_plano_obrigatorio (20261010a).
+        const STATUS_EXIGE_PLANO = ['ativo', 'em_atraso', 'em_transf_titularidade'];
+        if (!formData.plano_assinatura_id
+            && formData.tipo_unidade !== 'geradora'
+            && STATUS_EXIGE_PLANO.includes(formData.status)) {
+            showAlert('Escolha o plano de assinatura da UC antes de colocá-la em operação.', 'error');
+            return;
+        }
+
         setLoading(true);
 
         try {
@@ -992,6 +1021,47 @@ Qualquer dúvida, é só responder esta mensagem.`;
                 throw new Error('Para faturar consumo de terceiro é preciso vincular o assinante que será cobrado.');
             }
 
+            // Autoconsumo remoto: a UC só entra na usina com o titular da conta
+            // igual ao da UG. Se ainda não é, o cadastro nasce SEM usina e a
+            // troca de titularidade é iniciada logo depois de salvar; a UC só é
+            // vinculada quando a TT conclui (fn_concluir_tt).
+            let usinaParaTT = null;
+            if (payload.usina_id && payload.tipo_unidade !== 'geradora' && !consumerUnit?.usina_id) {
+                const usinaAlvo = usinas.find(u => u.id === payload.usina_id);
+                if (usinaAlvo?.modalidade === 'auto_consumo_remoto') {
+                    const { data: ug } = await supabase
+                        .from('consumer_units')
+                        .select('numero_uc, titular_fatura_id')
+                        .eq('usina_id', payload.usina_id).eq('tipo_unidade', 'geradora')
+                        .limit(1).maybeSingle();
+                    const soDigitos = (v) => (v || '').replace(/\D/g, '');
+                    const docDe = (id) => soDigitos(subscribers.find(sub => sub.id === id)?.cpf_cnpj);
+                    const docUC = docDe(payload.titular_fatura_id);
+                    const docUG = docDe(ug?.titular_fatura_id);
+                    const mesmoTitular = ug?.titular_fatura_id && payload.titular_fatura_id
+                        && (ug.titular_fatura_id === payload.titular_fatura_id || (docUC && docUC === docUG));
+                    if (ug?.titular_fatura_id && !mesmoTitular) {
+                        if (!payload.titular_fatura_id) {
+                            throw new Error('Informe o titular da conta de energia da UC (o cedente da troca de titularidade).');
+                        }
+                        if (!payload.plano_assinatura_id) {
+                            throw new Error('Escolha o plano de assinatura da UC: durante a troca de titularidade ela fica "Em Transf. de Titularidade", que exige plano.');
+                        }
+                        const nomeUC = subscribers.find(sub => sub.id === payload.titular_fatura_id)?.name || 'titular da UC';
+                        const nomeUG = subscribers.find(sub => sub.id === ug.titular_fatura_id)?.name || 'titular da UG';
+                        const ok = await showConfirm(
+                            `A conta de energia desta UC está em ${nomeUC} e a UG ${ug.numero_uc} da usina ${usinaAlvo.name} está em ${nomeUG}. Em autoconsumo remoto a UC só pode ser vinculada depois da troca de titularidade. Salvar a UC e iniciar a troca agora?`,
+                            'Troca de titularidade necessária',
+                            'Salvar e iniciar TT',
+                            'Voltar'
+                        );
+                        if (!ok) { setLoading(false); return; }
+                        usinaParaTT = payload.usina_id;
+                        payload.usina_id = null;
+                    }
+                }
+            }
+
             let result;
             if (consumerUnit?.id) {
                 result = await supabase.from('consumer_units').update(payload).eq('id', consumerUnit.id).select().single();
@@ -1000,6 +1070,19 @@ Qualquer dúvida, é só responder esta mensagem.`;
             }
 
             if (result.error) throw result.error;
+
+            if (usinaParaTT) {
+                const { error: ttError } = await supabase.rpc('fn_iniciar_tt', { p_uc_id: result.data.id, p_usina_id: usinaParaTT });
+                if (ttError) {
+                    showAlert(`UC salva, mas a troca de titularidade não foi iniciada: ${ttError.message}. Inicie pelo painel "Troca de titularidade" da UC.`, 'warning');
+                } else {
+                    showAlert('UC salva e troca de titularidade iniciada. A UC será vinculada à usina quando a TT concluir.', 'success');
+                    // O RPC mudou a UC (status, usina_destino_id): devolve a linha atual.
+                    const { data: atual } = await supabase.from('consumer_units').select('*').eq('id', result.data.id).maybeSingle();
+                    if (atual) result.data = atual;
+                }
+            }
+
             onSave(result.data);
             onClose();
         } catch (error) {
@@ -1114,6 +1197,7 @@ Qualquer dúvida, é só responder esta mensagem.`;
             'atrasado': { color: '#991b1b', bg: '#fee2e2', label: 'Atrasado', icon: AlertCircle },
             'em_transf_titularidade': { color: '#5b21b6', bg: '#f5f3ff', label: 'Em Transf. de Titularidade', icon: Clock },
             'desconectado': { color: '#be123c', bg: '#fff1f2', label: 'Desconectado', icon: X },
+            'desligado_por_tt': { color: '#5b21b6', bg: '#f5f3ff', label: 'Desligado por TT', icon: X },
             'ag_emissao_boleto': { color: '#1e40af', bg: '#eff6ff', label: 'Sem Faturamento', icon: FileText },
             'cancelado': { color: '#475569', bg: '#f1f5f9', label: 'Cancelado', icon: X },
         };
@@ -2370,6 +2454,20 @@ Qualquer dúvida, é só responder esta mensagem.`;
                                                         </div>
                                                     );
                                                 })()}
+
+                                                {/* TT: a UC só ganha usina quando a troca de titularidade conclui. */}
+                                                <TrocaTitularidadePanel
+                                                    uc={consumerUnit && {
+                                                        id: consumerUnit.id,
+                                                        numero_uc: formData.numero_uc,
+                                                        usina_id: formData.usina_id,
+                                                        titular_fatura_id: formData.titular_fatura_id,
+                                                        tipo_unidade: formData.tipo_unidade
+                                                    }}
+                                                    usinas={usinas}
+                                                    subscribers={subscribers}
+                                                    onUcAtualizada={aplicarUcAtualizadaPelaTT}
+                                                />
                                             </div>
                                         </div>
                                     </div>
@@ -2557,14 +2655,21 @@ Qualquer dúvida, é só responder esta mensagem.`;
                                                 </div>
                                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem' }}>
                                                     <div>
-                                                        <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Plano de Serviço</label>
+                                                        <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Plano de Serviço *</label>
                                                         <select
                                                             value={formData.plano_assinatura_id}
                                                             onChange={e => setFormData({ ...formData, plano_assinatura_id: e.target.value })}
                                                             style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none' }}
                                                         >
-                                                            <option value="">Nenhum Plano (Usará fallback manual)</option>
-                                                            {planos.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
+                                                            <option value="">Selecione o plano de assinatura (obrigatório para a UC em operação)</option>
+                                                            {/* Só versão ativa; o plano atual da UC aparece mesmo se for versão antiga. */}
+                                                            {planos
+                                                                .filter(p => p.status === 'ativo' || p.id === formData.plano_assinatura_id)
+                                                                .map(p => (
+                                                                    <option key={p.id} value={p.id}>
+                                                                        {p.nome}{p.status === 'somente_contratos' ? ' (versão antiga — somente contratos)' : ''}
+                                                                    </option>
+                                                                ))}
                                                         </select>
                                                     </div>
                                                 </div>

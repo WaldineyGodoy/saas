@@ -15,6 +15,7 @@ import HistoryTimeline from './HistoryTimeline';
 import ContratoUsina from './ContratoUsina';
 import ContratoGestaoUsina from './ContratoGestaoUsina';
 import { baixarPdfContratoUsina, CONTRATOS_USINA, DEFAULTS_USINA, gerarPdfContratoUsinaBase64 } from '../lib/contratosUsina';
+import { termosContratoDoPlano, CHAVES_CONTRATO_DO_PLANO, planoAceitaUsina } from '../lib/planoUsina';
 import { paraNumero } from '../lib/contratoBase';
 import { useAuth } from '../contexts/AuthContext';
 import { useBranding } from '../contexts/BrandingContext';
@@ -403,6 +404,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
         servicos_contratados: [],
         service_values: {}, // JSONB for values
         gestao_percentual: '',
+        plano_usina_id: '',
         leased_area_id: '',
         cep: '',
         rua: '',
@@ -446,6 +448,8 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
     const [areasDisponiveis, setAreasDisponiveis] = useState([]);
     const [assinaturas, setAssinaturas] = useState([]);
     const [carregandoAssinaturas, setCarregandoAssinaturas] = useState(false);
+    const [planosUsina, setPlanosUsina] = useState([]);
+    const [originadores, setOriginadores] = useState([]);
     const [enviandoContrato, setEnviandoContrato] = useState(false);
     const [gerandoMinuta, setGerandoMinuta] = useState(false);
     const [cancelandoAssinatura, setCancelandoAssinatura] = useState(null);
@@ -483,6 +487,25 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
         }
     }, []);
 
+    // Planos de usina e originadores para a aba Financeiro (spec
+    // 2026-10-06). O plano de usina nao aponta para plano de assinatura.
+    useEffect(() => {
+        (async () => {
+            const [planos, origs] = await Promise.all([
+                supabase.from('planos_usina')
+                    .select('*')
+                    .order('nome'),
+                supabase.from('originators_v2')
+                    .select('id, name, cargo, ativo')
+                    .order('name')
+            ]);
+            if (planos.error) console.error('Erro ao carregar planos de usina:', planos.error);
+            else setPlanosUsina(planos.data || []);
+            if (origs.error) console.error('Erro ao carregar originadores:', origs.error);
+            else setOriginadores(origs.data || []);
+        })();
+    }, []);
+
     useEffect(() => {
         if (activeTab === 'contratos') {
             carregarDadosContrato(usina?.id, formData.leased_area_id);
@@ -498,6 +521,18 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
             setContractOpts({ ...DEFAULTS_USINA, ...usina.contract_terms });
         }
     }, [usina?.id, usina?.contract_terms]);
+
+    // Termos do Plano de Usina mandam no contrato (spec 2026-10-06, secao 3):
+    // com plano, recorrente, taxas, multas e garantia saem dele; sem plano,
+    // voltam ao que a usina tinha gravado ou ao padrao do contrato.
+    const planoUsinaSel = planosUsina.find(pl => pl.id === formData.plano_usina_id) || null;
+    useEffect(() => {
+        const base = { ...DEFAULTS_USINA, ...(usina?.contract_terms || {}) };
+        const termos = planoUsinaSel
+            ? termosContratoDoPlano(planoUsinaSel)
+            : Object.fromEntries(CHAVES_CONTRATO_DO_PLANO.map(k => [k, base[k]]));
+        setContractOpts(prev => ({ ...prev, ...termos }));
+    }, [planoUsinaSel, usina?.contract_terms]);
 
     const contextoContrato = () => ({
         usina: { ...usina, ...formData, address: { rua: formData.rua, numero: formData.numero, bairro: formData.bairro, cidade: formData.cidade, uf: formData.uf, cep: formData.cep } },
@@ -544,6 +579,9 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
             // criaria uma cópia que envelhece sozinha assim que alguém
             // corrigir o valor investido na aba Dados.
             if (chave === 'valorTotal') continue;
+            // Com Plano de Usina, recorrente, taxas, multas e garantia sao do
+            // plano: gravar copia na usina faria duas verdades.
+            if (formData.plano_usina_id && CHAVES_CONTRATO_DO_PLANO.includes(chave)) continue;
             const bruto = contractOpts[chave];
             if (typeof padrao === 'number') {
                 const n = paraNumero(bruto);
@@ -1081,6 +1119,7 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                 servicos_contratados: usina.servicos_contratados || [],
                 service_values: usina.service_values || {},
                 gestao_percentual: usina.gestao_percentual || '',
+                plano_usina_id: usina.plano_usina_id || '',
                 leased_area_id: usina.leased_area_id || '',
                 cep: usina.address?.cep || '',
                 rua: usina.address?.rua || '',
@@ -1765,7 +1804,7 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
         // dados que já estão no cadastro do fornecedor.
         const { data } = await supabase
             .from('suppliers')
-            .select('id, name, phone, cnpj, email, address, legal_partner_name, legal_partner_cpf')
+            .select('id, name, phone, cnpj, email, address, legal_partner_name, legal_partner_cpf, originator_id')
             .order('name');
         setSuppliers(data || []);
     };
@@ -2914,6 +2953,9 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
         }
     };
 
+    // O retrato das UCs (prioridade ou porcentagem) é montado no banco por
+    // fn_gerar_lista_rateio, a mesma função que a troca de titularidade usa.
+    // Por isso o cálculo parte dos dados SALVOS, não do que está na tela.
     const handleCreateRateioCard = async () => {
         if (!usina?.id) {
             showAlert('Salve a usina antes de criar uma Lista de Rateio.', 'warning');
@@ -2925,105 +2967,29 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
         }
 
         const confirmed = await showConfirm(
-            'Criar Lista de Rateio',
-            `Criar um card de Lista de Rateio para a usina "${formData.name}"?\n\nSerão incluídas apenas UCs Ativas, Em Atraso e Ag. Conexão (${selectedUCs.filter(uc => uc.tipo_unidade === 'geradora' || ['ativo', 'em_atraso', 'aguardando_conexao'].includes(uc.status)).length} de ${selectedUCs.length} UC(s)).`,
-            'Sim, Criar',
+            `Gerar a Lista de Rateio da usina "${formData.name}"?\n\nO cálculo usa os dados SALVOS da usina e das UCs: se alterou a ordem de prioridade, o tipo de rateio ou o saldo remanescente, salve antes. Entram as UCs Ativas, Em Atraso e Ag. Conexão, mais a geradora. Se já existir um card "Criada" desta usina, ele é atualizado em vez de duplicado.`,
+            'Gerar Lista de Rateio',
+            'Sim, Gerar',
             'Cancelar'
         );
         if (!confirmed) return;
 
-        // Only include UCs with allowed statuses (+ geradora is always included)
-        const ALLOWED_RATEIO_STATUSES = ['ativo', 'em_atraso', 'aguardando_conexao'];
-        const eligibleUCs = selectedUCs.filter(uc =>
-            uc.tipo_unidade === 'geradora' || ALLOWED_RATEIO_STATUSES.includes(uc.status)
-        );
-
-        if (eligibleUCs.length === 0) {
-            showAlert('Nenhuma UC elegível (Ativa, Em Atraso ou Ag. Conexão) para criar a lista.', 'warning');
-            return;
-        }
-
-        // Build the same processedUCs logic as handleGenerateList
-        const geradora = eligibleUCs.find(u => u.tipo_unidade === 'geradora');
-        const beneficiarias = eligibleUCs.filter(u => u.tipo_unidade !== 'geradora');
-        const sortedUCs = geradora ? [geradora, ...beneficiarias] : beneficiarias;
-        const isPorcentagem = formData.rateio_type === 'porcentagem';
-        let processedUCs = [];
-
-        if (isPorcentagem) {
-            let currentTotalPrc = 0;
-            let saldoRemanescenteIndex = -1;
-            const totalCapacity = Number(formData.geracao_estimada_kwh) || 1;
-
-            sortedUCs.forEach((uc, idx) => {
-                if (uc.saldo_remanescente) saldoRemanescenteIndex = idx;
-            });
-            if (saldoRemanescenteIndex === -1) {
-                const geradoraIdx = sortedUCs.findIndex(uc => uc.tipo_unidade === 'geradora');
-                saldoRemanescenteIndex = geradoraIdx !== -1 ? geradoraIdx : 0;
-            }
-
-            for (let i = 0; i < sortedUCs.length; i++) {
-                const uc = { ...sortedUCs[i] };
-                const kWhVal = Number(uc.franquia) || 0;
-                const prcVal = (kWhVal / totalCapacity) * 100;
-                if (currentTotalPrc + prcVal <= 100) {
-                    currentTotalPrc += prcVal;
-                    uc.calculatedPercentage = prcVal;
-                    processedUCs.push(uc);
-                } else if (currentTotalPrc < 100) {
-                    uc.calculatedPercentage = 100 - currentTotalPrc;
-                    currentTotalPrc = 100;
-                    processedUCs.push(uc);
-                    break;
-                } else break;
-            }
-            if (currentTotalPrc < 100 && processedUCs.length > 0) {
-                const targetId = sortedUCs[saldoRemanescenteIndex]?.id;
-                const targetInProcessed = processedUCs.findIndex(u => u.id === targetId);
-                if (targetInProcessed !== -1) {
-                    processedUCs[targetInProcessed].calculatedPercentage = (processedUCs[targetInProcessed].calculatedPercentage || 0) + (100 - currentTotalPrc);
-                } else {
-                    processedUCs[0].calculatedPercentage = (processedUCs[0].calculatedPercentage || 0) + (100 - currentTotalPrc);
-                }
-            }
-        } else {
-            processedUCs = sortedUCs.map((uc, idx) => ({ ...uc, prioridade: idx + 1 }));
-        }
-
-        // Build snapshot with relevant fields only
-        const ucsSnapshot = processedUCs.map(uc => {
-            const sub = subscribers.find(s => s.id === uc.subscriber_id);
-            return {
-                id: uc.id,
-                numero_uc: uc.numero_uc,
-                tipo_unidade: uc.tipo_unidade,
-                status: uc.status,
-                franquia: uc.franquia,
-                consumo_medio_kwh: uc.consumo_medio_kwh,
-                cpf_cnpj: uc.cpf_cnpj_fatura || sub?.cpf_cnpj || '',
-                saldo_remanescente: uc.saldo_remanescente,
-                prioridade: uc.prioridade,
-                calculatedPercentage: uc.calculatedPercentage
-            };
-        });
-
         try {
-            const now = new Date().toISOString();
-            const { error } = await supabase.from('rateio_lists').insert({
-                usina_id: usina.id,
-                usina_name: formData.name,
-                concessionaria: formData.concessionaria,
-                unidade_geradora: formData.unidade_geradora,
-                qtd_ucs: processedUCs.length,
-                ucs_snapshot: ucsSnapshot,
-                rateio_type: formData.rateio_type,
-                status: 'criada',
-                status_dates: { criada_at: now }
-            });
-
+            const { data: cardId, error } = await supabase.rpc('fn_gerar_lista_rateio', { p_usina_id: usina.id, p_origem: 'manual' });
             if (error) throw error;
-            showAlert(`Lista de Rateio criada com ${processedUCs.length} UC(s)! Acesse o menu "Lista de Rateio" para acompanhar.`, 'success');
+
+            if (!cardId) {
+                // null: ou há lista em processamento na concessionária, ou nenhuma UC elegível.
+                const { data: u } = await supabase.from('usinas').select('lista_rateio_pendente').eq('id', usina.id).maybeSingle();
+                showAlert(
+                    u?.lista_rateio_pendente
+                        ? 'Esta usina já tem uma lista em processamento na concessionária. O card novo é criado sozinho quando ela for concluída, reprovada ou cancelada.'
+                        : 'Nenhuma UC elegível (Ativa, Em Atraso ou Ag. Conexão) para criar a lista.',
+                    'warning'
+                );
+                return;
+            }
+            showAlert('Lista de Rateio gerada. Acompanhe no menu "Lista de Rateio".', 'success');
         } catch (err) {
             console.error('Error creating rateio card:', err);
             showAlert('Erro ao criar Lista de Rateio: ' + err.message, 'error');
@@ -3262,6 +3228,8 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
             servicos_contratados: formData.servicos_contratados,
             service_values: formData.service_values,
             gestao_percentual: Number(formData.gestao_percentual),
+            // String vazia num campo uuid e erro do Postgres, nao "sem plano".
+            plano_usina_id: formData.plano_usina_id || null,
             // String vazia num campo uuid é erro do Postgres, não "sem valor".
             leased_area_id: formData.leased_area_id || null,
             // Parcelas, prazos e demais condições da aba Contratos. Antes só
@@ -4268,6 +4236,65 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                     </div>
                                 )}
                             </div>
+
+                            {/* Plano de Usina: liga o split desta usina (spec 2026-10-06) */}
+                            {(() => {
+                                const mudouPlano = (formData.plano_usina_id || '') !== (usina?.plano_usina_id || '');
+                                const seletor = { width: '100%', padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #bfdbfe', background: 'white', fontWeight: 600, color: '#1e3a8a' };
+                                return (
+                                    <div style={{ marginTop: '1.5rem', background: '#eff6ff', padding: '1.5rem', borderRadius: '16px', border: '1px solid #bfdbfe', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                        <div>
+                                            <h4 style={{ margin: 0, fontSize: '1rem', color: '#1e40af', fontWeight: 700 }}>Plano de Usina</h4>
+                                            <p style={{ margin: 0, fontSize: '0.8rem', color: '#2563eb' }}>Gestão B2W, termos do contrato e recompensa do originador do fornecedor desta usina</p>
+                                        </div>
+                                        <select
+                                            className="crm-input"
+                                            value={formData.plano_usina_id || ''}
+                                            onChange={e => setFormData({ ...formData, plano_usina_id: e.target.value })}
+                                            style={seletor}
+                                        >
+                                            <option value="">Sem plano de usina</option>
+                                            {planosUsina.map(pl => (
+                                                <option key={pl.id} value={pl.id} disabled={!planoAceitaUsina(pl) && pl.id !== formData.plano_usina_id}>
+                                                    {pl.nome} · gestão {Number(pl.percentual_recorrente)}%
+                                                    {pl.status === 'somente_contratos' ? ' (somente contratos)' : ''}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        {planoUsinaSel && (
+                                            <p style={{ margin: 0, fontSize: '0.75rem', color: '#1e40af', lineHeight: 1.5 }}>
+                                                Gestão B2W {Number(planoUsinaSel.percentual_recorrente)}% · administração R$ {Number(planoUsinaSel.taxa_admin_reais).toFixed(2).replace('.', ',')} por consumidor/mês · recuperação {Number(planoUsinaSel.taxa_recuperacao_pct)}%
+                                                {` · originador da usina: ${Number(planoUsinaSel.originador_recorrente_pct)}% recorrente`}
+                                                {` · Líder do originador ${Number(planoUsinaSel.originador_lider_recorrente_pct ?? 0)}%`}
+                                                {(planoUsinaSel.originador_bonus_fechamentos || []).length > 0 ? `, bônus no(s) fechamento(s) ${planoUsinaSel.originador_bonus_fechamentos.join(', ')}` : ''}.
+                                                {' '}Com plano, o razão usa a gestão do plano, não a "Taxa Percentual" acima, e o contrato de compra e venda sai com os termos do plano.
+                                            </p>
+                                        )}
+                                        {mudouPlano && (
+                                            <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: 700, color: '#b45309' }}>
+                                                {formData.plano_usina_id
+                                                    ? 'Ao salvar, toda fatura paga a partir de agora das UCs desta usina passa a lançar a gestão B2W pelo plano de usina. Faturas já lançadas não mudam.'
+                                                    : 'Ao salvar, a gestão B2W volta a sair do plano de assinatura de cada UC.'}
+                                            </p>
+                                        )}
+                                        {(() => {
+                                            // O originador mora no fornecedor e a usina herda
+                                            // (spec, decisao 6b): aqui so se mostra.
+                                            const forn = suppliers.find(f => f.id === formData.supplier_id);
+                                            const orig = originadores.find(o => o.id === forn?.originator_id);
+                                            return (
+                                                <p style={{ margin: 0, fontSize: '0.8rem', color: '#1e40af' }}>
+                                                    <strong>Originador da usina:</strong>{' '}
+                                                    {orig
+                                                        ? `${orig.name}${orig.ativo ? '' : ' (inativo — a parte dele fica para a associação)'}`
+                                                        : 'nenhum — o previsto no plano fica para a associação'}
+                                                    {' · '}herdado do fornecedor; altere no cadastro do fornecedor.
+                                                </p>
+                                            );
+                                        })()}
+                                    </div>
+                                );
+                            })()}
 
                             <div style={{ marginTop: '1.5rem' }}>
                                 {/* Sub-tabs for Financeiro */}
@@ -5551,6 +5578,7 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                             usina={usina}
                                             supplierId={formData.supplier_id}
                                             registrarHistorico={addHistory}
+                                            planoUsina={planoUsinaSel}
                                         />
                                     ) : (
                                     <>
