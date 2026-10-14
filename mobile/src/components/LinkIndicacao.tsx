@@ -6,7 +6,7 @@ import QRCode from 'react-native-qrcode-svg';
 import { colors, type } from '../theme/tokens';
 import { Button, Card, Row } from './ui';
 
-export function LinkIndicacao({ link, texto, bonus }: { link: string; texto: string; bonus?: string }) {
+export function LinkIndicacao({ link, texto, bonus, titulo = 'Seu link de indicação' }: { link: string; texto: string; bonus?: string; titulo?: string }) {
   const [copiado, setCopiado] = useState(false);
   const [qr, setQr] = useState(false);
   const copiar = async () => {
@@ -18,7 +18,7 @@ export function LinkIndicacao({ link, texto, bonus }: { link: string; texto: str
   return (
     <Card style={{ gap: 10 }}>
       <Row style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-        <Text style={[type.headlineSm, { color: colors.onSurface }]}>Seu link de indicação</Text>
+        <Text style={[type.headlineSm, { color: colors.onSurface }]}>{titulo}</Text>
         {bonus ? <Text style={[type.labelSm, { color: colors.secondary }]}>{bonus}</Text> : null}
       </Row>
       <View style={{ backgroundColor: colors.surface, borderRadius: 8, padding: 10, borderWidth: 1, borderColor: colors.borderSubtle }}>

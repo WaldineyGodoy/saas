@@ -10,4 +10,4 @@
  * Vale o maior nível que a versão tiver (layout + correção = X). Subir um
  * nível zera os da direita: 1.6.1 -> 2.0.0 (X), 1.7.0 (Y) ou 1.6.2 (Z).
  */
-export const NOVIDADES_DA_VERSAO = 'Nova página pública de exclusão de conta (apps.b2wenergia.com.br/excluir-conta), exigida pela Google Play.';
+export const NOVIDADES_DA_VERSAO = 'Correção: o Parceiro Power vê o seu link de indicação e o QR Code na Home Connect e na Drive Connect.';

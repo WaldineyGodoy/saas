@@ -101,6 +101,7 @@ export const demoRpc = (fn: string, args?: Record<string, unknown>): unknown => 
       { id: '00000000-0000-4000-8000-000000000002', nome: 'Plano Conect 15%', desconto_assinante: 15 },
     ];
     case 'app_minha_adesao': return null;
+    case 'app_meu_originador': return null;
     case 'app_criar_adesao': return { subscriber_id: SUB, onboarding_token: '00000000-0000-4000-8000-0000000000cc' };
     case 'app_registrar_interesse_investimento': return '00000000-0000-4000-8000-0000000000bb';
     default: return null;

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('../env', () => ({ CRM_URL: 'https://crm.b2wenergia.com.br' }));
-const { linkIndicacao, linkSiteConvite, parseQrRecarga, textoIndicacao, urlCheckoutRecarga } = await import('../links');
+const { linkIndicacao, linkParceiro, linkSiteConvite, textoConviteParceiro, parseQrRecarga, textoIndicacao, urlCheckoutRecarga } = await import('../links');
 
 const ID = '3f2b9c1e-8a4d-4e2f-9b1a-0c5d6e7f8a9b';
 
@@ -41,5 +41,17 @@ describe('link de indicacao', () => {
 describe('linkSiteConvite', () => {
   it('monta o convite do originador como o CRM', () => {
     expect(linkSiteConvite(ID, ' Carlos  Silva ')).toBe(`https://b2wenergia.com.br/convite/?name=Carlos&id=${ID}`);
+  });
+});
+
+describe('link do Parceiro Power', () => {
+  it('usa o link curto e, sem ele, a rota do webapp', () => {
+    expect(linkParceiro({ id: ID, short_url: 'https://link.b2wenergia.com.br/fabiof038' })).toBe('https://link.b2wenergia.com.br/fabiof038');
+    expect(linkParceiro({ id: ID, short_url: null })).toBe(`https://apps.b2wenergia.com.br/i/${ID}`);
+    expect(linkParceiro(null)).toBe('');
+  });
+  it('mensagem do parceiro leva o link', () => {
+    expect(textoConviteParceiro('Fabio Santos', 'https://x/y')).toMatch(/^Oi! Aqui é Fabio, parceiro da B2W Energia\..*https:\/\/x\/y$/);
+    expect(textoConviteParceiro('Fabio', '')).toBe('');
   });
 });
