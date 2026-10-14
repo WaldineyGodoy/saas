@@ -60,6 +60,8 @@ function RootStack() {
       </Stack.Protected>
       {/* Link de indicação: vale logado ou não. */}
       <Stack.Screen name="i/[codigo]" options={{ headerShown: false }} />
+      {/* Exclusão de conta: pública (exigência da Google Play), logado ou não. */}
+      <Stack.Screen name="excluir-conta" options={{ title: 'Excluir conta' }} />
       <Stack.Protected guard={Boolean(session)}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="energia/[ucId]" options={{ title: 'Unidade consumidora' }} />
