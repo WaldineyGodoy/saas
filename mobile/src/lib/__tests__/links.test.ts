@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('../env', () => ({ CRM_URL: 'https://crm.b2wenergia.com.br' }));
-const { linkIndicacao, linkParceiro, linkSiteConvite, textoConviteParceiro, parseQrRecarga, textoIndicacao, urlCheckoutRecarga } = await import('../links');
+const { linkIndicacao, linkParceiro, linkSiteConvite, textoContratoCliente, textoConviteParceiro, parseQrRecarga, textoIndicacao, urlCheckoutRecarga, whatsappPara } = await import('../links');
 
 const ID = '3f2b9c1e-8a4d-4e2f-9b1a-0c5d6e7f8a9b';
 
@@ -53,5 +53,20 @@ describe('link do Parceiro Power', () => {
   it('mensagem do parceiro leva o link', () => {
     expect(textoConviteParceiro('Fabio Santos', 'https://x/y')).toMatch(/^Oi! Aqui é Fabio, parceiro da B2W Energia\..*https:\/\/x\/y$/);
     expect(textoConviteParceiro('Fabio', '')).toBe('');
+  });
+});
+
+describe('adesão assistida: mensagem ao cliente', () => {
+  it('chama o cliente pelo primeiro nome e leva o link de assinatura', () => {
+    const t = textoContratoCliente('Carla Mendes', 'https://assina.example/abc');
+    expect(t).toMatch(/^Oi, Carla!/);
+    expect(t).toContain('https://assina.example/abc');
+  });
+  it('sem link não monta mensagem', () => {
+    expect(textoContratoCliente('Carla', '')).toBe('');
+  });
+  it('WhatsApp vai direto para o celular do cliente, com o 55', () => {
+    expect(whatsappPara('84999990001', 'oi')).toBe('https://wa.me/5584999990001?text=oi');
+    expect(whatsappPara(null, 'oi')).toBe('https://wa.me/?text=oi');
   });
 });

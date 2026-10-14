@@ -104,6 +104,17 @@ export const demoRpc = (fn: string, args?: Record<string, unknown>): unknown => 
     case 'app_meu_originador': return null;
     case 'app_criar_adesao': return { subscriber_id: SUB, onboarding_token: '00000000-0000-4000-8000-0000000000cc' };
     case 'app_registrar_interesse_investimento': return '00000000-0000-4000-8000-0000000000bb';
+    case 'app_criar_adesao_cliente': return { subscriber_id: '00000000-0000-4000-8000-0000000000d1', onboarding_token: '00000000-0000-4000-8000-0000000000dd' };
+    case 'app_adesao_cliente': return {
+      etapa: 'documentos', token: '00000000-0000-4000-8000-0000000000dd', nome: 'Carla Mendes', email: 'carla@example.com', phone: '84999990001',
+      faltantes: [{ tipo: 'identidade', consumer_unit_id: null, numero_uc: null }],
+    };
+    case 'app_rede_parceiro': return [
+      { id: '00000000-0000-4000-8000-0000000000d1', tipo: 'assinante', name: 'Carla Mendes', status: 'ativacao', etapa: 'adesao', numero_uc: '7012345678', cidade: 'Natal', uf: 'RN', consumo_kwh: 320, comissao: 0, criado_em: '2025-04-10T12:00:00Z' },
+      { id: '00000000-0000-4000-8000-0000000000d2', tipo: 'assinante', name: 'Pedro Alves', status: 'ativacao', etapa: 'assinatura', numero_uc: '7012345679', cidade: 'Parnamirim', uf: 'RN', consumo_kwh: 450, comissao: 0, criado_em: '2025-04-08T12:00:00Z' },
+      { id: '00000000-0000-4000-8000-0000000000d3', tipo: 'assinante', name: 'Lúcia Ferreira', status: 'ativo', etapa: 'ativo', numero_uc: '7012345680', cidade: 'Natal', uf: 'RN', consumo_kwh: 610, comissao: 84.5, criado_em: '2025-02-01T12:00:00Z' },
+      { id: '00000000-0000-4000-8000-0000000000d4', tipo: 'lead', name: 'Marcos Lima', status: 'novo', etapa: 'interessado', numero_uc: null, cidade: 'Mossoró', uf: 'RN', consumo_kwh: 280, comissao: 0, criado_em: '2025-04-11T12:00:00Z' },
+    ];
     default: return null;
   }
 };

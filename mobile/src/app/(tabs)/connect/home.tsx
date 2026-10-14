@@ -1,13 +1,15 @@
+import { router } from 'expo-router';
 import { useMemo } from 'react';
+import { Text, View } from 'react-native';
 import { BotaoConvite, ConviteRodape, useDestinoAssinarEnergia } from '../../../components/Convites';
 import { LinkIndicacao } from '../../../components/LinkIndicacao';
 import { RedeIndicados } from '../../../components/RedeIndicados';
-import { Card, Empty, ErrorState, Hero, Loading, Metric, Row, Screen, SectionLabel } from '../../../components/ui';
-import { Text } from 'react-native';
-import { useMeuOriginador, useMinhaRede, usePerfil } from '../../../lib/api';
+import { RedeParceiro } from '../../../components/RedeParceiro';
+import { Card, Empty, ErrorState, Hero, Icon, Loading, Metric, Row, Screen, SectionLabel } from '../../../components/ui';
+import { useMeuOriginador, useMinhaRede, usePerfil, useRedeParceiro } from '../../../lib/api';
 import { fmtBRL, fmtKwh } from '../../../lib/format';
 import { linkIndicacao, linkParceiro, STATUS_PODE_INDICAR, textoConviteParceiro, textoIndicacao } from '../../../lib/links';
-import { grupoRede } from '../../../lib/status';
+import { grupoParceiro, grupoRede } from '../../../lib/status';
 import { colors, type } from '../../../theme/tokens';
 
 export default function HomeConnect() {
@@ -21,6 +23,9 @@ export default function HomeConnect() {
   // assinante. Antes a tela dizia "Disponível para assinantes" (14/10/2026).
   const parceiro = useMeuOriginador(Boolean(perfil.data?.originator));
   const linkPar = linkParceiro(parceiro.data);
+  const ehParceiro = Boolean(parceiro.data?.id && parceiro.data.ativo);
+  // A rede do parceiro fica no app (antes a tela mandava para o CRM).
+  const clientes = useRedeParceiro(ehParceiro);
 
   const tot = useMemo(() => {
     const ativos = (rede.data ?? []).filter((i) => grupoRede(i.status, i.fatura_status) === 'ativo');
@@ -30,12 +35,21 @@ export default function HomeConnect() {
     };
   }, [rede.data]);
 
+  const totPar = useMemo(() => {
+    const lista = clientes.data ?? [];
+    return {
+      ativos: lista.filter((c) => grupoParceiro(c.etapa) === 'ativo').length,
+      comissao: lista.reduce((a, c) => a + (Number(c.comissao) || 0), 0),
+    };
+  }, [clientes.data]);
+
   if (perfil.isLoading) return <Loading />;
 
   return (
-    <Screen refreshing={rede.isRefetching} onRefresh={() => { perfil.refetch(); rede.refetch(); }}>
+    <Screen refreshing={rede.isRefetching || clientes.isRefetching} onRefresh={() => { perfil.refetch(); rede.refetch(); if (ehParceiro) clientes.refetch(); }}>
       <Hero title="Home Connect" subtitle={sub || !linkPar ? 'Ganhe cashback todo mês indicando assinantes para a sua rede.' : 'Indique clientes para a B2W e ganhe comissão por cada adesão.'} />
       {sub && pode ? <LinkIndicacao link={link} texto={textoIndicacao(sub.name, link)} bonus={linkPar ? 'Cashback na sua fatura' : undefined} /> : null}
+      {ehParceiro ? <CadastrarAssinante /> : null}
       {linkPar ? (
         <LinkIndicacao titulo="Seu link de Parceiro Power" bonus="Comissão por cliente" link={linkPar} texto={textoConviteParceiro(parceiro.data?.name, linkPar)} />
       ) : null}
@@ -48,11 +62,15 @@ export default function HomeConnect() {
             action={<BotaoConvite label={perfil.data?.lead ? 'Continuar minha adesão' : 'Assinar energia'} icon="bolt" destino={assinar} />} />
         )
       ) : null}
-      {!sub && linkPar ? (
-        <Card style={{ gap: 6 }}>
-          <Text style={[type.headlineSm, { color: colors.onSurface }]}>Seus clientes e comissões</Text>
-          <Text style={[type.bodySm, { color: colors.inkSecondary }]}>Quem assinar pelo seu link fica ligado a você. Acompanhe os clientes e as comissões no CRM B2W (crm.b2wenergia.com.br), com o mesmo e-mail do app.</Text>
-        </Card>
+      {ehParceiro ? (
+        <>
+          <Row>
+            <Metric label="Clientes ativos" value={String(totPar.ativos)} icon="groups" />
+            <Metric label="Comissões" value={fmtBRL(totPar.comissao)} icon="payments" iconColor={colors.secondary} foot="Acumulado" footIcon="verified" />
+          </Row>
+          <SectionLabel title="Minha rede de clientes" aside={`${clientes.data?.length ?? 0} clientes`} />
+          {clientes.isLoading ? <Loading /> : clientes.error ? <ErrorState error={clientes.error} onRetry={() => clientes.refetch()} /> : <RedeParceiro clientes={clientes.data ?? []} />}
+        </>
       ) : null}
       {sub ? (
         <>
@@ -68,5 +86,21 @@ export default function HomeConnect() {
         <ConviteRodape titulo="Ganhe também com usinas e eletropostos" texto="Além do cashback da sua rede, tenha renda com cotas de usina, consórcio, financiamento ou um eletroposto." botao="Ter renda com usinas e eletropostos" />
       ) : null}
     </Screen>
+  );
+}
+
+/** Adesão assistida: o parceiro cadastra o cliente pelo próprio app. */
+function CadastrarAssinante() {
+  return (
+    <Card onPress={() => router.push('/adesao-cliente')} style={{ flexDirection: 'row', alignItems: 'center', gap: 14, borderColor: colors.primary, borderWidth: 1 }}>
+      <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
+        <Icon name="person-add" size={24} color={colors.onPrimary} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={[type.headlineSm, { color: colors.onSurface }]}>Cadastrar Novo Assinante</Text>
+        <Text style={[type.bodySm, { color: colors.inkSecondary }]}>Novo assinante para minha rede</Text>
+      </View>
+      <Icon name="chevron-right" color={colors.primary} />
+    </Card>
   );
 }

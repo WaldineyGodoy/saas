@@ -26,7 +26,7 @@ export const toneColor: Record<Tone, string> = new Proxy({} as Record<Tone, stri
 const UC: Record<string, [string, Tone]> = {
   ativo: ['Ativa', 'ok'],
   vinculado: ['Vinculada', 'ok'],
-  ativacao: ['Em ativação', 'info'],
+  ativacao: ['Ativação', 'info'],
   em_ativacao: ['Em ativação', 'info'],
   aguardando_conexao: ['Aguardando conexão', 'info'],
   em_transf_titularidade: ['Troca de titular', 'info'],
@@ -82,3 +82,29 @@ export const ucStatus = (s?: string | null) => pick(UC, s);
 export const usinaStatus = (s?: string | null) => pick(USINA, s);
 export const faturaStatus = (s?: string | null) => pick(FATURA, s);
 export const eletropostoStatus = (s?: string | null) => pick(ELETROPOSTO, s);
+
+/** Rede do Parceiro Power (app_rede_parceiro): onde cada cliente está. */
+export type GrupoParceiro = 'interessado' | 'adesao' | 'assinatura' | 'ativacao' | 'ativo' | 'cancelado';
+export const grupoParceiro = (etapa: string): GrupoParceiro => {
+  switch (etapa) {
+    case 'interessado':
+    case 'adesao':
+    case 'assinatura':
+      return etapa;
+    case 'contrato_assinado':
+      return 'ativacao';
+    case 'ativo':
+    case 'ativo_inadimplente':
+      return 'ativo';
+    default:
+      return 'cancelado';
+  }
+};
+export const ROTULO_PARCEIRO: Record<GrupoParceiro, [string, Tone]> = {
+  interessado: ['Interessado', 'neutral'],
+  adesao: ['Em adesão', 'warn'],
+  assinatura: ['Assinatura', 'info'],
+  ativacao: ['Ativação', 'info'],
+  ativo: ['Ativo', 'ok'],
+  cancelado: ['Encerrado', 'bad'],
+};
