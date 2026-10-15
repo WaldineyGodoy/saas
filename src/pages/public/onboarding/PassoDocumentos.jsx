@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '../../../lib/supabase';
-import { documentosObrigatorios, lerErroFuncao, validarArquivo } from '../../../lib/onboarding';
+import { documentosObrigatorios, validarArquivo } from '../../../lib/onboarding';
+import { enviarDocumentoOnboarding } from '../../../lib/onboardingDocumentos';
 import { CheckCircle, FileText, Upload, ArrowRight } from 'lucide-react';
 
 /** Chave de um documento: o tipo, mais a UC quando é conta de energia. */
@@ -40,21 +40,7 @@ export default function PassoDocumentos({ token, estado, onCompleto }) {
 
         setEnviando(k);
         try {
-            const { data: u, error: e1 } = await supabase.functions.invoke('onboarding-documentos',
-                { body: { acao: 'url', token, tipo: item.tipo, consumer_unit_id: item.consumer_unit_id, mime: file.type, tamanho: file.size } });
-            if (e1) throw new Error((await lerErroFuncao(e1)).mensagem);
-            if (u?.error) throw new Error(u.error);
-
-            const { error: e2 } = await supabase.storage.from('documentos-assinante')
-                .uploadToSignedUrl(u.path, u.token_upload, file, { contentType: file.type });
-            if (e2) throw new Error('Não foi possível enviar o arquivo. Tente de novo.');
-
-            const { data: r, error: e3 } = await supabase.functions.invoke('onboarding-documentos',
-                { body: { acao: 'registrar', token, tipo: item.tipo, consumer_unit_id: item.consumer_unit_id, path: u.path, mime: file.type, tamanho: file.size } });
-            if (e3) throw new Error((await lerErroFuncao(e3)).mensagem);
-            if (r?.error) throw new Error(r.error);
-
-            const novos = r?.faltantes || [];
+            const novos = await enviarDocumentoOnboarding({ token, tipo: item.tipo, consumerUnitId: item.consumer_unit_id, file });
             setFaltantes(novos);
             if (novos.length === 0) onCompleto();
         } catch (e) {
@@ -67,7 +53,7 @@ export default function PassoDocumentos({ token, estado, onCompleto }) {
 
     return (
         <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-6 md:p-10">
-            <h2 className="text-2xl font-bold mb-2 flex items-center gap-2" style={{ color: '#003366' }}>
+            <h2 className="text-2xl font-bold mb-2 flex items-center gap-2">
                 <div className="w-1 h-8 bg-[#FF6600] rounded-full"></div>
                 Documentos
             </h2>
@@ -120,8 +106,7 @@ export default function PassoDocumentos({ token, estado, onCompleto }) {
             <button
                 onClick={onCompleto}
                 disabled={faltantes.length > 0 || !!enviando}
-                className="w-full mt-8 py-4 text-lg font-bold text-white uppercase tracking-wider rounded-xl shadow-xl flex justify-center items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
-                style={{ backgroundColor: '#FF6600' }}
+                className="btn-flame w-full mt-8 py-4 text-lg font-bold rounded-xl flex justify-center items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
             >
                 Continuar <ArrowRight size={22} />
             </button>

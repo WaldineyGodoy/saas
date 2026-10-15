@@ -1,0 +1,230 @@
+/*
+ * Identidade do site b2wenergia.com.br na adesão pública (/contrato).
+ * Pedido do dono (15/10/2026): a página vinha do site escuro/laranja e caía
+ * num visual claro/azul, fora de formatação no celular.
+ *
+ * Tudo fica preso em .tema-b2w: o resto do CRM não muda. As classes do
+ * Tailwind usadas na página são remapeadas aqui para os tokens do site
+ * (mesmos valores do :root de b2wenergia.com.br).
+ */
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap');
+
+.tema-b2w {
+  --flame-300: #F79571; --flame-400: #F26F45; --flame-500: #EE4A22; --flame-600: #D33A15;
+  --flame-soft: rgba(238, 74, 34, .12); --flame-line: rgba(238, 74, 34, .32);
+  --bg: #0D0D0D; --bg-subtle: #141310; --surface: #1E1C18; --surface-2: #2E2B26;
+  --border: #2A2723; --border-strong: #47433C;
+  --ink: #F5F5F4; --ink-2: #C9C6C0; --ink-3: #8F8A82;
+  --ok: #10B981;
+  --f-display: 'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --f-body: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --f-mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  /* Variáveis do CRM usadas pela janela da UC (PublicConsumerUnitForm) */
+  --color-bg-light: var(--surface-2);
+  --color-text: var(--ink);
+  --color-text-medium: var(--ink-3);
+  --color-border: var(--border);
+  --color-error: var(--flame-400);
+  --radius-sm: 14px;
+
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--f-body);
+  -webkit-font-smoothing: antialiased;
+  color-scheme: dark;
+  overflow-x: hidden;
+}
+.tema-b2w h1, .tema-b2w h2, .tema-b2w h3 {
+  font-family: var(--f-display);
+  letter-spacing: -.02em;
+  color: var(--ink);
+}
+
+/* ----- Cabeçalho ----- */
+.tema-b2w .adesao-topo {
+  position: sticky; top: 0; z-index: 20;
+  background: rgba(13, 13, 13, .86);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+}
+.tema-b2w .adesao-topo .wrap {
+  max-width: 64rem; margin: 0 auto; padding: 12px 16px;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+.tema-b2w .adesao-topo img { height: 28px; width: auto; display: block; }
+.tema-b2w .tag {
+  font-family: var(--f-mono); font-size: 11px; font-weight: 500;
+  letter-spacing: .16em; text-transform: uppercase; color: var(--flame-400);
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.tema-b2w .tag::before { content: ''; width: 18px; height: 1px; background: currentColor; }
+
+/* ----- Rodapé com a versão ----- */
+.tema-b2w .adesao-rodape {
+  max-width: 64rem; margin: 24px auto 0; padding: 20px 16px 28px;
+  border-top: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: 6px;
+  font-size: 12px; color: var(--ink-3);
+}
+
+/* ----- Superfícies (remapeia o Tailwind da página) ----- */
+.tema-b2w .bg-white { background-color: var(--surface) !important; }
+.tema-b2w .bg-slate-50 { background-color: var(--bg-subtle) !important; }
+.tema-b2w .bg-slate-300 { background-color: var(--border-strong) !important; }
+.tema-b2w .border-slate-100, .tema-b2w .border-slate-200, .tema-b2w .border-slate-300 { border-color: var(--border) !important; }
+.tema-b2w .text-slate-900, .tema-b2w .text-slate-800, .tema-b2w .text-slate-700 { color: var(--ink) !important; }
+.tema-b2w .text-slate-600 { color: var(--ink-2) !important; }
+.tema-b2w .text-slate-500, .tema-b2w .text-slate-400 { color: var(--ink-3) !important; }
+.tema-b2w .shadow-sm, .tema-b2w .shadow-lg, .tema-b2w .shadow-xl { box-shadow: none !important; }
+.tema-b2w .rounded-2xl { border-radius: 20px; }
+
+/* Avisos coloridos em tom escuro */
+.tema-b2w .bg-orange-50 { background-color: var(--flame-soft) !important; }
+.tema-b2w .border-orange-200 { border-color: var(--flame-line) !important; }
+.tema-b2w .bg-sky-50, .tema-b2w .bg-blue-50 { background-color: rgba(56, 189, 248, .08) !important; }
+.tema-b2w .border-sky-200, .tema-b2w .border-blue-200 { border-color: rgba(56, 189, 248, .3) !important; }
+.tema-b2w .text-sky-900 { color: #BAE6FD !important; }
+.tema-b2w .bg-green-50 { background-color: rgba(16, 185, 129, .1) !important; }
+.tema-b2w .border-green-200 { border-color: rgba(16, 185, 129, .35) !important; }
+.tema-b2w .text-green-700 { color: #6EE7B7 !important; }
+.tema-b2w .hover\:bg-green-100:hover { background-color: rgba(16, 185, 129, .18) !important; }
+.tema-b2w .hover\:bg-red-50:hover { background-color: rgba(239, 68, 68, .12) !important; }
+.tema-b2w .hover\:bg-orange-50:hover { background-color: var(--flame-soft) !important; }
+.tema-b2w .text-red-500 { color: #F87171 !important; }
+.tema-b2w .text-green-500 { color: var(--ok) !important; }
+.tema-b2w .text-green-600 { color: var(--ok) !important; }
+.tema-b2w .text-red-600 { color: #F87171 !important; }
+.tema-b2w .text-orange-500 { color: var(--flame-400) !important; }
+.tema-b2w .fill-orange-500 { fill: var(--flame-400) !important; }
+.tema-b2w .bg-green-500 { background-color: var(--ok) !important; }
+
+/* ----- Campos ----- */
+.tema-b2w input:not([type=checkbox]):not([type=radio]),
+.tema-b2w select,
+.tema-b2w textarea,
+.tema-b2w .input {
+  background-color: var(--bg-subtle) !important;
+  border: 1px solid var(--border-strong) !important;
+  color: var(--ink) !important;
+  border-radius: 12px !important;
+  font-size: 16px; /* 16px evita o zoom automático do iPhone no foco */
+}
+.tema-b2w input::placeholder, .tema-b2w textarea::placeholder { color: var(--ink-3); opacity: 1; }
+.tema-b2w input:focus, .tema-b2w select:focus, .tema-b2w textarea:focus, .tema-b2w .input:focus {
+  outline: none !important;
+  border-color: var(--flame-500) !important;
+  box-shadow: 0 0 0 3px var(--flame-soft) !important;
+}
+.tema-b2w input[readonly] { color: var(--ink-3) !important; }
+.tema-b2w input[type=checkbox] { accent-color: var(--flame-500); }
+.tema-b2w label, .tema-b2w .label {
+  font-family: var(--f-mono);
+  letter-spacing: .1em;
+  color: var(--ink-3) !important;
+  font-size: 11px !important;
+  text-transform: uppercase;
+}
+.tema-b2w label.aceite { font-family: var(--f-body); letter-spacing: 0; text-transform: none; font-size: 14px !important; color: var(--ink-2) !important; }
+.tema-b2w a.link { color: var(--flame-300); }
+
+/* ----- Botões ----- */
+.tema-b2w .btn-flame {
+  background: linear-gradient(180deg, var(--flame-400), var(--flame-600)) !important;
+  color: #fff !important;
+  border: 0;
+  box-shadow: 0 10px 30px -10px rgba(238, 74, 34, .6) !important;
+  font-family: var(--f-display);
+  letter-spacing: .02em;
+}
+.tema-b2w .btn-contorno {
+  background: transparent !important;
+  color: var(--ink) !important;
+  border: 1px solid var(--border-strong) !important;
+}
+.tema-b2w .dia-ativo { background: var(--flame-500) !important; color: #fff !important; border-color: transparent !important; }
+
+/* ----- Resumo da economia ----- */
+.tema-b2w .economia-destaque {
+  background: radial-gradient(circle at 85% 0%, rgba(238, 74, 34, .35), transparent 60%), var(--surface-2);
+}
+.tema-b2w .economia-numero { font-family: var(--f-display); font-weight: 800; letter-spacing: -.04em; color: var(--flame-300); line-height: 1; }
+/* Valor em reais: encolhe com a tela para caber na coluna (R$ 2.289,31 em 320px). */
+.tema-b2w .economia-valor { font-size: clamp(1.15rem, 5.6vw, 2.25rem); white-space: nowrap; }
+
+/* ----- Modal da UC (classes globais do CRM) ----- */
+.tema-b2w .modal-overlay { background: rgba(0, 0, 0, .72) !important; backdrop-filter: blur(4px); }
+.tema-b2w .modal-content {
+  background: var(--surface) !important; color: var(--ink) !important;
+  border: 1px solid var(--border) !important; border-radius: 20px !important;
+  width: calc(100% - 24px) !important; max-height: calc(100dvh - 24px); overflow-y: auto;
+}
+.tema-b2w .modal-header { border-bottom-color: var(--border) !important; }
+.tema-b2w .modal-header h3 { color: var(--ink) !important; }
+.tema-b2w .modal-close { color: var(--ink-2) !important; background: transparent !important; }
+.tema-b2w .modal-footer { border-top-color: var(--border) !important; }
+.tema-b2w .btn.btn-primary { background: var(--flame-500) !important; border-color: var(--flame-500) !important; color: #fff !important; }
+.tema-b2w .btn.btn-secondary { background: transparent !important; border: 1px solid var(--border-strong) !important; color: var(--ink) !important; }
+
+
+
+/* Laranja antigo (#FF6600) das classes do Tailwind -> chama do site */
+.tema-b2w .bg-\[\#FF6600\] { background-color: var(--flame-500) !important; }
+.tema-b2w .border-\[\#FF6600\] { border-color: var(--flame-500) !important; }
+.tema-b2w .text-\[\#FF6600\] { color: var(--flame-400) !important; }
+.tema-b2w .hover\:border-\[\#FF6600\]:hover { border-color: var(--flame-500) !important; }
+
+/* O Bootstrap global do CRM usa os mesmos nomes (p-3, mb-2, gap-3...) com outra
+   escala e !important: aqui valem os tamanhos do Tailwind (gerado a partir das
+   classes da página). */
+.tema-b2w .gap-2 { gap: 0.5rem !important; }
+.tema-b2w .gap-3 { gap: 0.75rem !important; }
+.tema-b2w .gap-5 { gap: 1.25rem !important; }
+.tema-b2w .gap-6 { gap: 1.5rem !important; }
+.tema-b2w .gap-x-2 { column-gap: 0.5rem !important; }
+.tema-b2w .gap-y-2 { row-gap: 0.5rem !important; }
+.tema-b2w .mb-1 { margin-bottom: 0.25rem !important; }
+.tema-b2w .mb-2 { margin-bottom: 0.5rem !important; }
+.tema-b2w .mb-3 { margin-bottom: 0.75rem !important; }
+.tema-b2w .mb-4 { margin-bottom: 1rem !important; }
+.tema-b2w .mb-6 { margin-bottom: 1.5rem !important; }
+.tema-b2w .mb-8 { margin-bottom: 2rem !important; }
+.tema-b2w .mt-1 { margin-top: 0.25rem !important; }
+.tema-b2w .mt-2 { margin-top: 0.5rem !important; }
+.tema-b2w .mt-3 { margin-top: 0.75rem !important; }
+.tema-b2w .mt-4 { margin-top: 1rem !important; }
+.tema-b2w .mt-8 { margin-top: 2rem !important; }
+.tema-b2w .p-2 { padding: 0.5rem !important; }
+.tema-b2w .p-4 { padding: 1rem !important; }
+.tema-b2w .p-5 { padding: 1.25rem !important; }
+.tema-b2w .p-6 { padding: 1.5rem !important; }
+.tema-b2w .p-8 { padding: 2rem !important; }
+.tema-b2w .pb-2 { padding-bottom: 0.5rem !important; }
+.tema-b2w .pb-4 { padding-bottom: 1rem !important; }
+.tema-b2w .pt-5 { padding-top: 1.25rem !important; }
+.tema-b2w .pt-6 { padding-top: 1.5rem !important; }
+.tema-b2w .pt-8 { padding-top: 2rem !important; }
+.tema-b2w .px-4 { padding-left: 1rem !important; padding-right: 1rem !important; }
+.tema-b2w .px-5 { padding-left: 1.25rem !important; padding-right: 1.25rem !important; }
+.tema-b2w .px-6 { padding-left: 1.5rem !important; padding-right: 1.5rem !important; }
+.tema-b2w .px-8 { padding-left: 2rem !important; padding-right: 2rem !important; }
+.tema-b2w .py-2 { padding-top: 0.5rem !important; padding-bottom: 0.5rem !important; }
+.tema-b2w .py-3 { padding-top: 0.75rem !important; padding-bottom: 0.75rem !important; }
+.tema-b2w .py-4 { padding-top: 1rem !important; padding-bottom: 1rem !important; }
+.tema-b2w .py-5 { padding-top: 1.25rem !important; padding-bottom: 1.25rem !important; }
+.tema-b2w .py-6 { padding-top: 1.5rem !important; padding-bottom: 1.5rem !important; }
+.tema-b2w .py-8 { padding-top: 2rem !important; padding-bottom: 2rem !important; }
+.tema-b2w .py-10 { padding-top: 2.5rem !important; padding-bottom: 2.5rem !important; }
+
+/* Variantes sm:/md: depois da escala acima, para valerem em telas maiores. */
+@media (min-width: 768px) {
+  .tema-b2w .md\:gap-6 { gap: 1.5rem !important; }
+  .tema-b2w .md\:gap-8 { gap: 2rem !important; }
+  .tema-b2w .md\:p-10 { padding: 2.5rem !important; }
+}
+
+/* ----- Celular ----- */
+@media (max-width: 640px) {
+  .tema-b2w .p-6, .tema-b2w .p-8 { padding: 20px !important; }
+  .tema-b2w .modal-content form { grid-template-columns: 1fr !important; }
+  .tema-b2w .modal-content form > * { grid-column: 1 / -1 !important; }
+}

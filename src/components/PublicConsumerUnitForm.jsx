@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { fetchAddressByCep } from '../lib/api';
 import { useUI } from '../contexts/UIContext';
 import { maskCpfCnpj, validateDocument } from '../lib/validators';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { parseEnergyBill, contaParaPedido, contaParaUc } from '../lib/energyBillParser';
+import { parseEnergyBillImage } from '../lib/energyBillImage';
+import { CheckCircle, ChevronDown, ChevronUp, RefreshCw, Upload } from 'lucide-react';
 
 const maskCEP = (val) => (val || '').replace(/\D/g, '').replace(/^(\d{5})(\d)/, '$1-$2').substring(0, 9);
 
@@ -37,7 +39,8 @@ const CollapsibleSection = ({ title, children, defaultOpen = false }) => {
                     padding: '1rem',
                     borderTop: '1px solid var(--color-border)',
                     display: 'grid',
-                    gridTemplateColumns: '1fr 1fr',
+                    // Duas colunas que viram uma no celular (adesão pelo site, 15/10/2026).
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
                     gap: '1rem'
                 }}>
                     {children}
@@ -63,11 +66,19 @@ export default function PublicConsumerUnitForm({
     // UC lida da conta de energia (link de adesão gerado no CRM com a conta lida)
     ucDefault,
     docAssinante,
+    // Id da visita da simulação: libera a leitura de FOTO sem login (a
+    // Edge Function limita as leituras por visita). PDF é lido no navegador.
+    visita,
     onClose,
     onSave
 }) {
     const { showAlert } = useUI();
     const [searchingCep, setSearchingCep] = useState(false);
+    const inputConta = useRef(null);
+    const [lendoConta, setLendoConta] = useState(false);
+    // Conta lida: preenche a UC e segue junto para virar o documento
+    // "conta de energia" da UC logo depois do cadastro (decisão do dono, 15/10/2026).
+    const [contaLida, setContaLida] = useState(null);
 
     // Endereço da conta, quando veio: a UC pode não ficar no endereço do assinante.
     const enderecoInicial = ucDefault?.endereco?.cep ? ucDefault.endereco : enderecoDefault;
@@ -142,6 +153,54 @@ export default function PublicConsumerUnitForm({
         }
     };
 
+    const lerConta = async (e) => {
+        const arquivo = e.target.files?.[0];
+        e.target.value = '';
+        if (!arquivo) return;
+        const ehPdf = arquivo.type === 'application/pdf';
+        if (!ehPdf && !arquivo.type.startsWith('image/')) {
+            showAlert('Envie o PDF ou uma foto da conta de luz.', 'warning');
+            return;
+        }
+        if (!ehPdf && !visita) {
+            showAlert('Para ler a foto da conta, comece pela simulação no site. Ou envie o PDF da conta.', 'warning');
+            return;
+        }
+        setLendoConta(true);
+        try {
+            const leitura = ehPdf ? await parseEnergyBill(arquivo) : await parseEnergyBillImage(arquivo, null, { visita });
+            if (!leitura?.numeroUc) throw new Error(ehPdf ? 'Não encontramos o número da UC neste PDF. Confira se é a conta da distribuidora.' : 'Não encontramos o número da UC nesta conta. Tente outra foto, com a conta inteira e boa luz.');
+            const pedido = contaParaPedido(leitura);
+            const campos = contaParaUc(pedido, { concessionarias: concessionariaDefault ? [] : [pedido.concessionaria] });
+            const cepConta = campos.cep ? maskCEP(campos.cep) : '';
+            setFormData(prev => ({
+                ...prev,
+                ...campos,
+                cep: cepConta || prev.cep,
+                // CEP novo: o IBGE (desconto da região) vem da busca abaixo.
+                ibge: cepConta && cepConta !== prev.cep ? '' : prev.ibge,
+            }));
+            if (cepConta) {
+                fetchAddressByCep(cepConta.replace(/\D/g, ''))
+                    .then(addr => setFormData(prev => ({
+                        ...prev,
+                        ibge: addr.ibge || '',
+                        rua: prev.rua || addr.rua || '',
+                        bairro: prev.bairro || addr.bairro || '',
+                        cidade: prev.cidade || addr.cidade || '',
+                        uf: prev.uf || addr.uf || '',
+                    })))
+                    .catch(() => {});
+            }
+            setContaLida({ arquivo, numeroUc: campos.numero_uc });
+        } catch (err) {
+            console.error('Leitura da conta na adesão:', err);
+            showAlert(err.message || 'Não foi possível ler a conta. Preencha os dados à mão.', 'error');
+        } finally {
+            setLendoConta(false);
+        }
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
 
@@ -174,7 +233,9 @@ export default function PublicConsumerUnitForm({
             ...formData,
             ibge,
             numero_uc: numeroUc,
-            cpf_cnpj_fatura: formData.cpf_cnpj_fatura.replace(/\D/g, '')
+            cpf_cnpj_fatura: formData.cpf_cnpj_fatura.replace(/\D/g, ''),
+            // Vira o documento da UC depois do cadastro (SubscriberSignup).
+            arquivo_conta: contaLida?.arquivo || null
         });
         onClose();
     };
@@ -191,8 +252,33 @@ export default function PublicConsumerUnitForm({
 
                 <form onSubmit={handleSubmit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
 
+                    {/* Ler a conta: preenche tudo e já anexa a conta como documento */}
+                    <div style={{ gridColumn: '1 / -1', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', padding: '1rem', borderRadius: 'var(--radius-sm)', border: '1px dashed var(--flame-line, #bae6fd)', background: 'var(--flame-soft, #f0f9ff)' }}>
+                        <div style={{ flex: '1 1 220px' }}>
+                            <div style={{ fontWeight: 700, color: 'var(--color-text)' }}>
+                                {contaLida ? <><CheckCircle size={16} style={{ verticalAlign: '-3px', color: 'var(--ok, #16a34a)' }} /> Conta lida{contaLida.numeroUc ? `: UC ${contaLida.numeroUc}` : ''}</> : 'Preencher pela conta de luz'}
+                            </div>
+                            <div style={{ fontSize: '0.85rem', color: 'var(--color-text-medium)' }}>
+                                {contaLida
+                                    ? 'Confira os dados abaixo. A conta já vai anexada como documento.'
+                                    : 'Envie a foto ou o PDF da conta: preenchemos UC, titular, ligação, endereço e consumo.'}
+                            </div>
+                        </div>
+                        <input ref={inputConta} type="file" accept="application/pdf,image/*" style={{ display: 'none' }} onChange={lerConta} />
+                        <button
+                            type="button"
+                            disabled={lendoConta}
+                            onClick={() => inputConta.current?.click()}
+                            className="btn btn-primary"
+                            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', whiteSpace: 'nowrap', cursor: lendoConta ? 'wait' : 'pointer' }}
+                        >
+                            {lendoConta ? <RefreshCw size={16} className="animate-spin" /> : <Upload size={16} />}
+                            {lendoConta ? 'Lendo a conta...' : (contaLida ? 'Ler outra conta' : 'Ler conta de luz')}
+                        </button>
+                    </div>
+
                     {/* Unit Data - Top Priority */}
-                    <div style={{ gridColumn: '1 / -1', background: '#f0f9ff', padding: '1rem', borderRadius: 'var(--radius-sm)', border: '1px solid #bae6fd' }}>
+                    <div style={{ gridColumn: '1 / -1', background: 'var(--surface-2, #f0f9ff)', padding: '1rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--flame-line, #bae6fd)' }}>
                         <div style={{ marginBottom: '1rem' }}>
                             <label className="label">Número da UC <span style={{ color: 'var(--color-error)' }}>*</span></label>
                             <input
@@ -268,15 +354,15 @@ export default function PublicConsumerUnitForm({
                                 readOnly={!!concessionariaDefault}
                                 placeholder="Ex: COSERN"
                                 className="input"
-                                style={concessionariaDefault ? { background: '#e0e0e0', color: '#555' } : undefined}
+                                style={concessionariaDefault ? { background: 'var(--surface-2, #e0e0e0)', color: 'var(--ink-3, #555)' } : undefined}
                             />
                         </div>
                     </div>
 
                     {/* Address Section */}
                     <CollapsibleSection title="Endereço de Instalação" defaultOpen={true}>
-                        <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '1rem' }}>
-                            <div style={{ width: '140px' }}>
+                        <div style={{ gridColumn: '1 / -1', display: 'flex', flexWrap: 'wrap', gap: '1rem' }}>
+                            <div style={{ flex: '1 1 140px' }}>
                                 <label className="label">CEP</label>
                                 <div style={{ position: 'relative' }}>
                                     <input
@@ -290,7 +376,7 @@ export default function PublicConsumerUnitForm({
                                     {searchingCep && <span style={{ position: 'absolute', right: '10px', top: '10px', fontSize: '0.7rem' }}>...</span>}
                                 </div>
                             </div>
-                            <div style={{ flex: 1 }}>
+                            <div style={{ flex: '2 1 200px' }}>
                                 <label className="label">Rua</label>
                                 <input
                                     value={formData.rua}
@@ -337,7 +423,7 @@ export default function PublicConsumerUnitForm({
                                     value={formData.cidade}
                                     readOnly
                                     className="input"
-                                    style={{ background: '#f5f5f5' }}
+                                    style={{ background: 'var(--surface-2, #f5f5f5)' }}
                                 />
                             </div>
                             <div style={{ width: '60px' }}>
@@ -346,7 +432,7 @@ export default function PublicConsumerUnitForm({
                                     value={formData.uf}
                                     readOnly
                                     className="input"
-                                    style={{ background: '#f5f5f5' }}
+                                    style={{ background: 'var(--surface-2, #f5f5f5)' }}
                                 />
                             </div>
                         </div>
