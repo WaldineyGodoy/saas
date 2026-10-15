@@ -84,6 +84,8 @@
 .tema-b2w .hover\:bg-orange-50:hover { background-color: var(--flame-soft) !important; }
 .tema-b2w .text-red-500 { color: #F87171 !important; }
 .tema-b2w .text-green-500 { color: var(--ok) !important; }
+.tema-b2w .text-green-600 { color: var(--ok) !important; }
+.tema-b2w .text-red-600 { color: #F87171 !important; }
 .tema-b2w .text-orange-500 { color: var(--flame-400) !important; }
 .tema-b2w .fill-orange-500 { fill: var(--flame-400) !important; }
 .tema-b2w .bg-green-500 { background-color: var(--ok) !important; }
