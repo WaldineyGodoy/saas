@@ -69,4 +69,7 @@ export const PDF_MAXIMO_BYTES = 5 * 1024 * 1024;
 export const mensagemDeErro = (msg: string): string =>
   /function .* does not exist|Could not find the function/i.test(msg)
     ? 'O servidor ainda não está preparado para este pedido. Avise o suporte B2W.'
-    : msg;
+    // CPF/CNPJ de quem já é assinante (14/10/2026: aparecia o erro cru do índice).
+    : /Ja existe um assinante com este CPF|subscribers_doc_digits_uidx/i.test(msg)
+      ? 'Já existe um assinante B2W com este CPF/CNPJ. Para incluir outra unidade consumidora, o titular usa a aba Energia do app dele (Nova UC) ou fala com a B2W.'
+      : msg;

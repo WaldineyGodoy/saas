@@ -10,4 +10,4 @@
  * Vale o maior nível que a versão tiver (layout + correção = X). Subir um
  * nível zera os da direita: 1.6.1 -> 2.0.0 (X), 1.7.0 (Y) ou 1.6.2 (Z).
  */
-export const NOVIDADES_DA_VERSAO = 'Home Connect do Parceiro Power: "Cadastrar Novo Assinante" faz a adesão do cliente pelo app (o contrato vai para o cliente assinar) e a sua rede de clientes, com etapa e comissão, aparece aqui mesmo.';
+export const NOVIDADES_DA_VERSAO = 'Correção: no cadastro de novo assinante, CPF/CNPJ que já é assinante B2W mostra uma orientação clara em vez de um erro técnico.';

@@ -29,4 +29,8 @@ describe('mensagemDeErro', () => {
     expect(mensagemDeErro('Could not find the function public.app_solicitar_nova_uc')).toMatch(/servidor/);
     expect(mensagemDeErro('Esta UC ja esta cadastrada na sua conta.')).toBe('Esta UC ja esta cadastrada na sua conta.');
   });
+  it('CPF de quem já é assinante vira orientação, nunca o erro do índice', () => {
+    expect(mensagemDeErro('duplicate key value violates unique constraint "subscribers_doc_digits_uidx"')).toMatch(/^Já existe um assinante B2W/);
+    expect(mensagemDeErro('Ja existe um assinante com este CPF/CNPJ.')).toMatch(/Nova UC/);
+  });
 });
