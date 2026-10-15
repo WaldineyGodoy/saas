@@ -9,7 +9,8 @@ import PublicConsumerUnitForm from '../../components/PublicConsumerUnitForm';
 import ContratoAdesao from '../../components/ContratoAdesao';
 import PassoDocumentos from './onboarding/PassoDocumentos';
 import { gerarPdfContratoBase64, paginasTermoAdesao } from '../../lib/contrato';
-import { DIAS_VENCIMENTO, VERSAO_TERMOS, lerErroFuncao, uuidOuNulo } from '../../lib/onboarding';
+import { DIAS_VENCIMENTO, VERSAO_TERMOS, lerErroFuncao, uuidOuNulo, validarArquivo } from '../../lib/onboarding';
+import { enviarDocumentoOnboarding } from '../../lib/onboardingDocumentos';
 import { separarNumero } from '../../lib/energyBillParser';
 import { Zap, CheckCircle, Plus, Trash2, ArrowRight, Clock, Link2, FileSignature } from 'lucide-react';
 import './temaAdesao.css';
@@ -391,6 +392,25 @@ export default function SubscriberSignup() {
             const token = data?.onboarding_token;
             setOnboardingToken(token);
             window.history.replaceState(null, '', '/contrato?retomar=' + token);
+
+            // Conta de luz lida na criação da UC: já vira o documento da UC.
+            // Falha aqui não trava a adesão: o passo Documentos pede de novo.
+            const comConta = consumerUnits.filter(uc => uc.arquivo_conta && !validarArquivo(uc.arquivo_conta));
+            if (comConta.length) {
+                setEtapa('Anexando a conta de luz...');
+                try {
+                    const { data: est0 } = await supabase.rpc('fn_onboarding_estado', { p_token: token });
+                    const digitos = (v) => String(v || '').replace(/\D/g, '');
+                    for (const uc of comConta) {
+                        const id = (est0?.ucs || []).find(u => digitos(u.numero_uc) === digitos(uc.numero_uc))?.id;
+                        if (!id) continue;
+                        await enviarDocumentoOnboarding({ token, tipo: 'conta_energia', consumerUnitId: id, file: uc.arquivo_conta })
+                            .catch(e => console.error('Anexo automático da conta:', e));
+                    }
+                } catch (e) {
+                    console.error('Anexo automático da conta:', e);
+                }
+            }
 
             setEtapa('Carregando o próximo passo...');
             const est = await carregarEstado(token);
@@ -809,7 +829,7 @@ export default function SubscriberSignup() {
 
                     {consumerUnits.length === 0 ? (
                         <div className="text-center py-8 text-slate-500 bg-slate-50 rounded-xl border border-dashed border-slate-300">
-                            <p>Nenhuma UC cadastrada. Adicione pelo menos uma para continuar.</p>
+                            <p>Nenhuma UC cadastrada. Toque em <b>Adicionar UC</b> e envie a conta de luz: preenchemos os dados para você.</p>
                         </div>
                     ) : (
                         <div className="space-y-3">
@@ -977,6 +997,7 @@ export default function SubscriberSignup() {
                     ucDefault={consumerUnits.length === 0 ? ucDaConta : null}
                     titularDefault={formData.name}
                     docAssinante={formData.cpf_cnpj}
+                    visita={uuidOuNulo(paramLeadId)}
                     franquiaDefault={consumerUnits.length === 0 ? (paramConsumo || consumoDoLead) : ''}
                     enderecoDefault={{
                         cep: formData.cep,

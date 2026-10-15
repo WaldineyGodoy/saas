@@ -23,10 +23,12 @@ const reduzirFoto = (arquivo) => new Promise((resolve, reject) => {
 
 // Lê a foto de uma conta física. Devolve o mesmo formato de parseEnergyBill.
 // ucsDoCadastro: numero_uc e/ou numero_uc_anterior da UC esperada (string ou array).
-export const parseEnergyBillImage = async (arquivo, ucsDoCadastro = null) => {
+// visita: id da visita da simulação, para a adesão pelo site sem login
+// (a função limita as leituras por visita).
+export const parseEnergyBillImage = async (arquivo, ucsDoCadastro = null, { visita = null } = {}) => {
     const dataUrl = await reduzirFoto(arquivo);
     const { data, error } = await supabase.functions.invoke('parse-invoice-image', {
-        body: { imageBase64: dataUrl, mediaType: 'image/jpeg' },
+        body: { imageBase64: dataUrl, mediaType: 'image/jpeg', ...(visita ? { visita } : {}) },
     });
 
     // functions.invoke devolve o erro em `error`, não lança; a mensagem útil vem no corpo.
