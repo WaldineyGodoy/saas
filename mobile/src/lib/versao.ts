@@ -10,4 +10,4 @@
  * Vale o maior nível que a versão tiver (layout + correção = X). Subir um
  * nível zera os da direita: 1.6.1 -> 2.0.0 (X), 1.7.0 (Y) ou 1.6.2 (Z).
  */
-export const NOVIDADES_DA_VERSAO = 'Correção: no cadastro de novo assinante, CPF/CNPJ que já é assinante B2W mostra uma orientação clara em vez de um erro técnico.';
+export const NOVIDADES_DA_VERSAO = 'Botão Voltar sempre visível no topo das telas internas (inclusive no Cadastrar Novo Assinante), mesmo quando a página é aberta direto pelo link.';

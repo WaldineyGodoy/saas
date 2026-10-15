@@ -4,17 +4,24 @@ import { Manrope_700Bold, Manrope_800ExtraBold } from '@expo-google-fonts/manrop
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useFonts } from 'expo-font';
 import * as Linking from 'expo-linking';
-import { Stack } from 'expo-router';
+import { Stack, type Href } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { useColorScheme } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { BotaoVoltar } from '../components/BotaoVoltar';
 import { AuthProvider, useAuth } from '../contexts/AuthContext';
 import { extrairIndicador, guardarIndicacaoPendente } from '../lib/indicacao';
 import { aplicarEsquema, colors, fonts, type Esquema } from '../theme/tokens';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
+
+/** Cabeçalho com o Voltar próprio: sem histórico, vai para `destino`. */
+const comVoltar = (title: string, destino: Href) => ({
+  title,
+  headerLeft: () => <BotaoVoltar destino={destino} />,
+});
 
 function RootStack() {
   const { session, loading } = useAuth();
@@ -61,19 +68,19 @@ function RootStack() {
       {/* Link de indicação: vale logado ou não. */}
       <Stack.Screen name="i/[codigo]" options={{ headerShown: false }} />
       {/* Exclusão de conta: pública (exigência da Google Play), logado ou não. */}
-      <Stack.Screen name="excluir-conta" options={{ title: 'Excluir conta' }} />
+      <Stack.Screen name="excluir-conta" options={comVoltar('Excluir conta', '/')} />
       <Stack.Protected guard={Boolean(session)}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="energia/[ucId]" options={{ title: 'Unidade consumidora' }} />
-        <Stack.Screen name="energia/nova-uc" options={{ title: 'Nova UC' }} />
-        <Stack.Screen name="invest/[usinaId]" options={{ title: 'Detalhamento da usina' }} />
+        <Stack.Screen name="energia/[ucId]" options={comVoltar('Unidade consumidora', '/energia')} />
+        <Stack.Screen name="energia/nova-uc" options={comVoltar('Nova UC', '/energia')} />
+        <Stack.Screen name="invest/[usinaId]" options={comVoltar('Detalhamento da usina', '/invest')} />
         <Stack.Screen name="scan" options={{ title: 'Escanear carregador', presentation: 'modal' }} />
-        <Stack.Screen name="indicacao" options={{ title: 'Indicação' }} />
-        <Stack.Screen name="adesao" options={{ title: 'Adesão' }} />
-        <Stack.Screen name="adesao-cliente" options={{ title: 'Novo assinante' }} />
-        <Stack.Screen name="comecar" options={{ title: 'Começar' }} />
-        <Stack.Screen name="parceiro" options={{ title: 'Parceiro Power' }} />
-        <Stack.Screen name="investir" options={{ title: 'B2W Invest' }} />
+        <Stack.Screen name="indicacao" options={comVoltar('Indicação', '/')} />
+        <Stack.Screen name="adesao" options={comVoltar('Adesão', '/energia')} />
+        <Stack.Screen name="adesao-cliente" options={comVoltar('Novo assinante', '/connect/home')} />
+        <Stack.Screen name="comecar" options={comVoltar('Começar', '/')} />
+        <Stack.Screen name="parceiro" options={comVoltar('Parceiro Power', '/')} />
+        <Stack.Screen name="investir" options={comVoltar('B2W Invest', '/invest')} />
       </Stack.Protected>
     </Stack>
   );
