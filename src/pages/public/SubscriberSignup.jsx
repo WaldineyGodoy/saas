@@ -12,6 +12,7 @@ import { gerarPdfContratoBase64, paginasTermoAdesao } from '../../lib/contrato';
 import { DIAS_VENCIMENTO, VERSAO_TERMOS, lerErroFuncao, uuidOuNulo } from '../../lib/onboarding';
 import { separarNumero } from '../../lib/energyBillParser';
 import { Zap, CheckCircle, Plus, Trash2, ArrowRight, Clock, Link2, FileSignature } from 'lucide-react';
+import './temaAdesao.css';
 
 const URL_TERMOS_USO = 'https://b2wenergia.com.br/termos-de-uso/';
 const URL_PRIVACIDADE = 'https://b2wenergia.com.br/politica-de-privacidade/';
@@ -24,14 +25,34 @@ const PASSOS = [
 
 const inputClass = 'w-full px-4 py-4 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-[#FF6600] focus:border-transparent transition-all shadow-sm font-medium text-slate-700';
 
+/* Identidade do site (temaAdesao.css): a adesão chega de b2wenergia.com.br e
+   segue com o mesmo visual (pedido do dono, 15/10/2026). */
+const LOGO_SITE = 'https://b2wenergia.com.br/assets/logos/b2w-energia-v1.png';
+
+function Topo() {
+    return (
+        <header className="adesao-topo">
+            <div className="wrap">
+                <a href="https://b2wenergia.com.br/" aria-label="B2W Energia">
+                    <img src={LOGO_SITE} alt="B2W Energia" width="900" height="259" />
+                </a>
+                <span className="tag">Adesão</span>
+            </div>
+        </header>
+    );
+}
+
 /** Tela cheia de mensagem: carregando, link expirado, concluído etc. */
 function TelaMensagem({ icone, titulo, children }) {
     return (
-        <div className="min-h-screen bg-slate-50 font-inter flex items-center justify-center px-4">
-            <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-8 md:p-10 max-w-lg w-full text-center">
-                {icone}
-                <h1 className="text-2xl md:text-3xl font-bold mb-4" style={{ color: '#003366' }}>{titulo}</h1>
-                <div className="text-slate-600">{children}</div>
+        <div className="tema-b2w min-h-screen flex flex-col">
+            <Topo />
+            <div className="flex-1 flex items-center justify-center px-4 py-10">
+                <div className="bg-white rounded-2xl border border-slate-100 p-8 md:p-10 max-w-lg w-full text-center">
+                    {icone}
+                    <h1 className="text-2xl md:text-3xl font-bold mb-4">{titulo}</h1>
+                    <div className="text-slate-600">{children}</div>
+                </div>
             </div>
         </div>
     );
@@ -50,7 +71,7 @@ function Passos({ atual }) {
                     <li key={p.id} className="flex items-center gap-2">
                         <span
                             className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-white ${feito ? 'bg-green-500' : ''}`}
-                            style={!feito ? { backgroundColor: ativo ? '#FF6600' : '#cbd5e1' } : undefined}
+                            style={!feito ? { backgroundColor: ativo ? 'var(--flame-500)' : 'var(--surface-2)' } : undefined}
                         >
                             {feito ? '✓' : i + 1}
                         </span>
@@ -503,8 +524,7 @@ export default function SubscriberSignup() {
                 <p className="mb-6">Verifique sua conexão e tente de novo.</p>
                 <button
                     onClick={() => window.location.reload()}
-                    className="px-6 py-3 rounded-xl font-bold text-white"
-                    style={{ backgroundColor: '#FF6600' }}
+                    className="btn-flame px-6 py-3 rounded-xl font-bold"
                 >
                     Tentar de novo
                 </button>
@@ -545,78 +565,74 @@ export default function SubscriberSignup() {
     const descontoExibido = estado?.ucs?.[0]?.desconto_assinante ?? paramDiscountPercent;
 
     return (
-        <div className="min-h-screen bg-slate-50 font-inter">
-            {/* Header / Banner */}
-            <div className="bg-white border-b border-slate-200">
-                <div className="max-w-5xl mx-auto px-4 py-6">
-                    <h1 className="text-3xl font-bold" style={{ color: '#003366' }}>
-                        {formData.name || 'Novo Assinante'}
-                    </h1>
-                    <p className="text-slate-500 mt-2 text-lg">
-                        {passo === 'dados'
-                            ? 'Confira os detalhes da sua economia e finalize sua adesão abaixo.'
-                            : 'Sua adesão fica salva: se sair, volte por este mesmo link.'}
-                    </p>
-                    <Passos atual={passo} />
-                </div>
+        <div className="tema-b2w min-h-screen">
+            <Topo />
+            <div className="max-w-5xl mx-auto px-4 pt-8 pb-2">
+                <h1 className="text-3xl md:text-4xl font-extrabold leading-tight">
+                    {primeiroNome ? <>Olá, <span className="text-orange-500">{primeiroNome}</span></> : 'Sua adesão'}
+                </h1>
+                <p className="text-slate-600 mt-2 text-base md:text-lg">
+                    {passo === 'dados'
+                        ? 'Confira sua economia e conclua a adesão em poucos minutos.'
+                        : 'Sua adesão fica salva: se sair, volte por este mesmo link.'}
+                </p>
+                <Passos atual={passo} />
             </div>
 
-            <div className="max-w-5xl mx-auto px-4 py-8 space-y-8">
+            <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
 
                 {passo === 'dados' && (<>
                 {/* Info Cards Row */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                <div className="bg-white rounded-2xl border border-slate-200 grid grid-cols-2 md:grid-cols-3">
+                    <div className="p-4 border-b md:border-b-0 border-slate-200">
                         <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Concessionária</p>
                         <p className="font-semibold text-slate-900">{paramConcessionaria || 'Distribuidora Local'}</p>
                     </div>
-                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Média de Consumo</p>
+                    <div className="p-4 border-b md:border-b-0 border-slate-200">
+                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Consumo médio</p>
                         <p className="font-semibold text-slate-900">{Number(displayConsumption).toLocaleString('pt-BR')} kWh</p>
                     </div>
-                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Endereço da Instalação</p>
+                    <div className="p-4 col-span-2 md:col-span-1">
+                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Endereço da instalação</p>
                         <p className="font-semibold text-slate-900 truncate" title={`${formData.rua}, ${formData.numero}`}>
-                            {formData.rua ? `${formData.rua}, ${formData.numero}` : 'Endereço não informado'}
+                            {formData.rua ? [formData.rua, formData.numero].filter(Boolean).join(', ') : 'Endereço não informado'}
                         </p>
                     </div>
                 </div>
 
                 {/* Economy Banner */}
-                <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-                    <div className="p-6 border-b border-slate-100 flex items-center gap-2">
-                        <Zap className="text-orange-500 fill-orange-500" size={24} />
-                        <h2 className="text-xl font-bold text-slate-800">Economia esperada com a B2W Energia</h2>
+                <div className="economia-destaque rounded-2xl border border-slate-200 overflow-hidden">
+                    <div className="px-5 pt-5 flex items-center gap-2">
+                        <Zap className="text-orange-500 fill-orange-500" size={20} />
+                        <h2 className="text-lg font-bold">Sua economia com a B2W Energia</h2>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2">
-                        {/* Blue Box */}
-                        <div className="p-8 text-center text-white flex flex-col justify-center items-center" style={{ backgroundColor: '#003366' }}>
-                            <p className="text-sm font-medium opacity-90 mb-2 uppercase tracking-wider">Desconto Garantido</p>
-                            <p className="text-6xl font-bold mb-2">{descontoExibido}%</p>
-                            <p className="text-xs opacity-75">Sobre a tarifa de energia</p>
+                    <div className="grid grid-cols-2">
+                        <div className="p-5">
+                            <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">Desconto garantido</p>
+                            <p className="economia-numero text-5xl md:text-6xl">{descontoExibido}%</p>
+                            <p className="text-xs text-slate-500 mt-2">sobre a tarifa de energia</p>
                         </div>
-                        {/* Orange Box */}
-                        <div className="p-8 text-center text-white flex flex-col justify-center items-center" style={{ backgroundColor: '#FF6600' }}>
-                            <p className="text-sm font-medium opacity-90 mb-2 uppercase tracking-wider">Economia Anual Estimada</p>
-                            <p className="text-5xl font-bold mb-2">
+                        <div className="p-5">
+                            <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">Economia por ano</p>
+                            <p className="economia-numero economia-valor">
                                 {Number(paramSavingsAnnual).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                             </p>
-                            <p className="text-xs opacity-75">Mais dinheiro no seu bolso</p>
+                            <p className="text-xs text-slate-500 mt-2">estimativa</p>
                         </div>
                     </div>
-                    <div className="bg-slate-50 p-3 text-center text-xs text-slate-500">
-                        * Estimativa baseada no seu histórico de consumo médio mensal informado.
+                    <div className="px-5 pb-4 text-xs text-slate-500">
+                        Estimativa com base no consumo médio mensal informado.
                     </div>
                 </div>
 
                 {/* Subscriber Form */}
                 <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-6 md:p-10">
-                    <h2 className="text-2xl font-bold mb-8 flex items-center gap-2" style={{ color: '#003366' }}>
+                    <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
                         <div className="w-1 h-8 bg-[#FF6600] rounded-full"></div>
                         Dados do Assinante
                     </h2>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-8">
                         {/* CPF/CNPJ */}
                         <div>
                             <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">CPF ou CNPJ</label>
@@ -629,7 +645,7 @@ export default function SubscriberSignup() {
                                     className={`w-full px-4 py-4 rounded-xl border ${searchingDoc ? 'bg-blue-50 border-blue-200' : 'bg-white border-slate-200'} focus:outline-none focus:ring-2 focus:ring-[#FF6600] focus:border-transparent transition-all shadow-sm font-medium text-slate-700`}
                                     placeholder="000.000.000-00"
                                 />
-                                {searchingDoc && <span className="absolute right-3 top-4 text-xs text-[#003366] font-bold">Buscando...</span>}
+                                {searchingDoc && <span className="absolute right-3 top-4 text-xs text-orange-500 font-bold">Buscando...</span>}
                             </div>
                         </div>
 
@@ -671,7 +687,7 @@ export default function SubscriberSignup() {
                             assina o termo em nome da empresa. */}
                         {ehCnpj && (
                             <div className="md:col-span-2 p-5 rounded-xl border border-orange-200 bg-orange-50">
-                                <h3 className="text-base font-bold mb-4" style={{ color: '#003366' }}>Representante legal</h3>
+                                <h3 className="text-base font-bold mb-4">Representante legal</h3>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <div>
                                         <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Nome do representante</label>
@@ -700,14 +716,14 @@ export default function SubscriberSignup() {
 
                         {/* Address */}
                         <div className="md:col-span-2 pt-6 border-t border-slate-100 mt-2">
-                            <h3 className="text-lg font-bold mb-6 flex items-center gap-2" style={{ color: '#003366' }}>
+                            <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
                                 <div className="w-1 h-6 bg-[#FF6600] rounded-full"></div>
                                 Endereço
                             </h3>
                         </div>
 
-                        <div className="grid grid-cols-3 gap-6 md:col-span-2">
-                            <div className="col-span-1">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 md:gap-6 md:col-span-2">
+                            <div className="sm:col-span-1">
                                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">CEP</label>
                                 <input
                                     type="text"
@@ -717,7 +733,7 @@ export default function SubscriberSignup() {
                                     className={`w-full px-4 py-4 rounded-xl border ${searchingCep ? 'bg-blue-50' : 'bg-white'} border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#FF6600] focus:border-transparent transition-all shadow-sm font-medium text-slate-700`}
                                 />
                             </div>
-                            <div className="col-span-2">
+                            <div className="sm:col-span-2">
                                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Rua</label>
                                 <input
                                     type="text"
@@ -728,7 +744,7 @@ export default function SubscriberSignup() {
                             </div>
                         </div>
 
-                        <div className="md:col-span-2 grid grid-cols-2 md:grid-cols-4 gap-6">
+                        <div className="md:col-span-2 grid grid-cols-2 md:grid-cols-4 gap-5 md:gap-6">
                             <div>
                                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Número</label>
                                 <input
@@ -747,7 +763,7 @@ export default function SubscriberSignup() {
                                     className="w-full px-4 py-4 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-[#FF6600] focus:border-transparent transition-all shadow-sm font-medium text-slate-700"
                                 />
                             </div>
-                            <div>
+                            <div className="col-span-2 md:col-span-1">
                                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Bairro</label>
                                 <input
                                     type="text"
@@ -756,11 +772,11 @@ export default function SubscriberSignup() {
                                     className="w-full px-4 py-4 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-[#FF6600] focus:border-transparent transition-all shadow-sm font-medium text-slate-700"
                                 />
                             </div>
-                            <div>
+                            <div className="col-span-2 md:col-span-1">
                                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Cidade/UF</label>
                                 <input
                                     type="text"
-                                    value={`${formData.cidade}-${formData.uf}`}
+                                    value={[formData.cidade, formData.uf].filter(Boolean).join(' / ')}
                                     readOnly
                                     className="w-full px-4 py-4 rounded-xl border border-slate-200 bg-slate-50 text-slate-500 cursor-not-allowed font-medium"
                                 />
@@ -772,7 +788,7 @@ export default function SubscriberSignup() {
                 {/* Consumer Units (UCs) */}
                 <div className="bg-white rounded-2xl shadow-lg border border-slate-200 p-6 md:p-10">
                     <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
-                        <h2 className="text-2xl font-bold flex items-center gap-2" style={{ color: '#003366' }}>
+                        <h2 className="text-2xl font-bold flex items-center gap-2">
                             <div className="w-1 h-8 bg-[#FF6600] rounded-full"></div>
                             Unidades Consumidoras
                         </h2>
@@ -825,7 +841,7 @@ export default function SubscriberSignup() {
                 {/* Vencimento + aceite */}
                 <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-6 md:p-10 space-y-8">
                     <div>
-                        <h2 className="text-2xl font-bold mb-2 flex items-center gap-2" style={{ color: '#003366' }}>
+                        <h2 className="text-2xl font-bold mb-2 flex items-center gap-2">
                             <div className="w-1 h-8 bg-[#FF6600] rounded-full"></div>
                             Dia de vencimento
                         </h2>
@@ -837,8 +853,7 @@ export default function SubscriberSignup() {
                                     type="button"
                                     onClick={() => setDiaVencimento(dia)}
                                     aria-pressed={diaVencimento === dia}
-                                    className={`py-4 rounded-xl font-bold text-lg border transition-colors ${diaVencimento === dia ? 'text-white border-transparent' : 'bg-white text-slate-700 border-slate-200 hover:border-[#FF6600]'}`}
-                                    style={diaVencimento === dia ? { backgroundColor: '#003366' } : undefined}
+                                    className={`py-4 rounded-xl font-bold text-lg border transition-colors ${diaVencimento === dia ? 'dia-ativo' : 'bg-slate-50 text-slate-700 border-slate-200 hover:border-[#FF6600]'}`}
                                 >
                                     {dia}
                                 </button>
@@ -846,7 +861,7 @@ export default function SubscriberSignup() {
                         </div>
                     </div>
 
-                    <label className="flex items-start gap-3 cursor-pointer">
+                    <label className="aceite flex items-start gap-3 cursor-pointer">
                         <input
                             type="checkbox"
                             checked={aceite}
@@ -855,9 +870,9 @@ export default function SubscriberSignup() {
                         />
                         <span className="text-slate-600">
                             Li e aceito os{' '}
-                            <a href={URL_TERMOS_USO} target="_blank" rel="noopener noreferrer" className="font-semibold underline" style={{ color: '#003366' }}>termos de uso</a>
+                            <a href={URL_TERMOS_USO} target="_blank" rel="noopener noreferrer" className="link font-semibold underline">termos de uso</a>
                             {' '}e a{' '}
-                            <a href={URL_PRIVACIDADE} target="_blank" rel="noopener noreferrer" className="font-semibold underline" style={{ color: '#003366' }}>política de privacidade</a>.
+                            <a href={URL_PRIVACIDADE} target="_blank" rel="noopener noreferrer" className="link font-semibold underline">política de privacidade</a>.
                         </span>
                     </label>
                 </div>
@@ -866,8 +881,7 @@ export default function SubscriberSignup() {
                 <button
                     onClick={handleEnviarDados}
                     disabled={loading}
-                    className="w-full py-5 text-xl font-bold text-white uppercase tracking-wider rounded-xl shadow-xl transition-all transform active:scale-[0.99] flex justify-center items-center gap-3 hover:shadow-2xl disabled:opacity-70"
-                    style={{ backgroundColor: '#FF6600' }}
+                    className="btn-flame w-full py-5 text-lg font-bold rounded-xl transition-all transform active:scale-[0.99] flex justify-center items-center gap-3 disabled:opacity-70"
                 >
                     {loading ? (etapa || 'Processando...') : (
                         <>
@@ -888,7 +902,7 @@ export default function SubscriberSignup() {
 
                 {passo === 'contrato' && estado && (
                     <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-6 md:p-10">
-                        <h2 className="text-2xl font-bold mb-2 flex items-center gap-2" style={{ color: '#003366' }}>
+                        <h2 className="text-2xl font-bold mb-2 flex items-center gap-2">
                             <div className="w-1 h-8 bg-[#FF6600] rounded-full"></div>
                             Contrato
                         </h2>
@@ -911,8 +925,7 @@ export default function SubscriberSignup() {
                         <button
                             onClick={handleGerarContrato}
                             disabled={loading}
-                            className="w-full py-5 text-lg md:text-xl font-bold text-white uppercase tracking-wider rounded-xl shadow-xl flex justify-center items-center gap-3 disabled:opacity-70 disabled:cursor-wait"
-                            style={{ backgroundColor: '#FF6600' }}
+                            className="btn-flame w-full py-5 text-lg font-bold rounded-xl flex justify-center items-center gap-3 disabled:opacity-70 disabled:cursor-wait"
                         >
                             {loading ? (etapa || 'Processando...') : (<><FileSignature size={24} /> Gerar e enviar meu contrato</>)}
                         </button>
@@ -927,7 +940,7 @@ export default function SubscriberSignup() {
                 {passo === 'enviado' && (
                     <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-6 md:p-10 text-center">
                         <CheckCircle size={56} className="mx-auto mb-4 text-green-500" />
-                        <h2 className="text-2xl font-bold mb-3" style={{ color: '#003366' }}>Contrato enviado para assinatura</h2>
+                        <h2 className="text-2xl font-bold mb-3">Contrato enviado para assinatura</h2>
                         <p className="text-slate-600 mb-6">
                             Enviamos o link de assinatura para o seu WhatsApp e e-mail. É o último passo.
                         </p>
@@ -936,8 +949,7 @@ export default function SubscriberSignup() {
                                 href={estado.signature_link}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="w-full md:w-auto inline-flex justify-center items-center gap-2 px-8 py-4 rounded-xl font-bold text-white text-lg shadow-lg mb-4"
-                                style={{ backgroundColor: '#FF6600' }}
+                                className="btn-flame w-full md:w-auto inline-flex justify-center items-center gap-2 px-8 py-4 rounded-xl font-bold text-lg mb-4"
                             >
                                 <Link2 size={22} /> Assinar meu contrato
                             </a>
@@ -946,8 +958,7 @@ export default function SubscriberSignup() {
                             <button
                                 onClick={handleReenviar}
                                 disabled={loading}
-                                className="mt-2 px-6 py-3 rounded-xl font-bold border disabled:opacity-60 disabled:cursor-wait"
-                                style={{ color: '#003366', borderColor: '#003366' }}
+                                className="btn-contorno mt-2 px-6 py-3 rounded-xl font-bold border disabled:opacity-60 disabled:cursor-wait"
                             >
                                 {loading ? 'Reenviando...' : 'Reenviar link'}
                             </button>

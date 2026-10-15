@@ -37,7 +37,8 @@ const CollapsibleSection = ({ title, children, defaultOpen = false }) => {
                     padding: '1rem',
                     borderTop: '1px solid var(--color-border)',
                     display: 'grid',
-                    gridTemplateColumns: '1fr 1fr',
+                    // Duas colunas que viram uma no celular (adesão pelo site, 15/10/2026).
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
                     gap: '1rem'
                 }}>
                     {children}
@@ -192,7 +193,7 @@ export default function PublicConsumerUnitForm({
                 <form onSubmit={handleSubmit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
 
                     {/* Unit Data - Top Priority */}
-                    <div style={{ gridColumn: '1 / -1', background: '#f0f9ff', padding: '1rem', borderRadius: 'var(--radius-sm)', border: '1px solid #bae6fd' }}>
+                    <div style={{ gridColumn: '1 / -1', background: 'var(--surface-2, #f0f9ff)', padding: '1rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--flame-line, #bae6fd)' }}>
                         <div style={{ marginBottom: '1rem' }}>
                             <label className="label">Número da UC <span style={{ color: 'var(--color-error)' }}>*</span></label>
                             <input
@@ -268,15 +269,15 @@ export default function PublicConsumerUnitForm({
                                 readOnly={!!concessionariaDefault}
                                 placeholder="Ex: COSERN"
                                 className="input"
-                                style={concessionariaDefault ? { background: '#e0e0e0', color: '#555' } : undefined}
+                                style={concessionariaDefault ? { background: 'var(--surface-2, #e0e0e0)', color: 'var(--ink-3, #555)' } : undefined}
                             />
                         </div>
                     </div>
 
                     {/* Address Section */}
                     <CollapsibleSection title="Endereço de Instalação" defaultOpen={true}>
-                        <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '1rem' }}>
-                            <div style={{ width: '140px' }}>
+                        <div style={{ gridColumn: '1 / -1', display: 'flex', flexWrap: 'wrap', gap: '1rem' }}>
+                            <div style={{ flex: '1 1 140px' }}>
                                 <label className="label">CEP</label>
                                 <div style={{ position: 'relative' }}>
                                     <input
@@ -290,7 +291,7 @@ export default function PublicConsumerUnitForm({
                                     {searchingCep && <span style={{ position: 'absolute', right: '10px', top: '10px', fontSize: '0.7rem' }}>...</span>}
                                 </div>
                             </div>
-                            <div style={{ flex: 1 }}>
+                            <div style={{ flex: '2 1 200px' }}>
                                 <label className="label">Rua</label>
                                 <input
                                     value={formData.rua}
@@ -337,7 +338,7 @@ export default function PublicConsumerUnitForm({
                                     value={formData.cidade}
                                     readOnly
                                     className="input"
-                                    style={{ background: '#f5f5f5' }}
+                                    style={{ background: 'var(--surface-2, #f5f5f5)' }}
                                 />
                             </div>
                             <div style={{ width: '60px' }}>
@@ -346,7 +347,7 @@ export default function PublicConsumerUnitForm({
                                     value={formData.uf}
                                     readOnly
                                     className="input"
-                                    style={{ background: '#f5f5f5' }}
+                                    style={{ background: 'var(--surface-2, #f5f5f5)' }}
                                 />
                             </div>
                         </div>

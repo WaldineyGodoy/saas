@@ -67,7 +67,7 @@ export default function PassoDocumentos({ token, estado, onCompleto }) {
 
     return (
         <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-6 md:p-10">
-            <h2 className="text-2xl font-bold mb-2 flex items-center gap-2" style={{ color: '#003366' }}>
+            <h2 className="text-2xl font-bold mb-2 flex items-center gap-2">
                 <div className="w-1 h-8 bg-[#FF6600] rounded-full"></div>
                 Documentos
             </h2>
@@ -120,8 +120,7 @@ export default function PassoDocumentos({ token, estado, onCompleto }) {
             <button
                 onClick={onCompleto}
                 disabled={faltantes.length > 0 || !!enviando}
-                className="w-full mt-8 py-4 text-lg font-bold text-white uppercase tracking-wider rounded-xl shadow-xl flex justify-center items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
-                style={{ backgroundColor: '#FF6600' }}
+                className="btn-flame w-full mt-8 py-4 text-lg font-bold rounded-xl flex justify-center items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
             >
                 Continuar <ArrowRight size={22} />
             </button>
