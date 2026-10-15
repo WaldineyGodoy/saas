@@ -59,6 +59,14 @@
 }
 .tema-b2w .tag::before { content: ''; width: 18px; height: 1px; background: currentColor; }
 
+/* ----- Rodapé com a versão ----- */
+.tema-b2w .adesao-rodape {
+  max-width: 64rem; margin: 24px auto 0; padding: 20px 16px 28px;
+  border-top: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: 6px;
+  font-size: 12px; color: var(--ink-3);
+}
+
 /* ----- Superfícies (remapeia o Tailwind da página) ----- */
 .tema-b2w .bg-white { background-color: var(--surface) !important; }
 .tema-b2w .bg-slate-50 { background-color: var(--bg-subtle) !important; }

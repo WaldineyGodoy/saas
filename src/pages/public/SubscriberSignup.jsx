@@ -30,6 +30,22 @@ const inputClass = 'w-full px-4 py-4 rounded-xl border border-slate-200 bg-white
    segue com o mesmo visual (pedido do dono, 15/10/2026). */
 const LOGO_SITE = 'https://b2wenergia.com.br/assets/logos/b2w-energia-v1.png';
 
+/* Versão da página de adesão no rodapé, para conferir que a publicada é a
+   última (pedido do dono, 15/10/2026). Atualizar a cada publicação:
+   X layout/UI/UX, Y funcionalidade sem mudar layout, Z correção. */
+const VERSAO_ADESAO = '1.0.0';
+const DATA_VERSAO = '15/10/2026';
+const NOVIDADES_ADESAO = 'visual do site, formatação para celular e leitura da conta de luz na UC';
+
+function Rodape() {
+    return (
+        <footer className="adesao-rodape">
+            <small>&copy; {new Date().getFullYear()} B2W Energia. Todos os direitos reservados.</small>
+            <small className="versao" data-versao={VERSAO_ADESAO}>{`Versão da adesão ${VERSAO_ADESAO} · ${DATA_VERSAO} · ${NOVIDADES_ADESAO}`}</small>
+        </footer>
+    );
+}
+
 function Topo() {
     return (
         <header className="adesao-topo">
@@ -55,6 +71,7 @@ function TelaMensagem({ icone, titulo, children }) {
                     <div className="text-slate-600">{children}</div>
                 </div>
             </div>
+            <Rodape />
         </div>
     );
 }
@@ -987,6 +1004,8 @@ export default function SubscriberSignup() {
                 )}
 
             </div>
+
+            <Rodape />
 
             {paginasContrato}
 
