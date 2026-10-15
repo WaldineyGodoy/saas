@@ -62,7 +62,11 @@ export default function LeadCaptureForm() {
                 if (addr.ibge) {
                     const offer = await fetchOfferData(addr.ibge);
                     if (offer) {
-                        setOfferData(offer);
+                        // Desconto do plano vigente da distribuidora, o mesmo
+                        // que a adesao aplica (decisao do dono, 15/10/2026).
+                        // Sem plano unico ativo, fica o desconto do municipio.
+                        const { data: descPlano } = await supabase.rpc('fn_desconto_plano_vigente', { p_concessionaria: offer.Concessionaria || '' });
+                        setOfferData(descPlano != null ? { ...offer, 'Desconto Assinante': Number(descPlano) } : offer);
                         // Assuming the column name is 'Concessionaria' in the DB response
                         setForm(prev => ({ ...prev, concessionaria: offer.Concessionaria || '' }));
                     } else {
