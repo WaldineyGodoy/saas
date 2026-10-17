@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { isEnergyBillPaid } from '../lib/energyBillStatus';
 import { useUI } from '../contexts/UIContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useBranding } from '../contexts/BrandingContext';
@@ -670,10 +671,22 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
             // e o erro, se vier, aparece.
             if ((status === 'em_tratativa' || status === 'tratativa') && linkedEntityType === 'conta_energia' && linkedEntityId) {
                 if (podeContestarConta) {
+                    // Conta ja paga que a concessionaria voltou a cobrar nao pode perder o
+                    // "pago" ao ser contestada: vira "Contestado Pago". A leitura falhar nao
+                    // pode barrar a contestacao -- cai no comportamento antigo.
+                    const { data: contaAtual } = await supabase
+                        .from('invoices')
+                        .select('energy_bill_status')
+                        .eq('id', linkedEntityId)
+                        .maybeSingle();
+                    const statusContestada = isEnergyBillPaid(contaAtual?.energy_bill_status)
+                        ? 'contestada_pago'
+                        : 'contestada';
+
                     const { error: contestarErro } = await supabase
                         .from('invoices')
                         .update({
-                            energy_bill_status: 'contestada',
+                            energy_bill_status: statusContestada,
                             reading_status: 'success',
                             reading_checked_at: new Date().toISOString()
                         })
