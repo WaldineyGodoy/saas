@@ -26,6 +26,7 @@ import SubscriberModal from './SubscriberModal';
 import PowerPlantModal from './PowerPlantModal';
 import InvoiceSummaryModal from './InvoiceSummaryModal';
 import TrocaTitularidadePanel from './TrocaTitularidadePanel';
+import { ENERGY_PAID_DIVERGENT, energyStatusMatchesFilter } from '../lib/energyBillStatus';
 
 export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDelete, defaultSection = 'geral' }) {
     // Ao encerrar uma UC, o robo para de buscar conta dela -- mas a
@@ -1229,7 +1230,9 @@ Qualquer dúvida, é só responder esta mensagem.`;
                 : { color: '#2563eb', bg: '#eff6ff', label: 'A Vencer', icon: Clock },
             'erro': { color: '#991b1b', bg: '#fef2f2', label: 'Indisponível', icon: AlertCircle },
             'parcelada': { color: '#ca8a04', bg: '#fef9c3', label: 'Parcelado', icon: Info },
-            'contestada': { color: '#7c3aed', bg: '#f3e8ff', label: 'Contestado', icon: Ban }
+            'contestada': { color: '#7c3aed', bg: '#f3e8ff', label: 'Contestado', icon: Ban },
+            'inconsistente_pago': { ...ENERGY_PAID_DIVERGENT.inconsistente_pago, icon: CheckCircle },
+            'contestada_pago': { ...ENERGY_PAID_DIVERGENT.contestada_pago, icon: CheckCircle }
         };
         const s = statusMap[status] || statusMap['pendente'];
         const Icon = s.icon;
@@ -1246,6 +1249,7 @@ Qualquer dúvida, é só responder esta mensagem.`;
         if (ebStatus === 'erro') return 'erro';
         if (ebStatus === 'parcelada') return 'parcelada';
         if (ebStatus === 'contestada') return 'contestada';
+        if (ebStatus === 'inconsistente_pago' || ebStatus === 'contestada_pago') return ebStatus;
         const today = new Date().toISOString().split('T')[0];
         const dueDate = inv.vencimento_concessionaria || inv.vencimento;
         const isPastDue = dueDate && dueDate < today;
@@ -1276,7 +1280,7 @@ Qualquer dúvida, é só responder esta mensagem.`;
         // 2. Status Filter
         if (statusFilter !== 'all') {
             const energyStatus = getEnergyStatus(inv);
-            if (energyStatus !== statusFilter) return false;
+            if (!energyStatusMatchesFilter(energyStatus, statusFilter)) return false;
         }
         return true;
     });

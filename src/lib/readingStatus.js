@@ -8,7 +8,8 @@ export const deriveReadingStatus = (status, energyBillStatus, options = {}) => {
     const PAID       = ['pago','parcelada','contestada'];
     const PENDING    = ['pending','pendente','aguardando'];
     const SUCCESS    = ['success','sucesso','pago','parcelada','contestada',
-                        'consistente','a_vencer','atrasada','atrasado', 'confirmado'];
+                        'consistente','a_vencer','atrasada','atrasado', 'confirmado',
+                        'inconsistente_pago','contestada_pago'];
 
     // IMPORTANTE: Mantenha esta função sincronizada com a function 'derive_reading_status' no PostgreSQL.
     // Se alterar a regra aqui, lembre-se de alterar o trigger lá!

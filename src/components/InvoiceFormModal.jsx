@@ -1996,11 +1996,13 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
                                             <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', marginBottom: '1rem', textAlign: 'center', letterSpacing: '0.05em' }}>
                                                 STATUS DE PAGAMENTO DA CONCESSIONÁRIA
                                             </label>
-                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.4rem' }}>
+                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.4rem' }}>
                                                 {[
                                                     { id: 'pendente', label: 'PENDENTE', color: '#2563eb', bg: '#eff6ff' },
                                                     { id: 'inconsistente', label: 'INCONSISTENTE', color: '#ea580c', bg: '#ffedd5' },
                                                     { id: 'contestada', label: 'CONTESTADA', color: '#7c3aed', bg: '#f3e8ff' },
+                                                    { id: 'inconsistente_pago', label: 'INCONSISTENTE PAGO', color: '#9a3412', bg: '#fed7aa' },
+                                                    { id: 'contestada_pago', label: 'CONTESTADO PAGO', color: '#5b21b6', bg: '#ddd6fe' },
                                                     { id: 'parcelada', label: 'PARCELADA', color: '#ca8a04', bg: '#fef9c3' },
                                                     { id: 'pago', label: 'PAGO', color: '#16a34a', bg: '#f0fdf4' }
                                                 ].map(s => (

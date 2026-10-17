@@ -15,11 +15,14 @@ import { useBranding } from '../contexts/BrandingContext';
 import { useUI } from '../contexts/UIContext';
 import { useAuth } from '../contexts/AuthContext';
 import { ehPapelInterno } from '../lib/papeis';
+import { ENERGY_PAID_DIVERGENT } from '../lib/energyBillStatus';
 
 const energyStatusColors = { 
     'a_vencer': { color: '#2563eb', bg: '#eff6ff', label: 'A Vencer' }, 
     'inconsistente': { color: '#ea580c', bg: '#ffedd5', label: 'Inconsistente' },
     'contestada': { color: '#7c3aed', bg: '#f3e8ff', label: 'Contestada' },
+    'inconsistente_pago': { color: ENERGY_PAID_DIVERGENT.inconsistente_pago.color, bg: ENERGY_PAID_DIVERGENT.inconsistente_pago.bg, label: 'Inconsistente Pago' },
+    'contestada_pago': { color: ENERGY_PAID_DIVERGENT.contestada_pago.color, bg: ENERGY_PAID_DIVERGENT.contestada_pago.bg, label: 'Contestado Pago' },
     'parcelada': { color: '#ca8a04', bg: '#fef9c3', label: 'Parcelada' }, 
     'atrasada': { color: '#dc2626', bg: '#fee2e2', label: 'Atrasada' },
     'pago': { color: '#166534', bg: '#dcfce7', label: 'Paga' }
@@ -1434,7 +1437,7 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                 <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Status da Conta de energia</span>
                                 {updatingStatus && <span style={{ fontSize: '0.7rem', color: '#3b82f6' }}>Salvando...</span>}
                             </div>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.25rem', background: 'white', padding: '0.25rem', borderRadius: '12px', marginBottom: '1rem' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.25rem', background: 'white', padding: '0.25rem', borderRadius: '12px', marginBottom: '1rem' }}>
                                  {(() => {
                                      const today = new Date();
                                      today.setHours(0, 0, 0, 0);
@@ -1451,6 +1454,8 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                          pendenteOption,
                                          { id: 'inconsistente', label: 'Inconsistente', color: '#ea580c' },
                                          { id: 'contestada', label: 'Contestada', color: '#7c3aed' },
+                                         { id: 'inconsistente_pago', label: 'Inconsistente Pago', color: ENERGY_PAID_DIVERGENT.inconsistente_pago.color },
+                                         { id: 'contestada_pago', label: 'Contestado Pago', color: ENERGY_PAID_DIVERGENT.contestada_pago.color },
                                          { id: 'parcelada', label: 'Parcelada', color: '#ca8a04' },
                                          { id: 'pago', label: 'Pago', color: '#166534' }
                                      ].map(s => (
@@ -1500,7 +1505,7 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                  </div>
                              </div>
 
-                             {energyStatus === 'inconsistente' && linkedProtocol && (
+                             {['inconsistente', 'inconsistente_pago'].includes(energyStatus) && linkedProtocol && (
                                  <div style={{ marginTop: '0.85rem', borderTop: '1px dashed #e2e8f0', paddingTop: '0.85rem', display: 'flex', justifyContent: 'center' }}>
                                      <button
                                          onClick={() => setIsProtocolModalOpen(true)}

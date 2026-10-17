@@ -13,6 +13,7 @@ import { useUI } from '../../contexts/UIContext';
 import InvoiceSummaryModal from '../../components/InvoiceSummaryModal';
 import { useAuth } from '../../contexts/AuthContext';
 import AuditGraphViewInvoiceSummary from './AuditGraphViewInvoiceSummary';
+import { ENERGY_PAID_DIVERGENT, energyStatusMatchesFilter, isEnergyBillPaid } from '../../lib/energyBillStatus';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -61,7 +62,7 @@ export const resolveEnergyStatus = (inv) => {
     if (['processing', 'processando', 'baixada'].includes(ebStatus)) return 'baixada';
     if (['success', 'sucesso', 'processada'].includes(ebStatus)) return 'processada';
     
-    if (['pago', 'parcelada', 'contestada', 'inconsistente'].includes(ebStatus)) {
+    if (['pago', 'parcelada', 'contestada', 'inconsistente', 'inconsistente_pago', 'contestada_pago'].includes(ebStatus)) {
         return ebStatus;
     }
     
@@ -103,7 +104,9 @@ export const contasStatuses = [
     { key: 'processada', label: 'Processada', color: '#22c55e', bg: '#f0fdf4' },
     { key: 'a_vencer', label: 'A Vencer', color: '#2563eb', bg: '#eff6ff' },
     { key: 'inconsistente', label: 'Inconsistente', color: '#ea580c', bg: '#ffedd5' },
+    { key: 'inconsistente_pago', label: 'Inconsistente Pago', color: ENERGY_PAID_DIVERGENT.inconsistente_pago.color, bg: ENERGY_PAID_DIVERGENT.inconsistente_pago.bg },
     { key: 'contestada', label: 'Contestada', color: '#7c3aed', bg: '#f3e8ff' },
+    { key: 'contestada_pago', label: 'Contestado Pago', color: ENERGY_PAID_DIVERGENT.contestada_pago.color, bg: ENERGY_PAID_DIVERGENT.contestada_pago.bg },
     { key: 'parcelada', label: 'Parcelada', color: '#ca8a04', bg: '#fef9c3' },
     { key: 'atrasada', label: 'Atrasada', color: '#dc2626', bg: '#fee2e2' },
     { key: 'pago', label: 'Paga', color: '#166534', bg: '#dcfce7' }
@@ -321,7 +324,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
 
             if (statusFilter) {
                 const resolvedStatus = resolveEnergyStatus(inv);
-                if (resolvedStatus !== statusFilter) return false;
+                if (!energyStatusMatchesFilter(resolvedStatus, statusFilter)) return false;
             }
             if (statusFaturaFilter) {
                 const effectiveStatus = inv.status === 'ag_emissao_boleto' ? 'sem_faturamento' : inv.status;
@@ -605,6 +608,10 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
         acc[status] = (acc[status] || 0) + 1;
         return acc;
     }, {});
+    // "Pago + divergencia" conta tambem nos chips dos dois pais, igual ao filtro.
+    contasCounts.pago = (contasCounts.pago || 0) + (contasCounts.inconsistente_pago || 0) + (contasCounts.contestada_pago || 0);
+    contasCounts.inconsistente = (contasCounts.inconsistente || 0) + (contasCounts.inconsistente_pago || 0);
+    contasCounts.contestada = (contasCounts.contestada || 0) + (contasCounts.contestada_pago || 0);
 
     useEffect(() => {
         fetchInvoices();
@@ -928,6 +935,8 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
             'a_vencer': { color: '#2563eb', bg: '#eff6ff', label: 'A Vencer', icon: Clock },
             'inconsistente': { color: '#ea580c', bg: '#ffedd5', label: 'Inconsistente', icon: AlertCircle },
             'contestada': { color: '#7c3aed', bg: '#f3e8ff', label: 'Contestado', icon: Ban },
+            'inconsistente_pago': { ...ENERGY_PAID_DIVERGENT.inconsistente_pago, icon: CheckCircle },
+            'contestada_pago': { ...ENERGY_PAID_DIVERGENT.contestada_pago, icon: CheckCircle },
             'parcelada': { color: '#ca8a04', bg: '#fef9c3', label: 'Parcelado', icon: Info },
             'atrasada': { color: '#dc2626', bg: '#fee2e2', label: 'Atrasado', icon: AlertCircle },
             'pago': { color: '#166534', bg: '#dcfce7', label: 'Pago', icon: CheckCircle }
@@ -1305,7 +1314,9 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                                 : { color: '#2563eb', label: 'A VENCER', bg: '#eff6ff' },
                                             'erro': { color: '#991b1b', label: 'INDISPONÍVEL', bg: '#fef2f2' },
                                             'parcelada': { color: '#ca8a04', label: 'PARCELADA', bg: '#fef9c3' },
-                                            'contestada': { color: '#7c3aed', label: 'CONTESTADA', bg: '#f3e8ff' }
+                                            'contestada': { color: '#7c3aed', label: 'CONTESTADA', bg: '#f3e8ff' },
+                                            'inconsistente_pago': { color: ENERGY_PAID_DIVERGENT.inconsistente_pago.color, label: 'INCONSISTENTE PAGO', bg: ENERGY_PAID_DIVERGENT.inconsistente_pago.bg },
+                                            'contestada_pago': { color: ENERGY_PAID_DIVERGENT.contestada_pago.color, label: 'CONTESTADO PAGO', bg: ENERGY_PAID_DIVERGENT.contestada_pago.bg }
                                         };
                                         
                                         const s = statusData[ebStatus] || { color: '#64748b', label: ebStatus.toUpperCase(), bg: '#f1f5f9' };
@@ -1373,7 +1384,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                                 </div>
 
                                                 {/* Botão de Pagamento Concessionária */}
-                                                {ebStatus !== 'pago' && inv.linha_digitavel && (
+                                                {!isEnergyBillPaid(ebStatus) && inv.linha_digitavel && (
                                                     <button 
                                                         onClick={(e) => {
                                                             e.stopPropagation();
@@ -1401,7 +1412,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                                     </button>
                                                 )}
                                                 
-                                                {ebStatus === 'pago' && (
+                                                {isEnergyBillPaid(ebStatus) && (
                                                     <div style={{ 
                                                         marginTop: '0.5rem', 
                                                         padding: '0.4rem', 
@@ -1736,6 +1747,8 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                 <option value="contestada">Contestada</option>
                                 <option value="parcelada">Parcelada</option>
                                 <option value="inconsistente">Inconsistente</option>
+                                <option value="inconsistente_pago">Inconsistente Pago</option>
+                                <option value="contestada_pago">Contestado Pago</option>
                             </select>
                         )}
                         <div style={{ width: '1px', height: '16px', background: '#e2e8f0' }}></div>
@@ -2142,7 +2155,9 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                         const isPastDue = dueDate < today;
                         const ebStatus = inv.energy_bill_status || 'pendente';
                         
-                        if (ebStatus === 'pago') acc.pago++;
+                        if (ebStatus === 'inconsistente_pago') acc.pago++;
+                        else if (ebStatus === 'contestada_pago') { acc.pago++; acc.contestada++; }
+                        else if (ebStatus === 'pago') acc.pago++;
                         else if (ebStatus === 'pendente' && isPastDue) acc.atrasado++;
                         else if (ebStatus === 'parcelada') acc.parcelada++;
                         else if (ebStatus === 'contestada') acc.contestada++;
@@ -2332,6 +2347,32 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                                                             fontWeight: '800',
                                                                             border: '1px solid #bbf7d0'
                                                                         }}>PAGA</span>
+                                                                    ) : inv.energy_bill_status === 'inconsistente_pago' ? (
+                                                                        <span style={{ 
+                                                                            display: 'block',
+                                                                            textAlign: 'center',
+                                                                            color: ENERGY_PAID_DIVERGENT.inconsistente_pago.color, 
+                                                                            background: ENERGY_PAID_DIVERGENT.inconsistente_pago.bg, 
+                                                                            padding: '0.4rem 0.2rem', 
+                                                                            borderRadius: '4px', 
+                                                                            fontSize: '0.62rem', 
+                                                                            fontWeight: '800',
+                                                                            lineHeight: 1.15,
+                                                                            border: `1px solid ${ENERGY_PAID_DIVERGENT.inconsistente_pago.color}40`
+                                                                        }}>INCONSISTENTE PAGO</span>
+                                                                    ) : inv.energy_bill_status === 'contestada_pago' ? (
+                                                                        <span style={{ 
+                                                                            display: 'block',
+                                                                            textAlign: 'center',
+                                                                            color: ENERGY_PAID_DIVERGENT.contestada_pago.color, 
+                                                                            background: ENERGY_PAID_DIVERGENT.contestada_pago.bg, 
+                                                                            padding: '0.4rem 0.2rem', 
+                                                                            borderRadius: '4px', 
+                                                                            fontSize: '0.62rem', 
+                                                                            fontWeight: '800',
+                                                                            lineHeight: 1.15,
+                                                                            border: `1px solid ${ENERGY_PAID_DIVERGENT.contestada_pago.color}40`
+                                                                        }}>CONTESTADO PAGO</span>
                                                                     ) : inv.energy_bill_status === 'parcelada' ? (
                                                                         <span style={{ 
                                                                             display: 'block',
@@ -2645,8 +2686,8 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                     ) : viewMode === 'energy_kanban' ? (
                         <div className="kanban-box">
                             <div className="kanban-board">
-                                {['pendente', 'indisponivel', 'baixada', 'processada', 'a_vencer', 'inconsistente', 'contestada', 'parcelada', 'atrasada', 'pago']
-                                    .filter(col => !statusFilter || col === statusFilter)
+                                {['pendente', 'indisponivel', 'baixada', 'processada', 'a_vencer', 'inconsistente', 'inconsistente_pago', 'contestada', 'contestada_pago', 'parcelada', 'atrasada', 'pago']
+                                    .filter(col => energyStatusMatchesFilter(col, statusFilter))
                                     .map(col => {
                                     const invoicesInCol = filteredInvoices.filter(inv => {
                                         return resolveEnergyStatus(inv) === col;
@@ -2662,7 +2703,9 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                         'processada': { color: '#22c55e', bg: '#f0fdf4', label: 'Processada' },
                                         'a_vencer': { color: '#2563eb', bg: '#eff6ff', label: 'A Vencer' }, 
                                         'inconsistente': { color: '#ea580c', bg: '#ffedd5', label: 'Inconsistente' },
+                                        'inconsistente_pago': { color: ENERGY_PAID_DIVERGENT.inconsistente_pago.color, bg: ENERGY_PAID_DIVERGENT.inconsistente_pago.bg, label: 'Inconsistente Pago' },
                                         'contestada': { color: '#7c3aed', bg: '#f3e8ff', label: 'Contestada' },
+                                        'contestada_pago': { color: ENERGY_PAID_DIVERGENT.contestada_pago.color, bg: ENERGY_PAID_DIVERGENT.contestada_pago.bg, label: 'Contestado Pago' },
                                         'parcelada': { color: '#ca8a04', bg: '#fef9c3', label: 'Parcelada' }, 
                                         'atrasada': { color: '#dc2626', bg: '#fee2e2', label: 'Atrasada' },
                                         'pago': { color: '#166534', bg: '#dcfce7', label: 'Paga' }
