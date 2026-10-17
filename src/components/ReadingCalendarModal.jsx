@@ -37,6 +37,10 @@ export default function ReadingCalendarModal({ isOpen, onClose, uc, monthFilter,
                 return { label: 'Inconsistente', color: '#ea580c', bg: '#ffedd5', icon: AlertCircle };
             case 'contestada':
                 return { label: 'Contestada', color: '#7c3aed', bg: '#f3e8ff', icon: AlertCircle };
+            case 'inconsistente_pago':
+                return { label: 'Inconsistente Pago', color: '#9a3412', bg: '#fed7aa', icon: CheckCircle };
+            case 'contestada_pago':
+                return { label: 'Contestado Pago', color: '#5b21b6', bg: '#ddd6fe', icon: CheckCircle };
             case 'parcelada':
                 return { label: 'Parcelada', color: '#ca8a04', bg: '#fef9c3', icon: CheckCircle };
             case 'atrasada':
