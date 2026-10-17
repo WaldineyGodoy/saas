@@ -114,13 +114,18 @@ export const contasStatuses = [
 
 
 // Helper adicionado para lidar com nomes de unidades geradoras
-const getDisplayName = (inv) => {
-    const cu = inv.consumer_units || inv; 
+export const getDisplayName = (inv) => {
+    const cu = inv?.consumer_units || inv; 
     if (!cu) return '-';
     if (cu.tipo_unidade === 'geradora') {
         return cu.usinas?.name || cu.suppliers?.name || 'USINA/FORNECEDOR';
     }
     return cu.subscribers?.name || '-';
+};
+
+export const getEnergyBillValue = (inv) => {
+    if (!inv) return 0;
+    return getEnergyBillValue(inv);
 };
 
 export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = false }) {
@@ -345,62 +350,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
         return true;
     });
 
-    const sortedInvoices = [...filteredInvoices].sort((a, b) => {
-        let primaryResult = 0;
-        if (sortBy === 'ref_desc') {
-            const dateA = a.mes_referencia ? new Date(a.mes_referencia) : new Date(0);
-            const dateB = b.mes_referencia ? new Date(b.mes_referencia) : new Date(0);
-            primaryResult = dateB - dateA;
-        } else if (sortBy === 'ref_asc') {
-            const dateA = a.mes_referencia ? new Date(a.mes_referencia) : new Date(0);
-            const dateB = b.mes_referencia ? new Date(b.mes_referencia) : new Date(0);
-            primaryResult = dateA - dateB;
-        } else if (sortBy === 'venc_desc') {
-            const dateA = a.vencimento ? new Date(a.vencimento) : new Date(0);
-            const dateB = b.vencimento ? new Date(b.vencimento) : new Date(0);
-            primaryResult = dateB - dateA;
-        } else if (sortBy === 'venc_asc') {
-            const dateA = a.vencimento ? new Date(a.vencimento) : new Date(0);
-            const dateB = b.vencimento ? new Date(b.vencimento) : new Date(0);
-            primaryResult = dateA - dateB;
-        } else if (sortBy === 'uc_asc') {
-            const ucA = a.consumer_units?.numero_uc || '';
-            const ucB = b.consumer_units?.numero_uc || '';
-            primaryResult = ucA.localeCompare(ucB);
-        } else if (sortBy === 'uc_desc') {
-            const ucA = a.consumer_units?.numero_uc || '';
-            const ucB = b.consumer_units?.numero_uc || '';
-            primaryResult = ucB.localeCompare(ucA);
-        } else if (sortBy === 'valor_desc') {
-            const valA = Number(a.valor_concessionaria) || ((Number(a.tarifa_minima || a.tarifa_minima_excedentes) || 0) + (Number(a.iluminacao_publica) || 0) + (Number(a.outros_lancamentos) || 0) + (Number(a.parcelamento) || 0));
-            const valB = Number(b.valor_concessionaria) || ((Number(b.tarifa_minima || b.tarifa_minima_excedentes) || 0) + (Number(b.iluminacao_publica) || 0) + (Number(b.outros_lancamentos) || 0) + (Number(b.parcelamento) || 0));
-            primaryResult = valB - valA;
-        } else if (sortBy === 'valor_asc') {
-            const valA = Number(a.valor_concessionaria) || ((Number(a.tarifa_minima || a.tarifa_minima_excedentes) || 0) + (Number(a.iluminacao_publica) || 0) + (Number(a.outros_lancamentos) || 0) + (Number(a.parcelamento) || 0));
-            const valB = Number(b.valor_concessionaria) || ((Number(b.tarifa_minima || b.tarifa_minima_excedentes) || 0) + (Number(b.iluminacao_publica) || 0) + (Number(b.outros_lancamentos) || 0) + (Number(b.parcelamento) || 0));
-            primaryResult = valA - valB;
-        } else if (sortBy === 'assinante_asc') {
-            const nameA = getDisplayName(a) || '';
-            const nameB = getDisplayName(b) || '';
-            primaryResult = nameA.localeCompare(nameB);
-        } else if (sortBy === 'assinante_desc') {
-            const nameA = getDisplayName(a) || '';
-            const nameB = getDisplayName(b) || '';
-            primaryResult = nameB.localeCompare(nameA);
-        }
-
-        // Se o critério principal empatar e não for ordenação primária pelo próprio mês de referência,
-        // aplica a ordenação secundária: Mês de Ref. com o Mais Novo Primeiro (decrescente)
-        if (primaryResult === 0 && sortBy !== 'ref_desc' && sortBy !== 'ref_asc') {
-            const dateA = a.mes_referencia ? new Date(a.mes_referencia) : new Date(0);
-            const dateB = b.mes_referencia ? new Date(b.mes_referencia) : new Date(0);
-            return dateB - dateA; // Mais novo primeiro
-        }
-
-        return primaryResult;
-    });
-
-    const getInvoiceDueDate = (inv) => {
+        const getInvoiceDueDate = (inv) => {
         if (!inv) return 'Não Faturado';
         if (inv.status === 'sem_faturamento' || inv.status === 'ag_emissao_boleto') {
             return 'Não Faturado';
@@ -427,6 +377,90 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
         return `${formattedDay}/${formattedMonth}/${nextYear}`;
     };
 
+    const getDueDateForSort = (inv) => {
+        if (!inv) return 0;
+        if (activeTab === 'contas_energia') {
+            const d = inv.vencimento_concessionaria || inv.vencimento;
+            return d ? new Date(d.split('T')[0] + 'T12:00:00').getTime() : 0;
+        }
+        if (inv.vencimento) {
+            return new Date(inv.vencimento.split('T')[0] + 'T12:00:00').getTime();
+        }
+        const calcDate = getInvoiceDueDate(inv);
+        if (calcDate && calcDate !== 'Não Faturado') {
+            const [d, m, y] = calcDate.split('/');
+            return new Date(`${y}-${m}-${d}T12:00:00`).getTime();
+        }
+        return 0;
+    };
+
+    const getInvoiceValueForSort = (inv) => {
+        if (!inv) return 0;
+        if (activeTab === 'contas_energia') {
+            return getEnergyBillValue(inv);
+        }
+        return Number(inv.valor_a_pagar) || 0;
+    };
+
+    const sortedInvoices = [...filteredInvoices].sort((a, b) => {
+        let primaryResult = 0;
+        if (sortBy === 'ref_desc') {
+            const dateA = a.mes_referencia ? new Date(a.mes_referencia.split('T')[0] + 'T12:00:00').getTime() : 0;
+            const dateB = b.mes_referencia ? new Date(b.mes_referencia.split('T')[0] + 'T12:00:00').getTime() : 0;
+            primaryResult = dateB - dateA;
+        } else if (sortBy === 'ref_asc') {
+            const dateA = a.mes_referencia ? new Date(a.mes_referencia.split('T')[0] + 'T12:00:00').getTime() : 0;
+            const dateB = b.mes_referencia ? new Date(b.mes_referencia.split('T')[0] + 'T12:00:00').getTime() : 0;
+            primaryResult = dateA - dateB;
+        } else if (sortBy === 'venc_desc') {
+            const dateA = getDueDateForSort(a);
+            const dateB = getDueDateForSort(b);
+            primaryResult = dateB - dateA;
+        } else if (sortBy === 'venc_asc') {
+            const dateA = getDueDateForSort(a);
+            const dateB = getDueDateForSort(b);
+            primaryResult = dateA - dateB;
+        } else if (sortBy === 'uc_asc') {
+            const ucA = a.consumer_units?.numero_uc || '';
+            const ucB = b.consumer_units?.numero_uc || '';
+            primaryResult = ucA.localeCompare(ucB);
+        } else if (sortBy === 'uc_desc') {
+            const ucA = a.consumer_units?.numero_uc || '';
+            const ucB = b.consumer_units?.numero_uc || '';
+            primaryResult = ucB.localeCompare(ucA);
+        } else if (sortBy === 'valor_desc') {
+            const valA = getInvoiceValueForSort(a);
+            const valB = getInvoiceValueForSort(b);
+            primaryResult = valB - valA;
+        } else if (sortBy === 'valor_asc') {
+            const valA = getInvoiceValueForSort(a);
+            const valB = getInvoiceValueForSort(b);
+            primaryResult = valA - valB;
+        } else if (sortBy === 'assinante_asc') {
+            const nameA = getDisplayName(a) || '';
+            const nameB = getDisplayName(b) || '';
+            primaryResult = nameA.localeCompare(nameB);
+        } else if (sortBy === 'assinante_desc') {
+            const nameA = getDisplayName(a) || '';
+            const nameB = getDisplayName(b) || '';
+            primaryResult = nameB.localeCompare(nameA);
+        }
+
+        // Se o critério principal empatar e não for ordenação primária pelo próprio mês de referência,
+        // aplica a ordenação secundária: Mês de Ref. com o Mais Novo Primeiro (decrescente)
+        if (primaryResult === 0 && sortBy !== 'ref_desc' && sortBy !== 'ref_asc') {
+            const dateA = a.mes_referencia ? new Date(a.mes_referencia.split('T')[0] + 'T12:00:00').getTime() : 0;
+            const dateB = b.mes_referencia ? new Date(b.mes_referencia.split('T')[0] + 'T12:00:00').getTime() : 0;
+            const secondaryResult = dateB - dateA;
+            if (secondaryResult !== 0) return secondaryResult;
+            const nameA = getDisplayName(a) || '';
+            const nameB = getDisplayName(b) || '';
+            return nameA.localeCompare(nameB);
+        }
+
+        return primaryResult;
+    });
+
     const handleGenerateExtrato = () => {
         if (sortedInvoices.length === 0) {
             showAlert('Nenhum registro para exportar.', 'warning');
@@ -435,131 +469,293 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
 
         const doc = new jsPDF('l', 'mm', 'a4');
         const pageWidth = doc.internal.pageSize.getWidth();
-
-        // Título e Header
-        doc.setFontSize(14);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(0, 51, 102); // Navy Blue
-        doc.text('EXTRATO DE FATURAS E EVENTOS', 14, 18);
-        
-        doc.setFontSize(9);
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(100, 116, 139); // Slate Grey
         const generationDate = new Date().toLocaleString('pt-BR');
-        doc.text(`Gerado em: ${generationDate}`, pageWidth - 14, 18, { align: 'right' });
 
-        // Linha divisória
-        doc.setDrawColor(226, 232, 240);
-        doc.setLineWidth(0.5);
-        doc.line(14, 22, pageWidth - 14, 22);
+        if (activeTab === 'contas_energia') {
+            // ==========================================
+            // EXTRATO DE CONTAS DE ENERGIA CONCESSIONÁRIA
+            // ==========================================
+            doc.setFontSize(14);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(0, 51, 102); // Navy Blue
+            doc.text('EXTRATO DE CONTAS DE ENERGIA CONCESSIONÁRIA', 14, 18);
+            
+            doc.setFontSize(9);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(100, 116, 139); // Slate Grey
+            doc.text(`Gerado em: ${generationDate}`, pageWidth - 14, 18, { align: 'right' });
 
-        // Resumo financeiro / Filtros aplicados
-        const totalFact = sortedInvoices.reduce((sum, inv) => sum + (inv.parent_invoice_id ? 0 : (Number(inv.valor_a_pagar) || 0)), 0);
-        
-        const totalAtrasado = sortedInvoices
-            .filter(inv => inv.status === 'atrasado')
-            .reduce((sum, inv) => sum + (inv.parent_invoice_id ? 0 : (Number(inv.valor_a_pagar) || 0)), 0);
-        const totalSemFaturamento = sortedInvoices
-            .filter(inv => inv.status === 'sem_faturamento')
-            .reduce((sum, inv) => sum + (inv.parent_invoice_id ? 0 : (Number(inv.valor_a_pagar) || 0)), 0);
-        const totalPago = sortedInvoices
-            .filter(inv => inv.status === 'pago' || inv.status === 'confirmado')
-            .reduce((sum, inv) => sum + (inv.parent_invoice_id ? 0 : (Number(inv.valor_a_pagar) || 0)), 0);
-        const totalAVencer = sortedInvoices
-            .filter(inv => inv.status === 'a_vencer')
-            .reduce((sum, inv) => sum + (inv.parent_invoice_id ? 0 : (Number(inv.valor_a_pagar) || 0)), 0);
+            // Linha divisória
+            doc.setDrawColor(226, 232, 240);
+            doc.setLineWidth(0.5);
+            doc.line(14, 22, pageWidth - 14, 22);
 
-        let statusSummaryText = `Atrasado: ${formatCurrency(totalAtrasado)}    |    Sem Faturamento: ${formatCurrency(totalSemFaturamento)}    |    Pago: ${formatCurrency(totalPago)}`;
-        if (totalAVencer > 0) {
-            statusSummaryText += `    |    A Vencer: ${formatCurrency(totalAVencer)}`;
-        }
+            const totalEnergy = sortedInvoices.reduce((sum, inv) => sum + getEnergyBillValue(inv), 0);
+            
+            const totalAtrasada = sortedInvoices
+                .filter(inv => resolveEnergyStatus(inv) === 'atrasada')
+                .reduce((sum, inv) => sum + getEnergyBillValue(inv), 0);
+            const totalAVencer = sortedInvoices
+                .filter(inv => resolveEnergyStatus(inv) === 'a_vencer')
+                .reduce((sum, inv) => sum + getEnergyBillValue(inv), 0);
+            const totalPaga = sortedInvoices
+                .filter(inv => resolveEnergyStatus(inv) === 'pago')
+                .reduce((sum, inv) => sum + getEnergyBillValue(inv), 0);
+            const totalParcelada = sortedInvoices
+                .filter(inv => resolveEnergyStatus(inv) === 'parcelada')
+                .reduce((sum, inv) => sum + getEnergyBillValue(inv), 0);
+            const totalContestada = sortedInvoices
+                .filter(inv => resolveEnergyStatus(inv) === 'contestada')
+                .reduce((sum, inv) => sum + getEnergyBillValue(inv), 0);
+            const totalInconsistente = sortedInvoices
+                .filter(inv => resolveEnergyStatus(inv) === 'inconsistente')
+                .reduce((sum, inv) => sum + getEnergyBillValue(inv), 0);
+            const totalInconsistentePago = sortedInvoices
+                .filter(inv => resolveEnergyStatus(inv) === 'inconsistente_pago')
+                .reduce((sum, inv) => sum + getEnergyBillValue(inv), 0);
+            const totalContestadaPago = sortedInvoices
+                .filter(inv => resolveEnergyStatus(inv) === 'contestada_pago')
+                .reduce((sum, inv) => sum + getEnergyBillValue(inv), 0);
 
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(15, 23, 42); // Charcoal
-        doc.text(`Total Faturas: ${formatCurrency(totalFact)}`, 14, 29);
-        doc.text(`Total Registros: ${sortedInvoices.length}`, pageWidth - 14, 29, { align: 'right' });
+            let statusSummaryText = `A Vencer: ${formatCurrency(totalAVencer)}    |    Atrasada: ${formatCurrency(totalAtrasada)}    |    Paga: ${formatCurrency(totalPaga)}`;
+            if (totalParcelada > 0) statusSummaryText += `    |    Parcelada: ${formatCurrency(totalParcelada)}`;
+            if (totalContestada > 0) statusSummaryText += `    |    Contestada: ${formatCurrency(totalContestada)}`;
+            if (totalInconsistente > 0) statusSummaryText += `    |    Inconsistente: ${formatCurrency(totalInconsistente)}`;
+            if (totalInconsistentePago > 0) statusSummaryText += `    |    Inconsistente Pago: ${formatCurrency(totalInconsistentePago)}`;
+            if (totalContestadaPago > 0) statusSummaryText += `    |    Contestado Pago: ${formatCurrency(totalContestadaPago)}`;
 
-        doc.setFontSize(9);
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(71, 85, 105); // Slate 600
-        doc.text(statusSummaryText, 14, 35);
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(15, 23, 42); // Charcoal
+            doc.text(`Total Contas: ${formatCurrency(totalEnergy)}`, 14, 29);
+            doc.text(`Total Registros: ${sortedInvoices.length}`, pageWidth - 14, 29, { align: 'right' });
 
-        // Mapear dados para a tabela
-        const tableBody = sortedInvoices.map(inv => {
-            const factValue = Number(inv.valor_a_pagar) || 0;
-            const energyBillValue = Number(inv.valor_concessionaria) || ((Number(inv.tarifa_minima || inv.tarifa_minima_excedentes) || 0) + (Number(inv.iluminacao_publica) || 0) + (Number(inv.outros_lancamentos) || 0) + (Number(inv.parcelamento) || 0) + (Number(inv.consumo_reais) || 0));
-            const statusLabel = 
-                inv.status === 'sem_faturamento' ? 'Sem Faturamento' : 
-                inv.status === 'pago' ? 'Pago' : 
-                inv.status === 'a_vencer' ? 'A Vencer' : 
-                inv.status === 'atrasado' ? 'Atrasado' : 
-                inv.status === 'em_transf_titularidade' ? 'Em Transf. Titularidade' : 
-                inv.status === 'desconectado' ? 'Desconectado' : 
-                inv.status === 'ag_emissao_boleto' ? 'Aguardando Emissão' : 
-                inv.status === 'cancelado' ? 'Cancelado' : inv.status || '-';
+            doc.setFontSize(9);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(71, 85, 105); // Slate 600
+            doc.text(statusSummaryText, 14, 35);
 
-            return [
-                inv.consumer_units?.numero_uc || '-',
-                abbreviateName(getDisplayName(inv) !== '-' ? getDisplayName(inv) : inv.consumer_units?.titular_conta, 20),
-                inv.mes_referencia ? (() => {
-                    const [year, month] = inv.mes_referencia.split('-');
-                    return `${month}/${year}`;
-                })() : '-',
-                inv.consumo_compensado ? `${inv.consumo_compensado} kWh` : '-',
-                formatCurrency(energyBillValue),
-                getInvoiceDueDate(inv),
-                getAnteriorLeitura(inv),
-                inv.data_leitura ? inv.data_leitura.split('T')[0].split('-').reverse().join('/') : '-',
-                formatCurrency(factValue),
-                statusLabel
-            ];
-        });
+            const stContaMap = {
+                'pendente': 'Pendente',
+                'indisponivel': 'Indisponível',
+                'baixada': 'Baixada',
+                'processada': 'Processada',
+                'a_vencer': 'A Vencer',
+                'inconsistente': 'Inconsistente',
+                'inconsistente_pago': 'Inconsistente Pago',
+                'contestada': 'Contestada',
+                'contestada_pago': 'Contestado Pago',
+                'parcelada': 'Parcelada',
+                'atrasada': 'Atrasada',
+                'pago': 'Paga'
+            };
 
-        // Tabela autoTable
-        autoTable(doc, {
-            startY: 40,
-            head: [[
-                'Unidade Consumidora', 
-                'Assinante / Titular', 
-                'Mês Ref.', 
-                'Energia Compensada', 
-                'Conta Energia', 
-                'Vencimento', 
-                'Leitura Ant.', 
-                'Leitura Atual', 
-                'Vr. Fatura', 
-                'Status'
-            ]],
-            body: tableBody,
-            theme: 'striped',
-            headStyles: { fillColor: [0, 51, 102], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8 },
-            bodyStyles: { fontSize: 8, textColor: [51, 65, 85] },
-            alternateRowStyles: { fillColor: [248, 250, 252] },
-            margin: { left: 14, right: 14 },
-            columnStyles: {
-                0: { cellWidth: 32 },
-                1: { cellWidth: 45 },
-                2: { cellWidth: 16, halign: 'center' },
-                3: { cellWidth: 28, halign: 'center' },
-                4: { cellWidth: 26, halign: 'right' },
-                5: { cellWidth: 24, halign: 'center' },
-                6: { cellWidth: 22, halign: 'center' },
-                7: { cellWidth: 22, halign: 'center' },
-                8: { cellWidth: 26, halign: 'right' },
-                9: { cellWidth: 28, halign: 'center' }
-            },
-            didDrawPage: (data) => {
-                const str = `Página ${data.pageNumber}`;
-                doc.setFontSize(8);
-                doc.setFont('helvetica', 'normal');
-                doc.setTextColor(148, 163, 184);
-                doc.text(str, pageWidth - 14, doc.internal.pageSize.getHeight() - 10, { align: 'right' });
+            const tableBody = sortedInvoices.map(inv => {
+                const billValue = getEnergyBillValue(inv);
+                const vencStr = inv.vencimento_concessionaria || inv.vencimento;
+                const formattedVenc = vencStr ? vencStr.split('T')[0].split('-').reverse().join('/') : '-';
+                const stConta = stContaMap[resolveEnergyStatus(inv)] || resolveEnergyStatus(inv);
+                const stFatura = 
+                    inv.status === 'sem_faturamento' ? 'Sem Faturamento' : 
+                    inv.status === 'pago' ? 'Pago' : 
+                    inv.status === 'a_vencer' ? 'A Vencer' : 
+                    inv.status === 'atrasado' ? 'Atrasado' : 
+                    inv.status === 'ag_emissao_boleto' ? 'Sem Faturamento' : 
+                    inv.status === 'cancelado' ? 'Cancelado' : inv.status || '-';
+
+                return [
+                    inv.consumer_units?.numero_uc || '-',
+                    abbreviateName(getDisplayName(inv) !== '-' ? getDisplayName(inv) : inv.consumer_units?.titular_conta, 20),
+                    inv.mes_referencia ? (() => {
+                        const [year, month] = inv.mes_referencia.split('-');
+                        return `${month}/${year}`;
+                    })() : '-',
+                    formatCurrency(billValue),
+                    formattedVenc,
+                    getAnteriorLeitura(inv),
+                    inv.data_leitura ? inv.data_leitura.split('T')[0].split('-').reverse().join('/') : '-',
+                    inv.consumo_kwh ? `${inv.consumo_kwh} kWh` : '-',
+                    inv.consumo_compensado ? `${inv.consumo_compensado} kWh` : '-',
+                    inv.energia_injetada ? `${inv.energia_injetada} kWh` : '-',
+                    stConta,
+                    stFatura
+                ];
+            });
+
+            autoTable(doc, {
+                startY: 40,
+                head: [[
+                    'Cód. Cliente', 
+                    'Assinante / Usina', 
+                    'Ref.', 
+                    'Vl. Conta', 
+                    'Vencimento', 
+                    'Lt. Ant.', 
+                    'Lt. Atual', 
+                    'Consumo', 
+                    'Compens.', 
+                    'Injetada', 
+                    'St. Conta', 
+                    'St. Fatura'
+                ]],
+                body: tableBody,
+                theme: 'striped',
+                headStyles: { fillColor: [0, 51, 102], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 7.5 },
+                bodyStyles: { fontSize: 7.5, textColor: [51, 65, 85] },
+                alternateRowStyles: { fillColor: [248, 250, 252] },
+                margin: { left: 10, right: 10 },
+                columnStyles: {
+                    0: { cellWidth: 26 },
+                    1: { cellWidth: 40 },
+                    2: { cellWidth: 16, halign: 'center' },
+                    3: { cellWidth: 24, halign: 'right' },
+                    4: { cellWidth: 22, halign: 'center' },
+                    5: { cellWidth: 20, halign: 'center' },
+                    6: { cellWidth: 20, halign: 'center' },
+                    7: { cellWidth: 22, halign: 'center' },
+                    8: { cellWidth: 22, halign: 'center' },
+                    9: { cellWidth: 22, halign: 'center' },
+                    10: { cellWidth: 21, halign: 'center' },
+                    11: { cellWidth: 22, halign: 'center' }
+                },
+                didDrawPage: (data) => {
+                    const str = `Página ${data.pageNumber}`;
+                    doc.setFontSize(8);
+                    doc.setFont('helvetica', 'normal');
+                    doc.setTextColor(148, 163, 184);
+                    doc.text(str, pageWidth - 10, doc.internal.pageSize.getHeight() - 10, { align: 'right' });
+                }
+            });
+
+            doc.save(`Extrato_Contas_Energia_${new Date().toISOString().substring(0, 10)}.pdf`);
+            showAlert('Extrato de contas de energia gerado com sucesso!', 'success');
+        } else {
+            // ==========================================
+            // EXTRATO DE FATURAS E EVENTOS
+            // ==========================================
+            doc.setFontSize(14);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(0, 51, 102); // Navy Blue
+            doc.text('EXTRATO DE FATURAS E EVENTOS', 14, 18);
+            
+            doc.setFontSize(9);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(100, 116, 139); // Slate Grey
+            doc.text(`Gerado em: ${generationDate}`, pageWidth - 14, 18, { align: 'right' });
+
+            // Linha divisória
+            doc.setDrawColor(226, 232, 240);
+            doc.setLineWidth(0.5);
+            doc.line(14, 22, pageWidth - 14, 22);
+
+            // Resumo financeiro / Filtros aplicados
+            const totalFact = sortedInvoices.reduce((sum, inv) => sum + (inv.parent_invoice_id ? 0 : (Number(inv.valor_a_pagar) || 0)), 0);
+            
+            const totalAtrasado = sortedInvoices
+                .filter(inv => inv.status === 'atrasado')
+                .reduce((sum, inv) => sum + (inv.parent_invoice_id ? 0 : (Number(inv.valor_a_pagar) || 0)), 0);
+            const totalSemFaturamento = sortedInvoices
+                .filter(inv => inv.status === 'sem_faturamento' || inv.status === 'ag_emissao_boleto')
+                .reduce((sum, inv) => sum + (inv.parent_invoice_id ? 0 : (Number(inv.valor_a_pagar) || 0)), 0);
+            const totalPago = sortedInvoices
+                .filter(inv => inv.status === 'pago' || inv.status === 'confirmado')
+                .reduce((sum, inv) => sum + (inv.parent_invoice_id ? 0 : (Number(inv.valor_a_pagar) || 0)), 0);
+            const totalAVencer = sortedInvoices
+                .filter(inv => inv.status === 'a_vencer')
+                .reduce((sum, inv) => sum + (inv.parent_invoice_id ? 0 : (Number(inv.valor_a_pagar) || 0)), 0);
+
+            let statusSummaryText = `Atrasado: ${formatCurrency(totalAtrasado)}    |    Sem Faturamento: ${formatCurrency(totalSemFaturamento)}    |    Pago: ${formatCurrency(totalPago)}`;
+            if (totalAVencer > 0) {
+                statusSummaryText += `    |    A Vencer: ${formatCurrency(totalAVencer)}`;
             }
-        });
 
-        doc.save(`Extrato_Faturas_${new Date().toISOString().substring(0, 10)}.pdf`);
-        showAlert('Extrato gerado com sucesso!', 'success');
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(15, 23, 42); // Charcoal
+            doc.text(`Total Faturas: ${formatCurrency(totalFact)}`, 14, 29);
+            doc.text(`Total Registros: ${sortedInvoices.length}`, pageWidth - 14, 29, { align: 'right' });
+
+            doc.setFontSize(9);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(71, 85, 105); // Slate 600
+            doc.text(statusSummaryText, 14, 35);
+
+            // Mapear dados para a tabela
+            const tableBody = sortedInvoices.map(inv => {
+                const factValue = Number(inv.valor_a_pagar) || 0;
+                const energyBillValue = getEnergyBillValue(inv);
+                const vencStr = inv.vencimento ? inv.vencimento.split('T')[0].split('-').reverse().join('/') : getInvoiceDueDate(inv);
+                const statusLabel = 
+                    inv.status === 'sem_faturamento' ? 'Sem Faturamento' : 
+                    inv.status === 'pago' ? 'Pago' : 
+                    inv.status === 'a_vencer' ? 'A Vencer' : 
+                    inv.status === 'atrasado' ? 'Atrasado' : 
+                    inv.status === 'em_transf_titularidade' ? 'Em Transf. Titularidade' : 
+                    inv.status === 'desconectado' ? 'Desconectado' : 
+                    inv.status === 'ag_emissao_boleto' ? 'Aguardando Emissão' : 
+                    inv.status === 'cancelado' ? 'Cancelado' : inv.status || '-';
+
+                return [
+                    inv.consumer_units?.numero_uc || '-',
+                    abbreviateName(getDisplayName(inv) !== '-' ? getDisplayName(inv) : inv.consumer_units?.titular_conta, 20),
+                    inv.mes_referencia ? (() => {
+                        const [year, month] = inv.mes_referencia.split('-');
+                        return `${month}/${year}`;
+                    })() : '-',
+                    inv.consumo_compensado ? `${inv.consumo_compensado} kWh` : '-',
+                    formatCurrency(energyBillValue),
+                    vencStr,
+                    getAnteriorLeitura(inv),
+                    inv.data_leitura ? inv.data_leitura.split('T')[0].split('-').reverse().join('/') : '-',
+                    formatCurrency(factValue),
+                    statusLabel
+                ];
+            });
+
+            autoTable(doc, {
+                startY: 40,
+                head: [[
+                    'Unidade Consumidora', 
+                    'Assinante / Titular', 
+                    'Mês Ref.', 
+                    'Energia Compensada', 
+                    'Conta Energia', 
+                    'Vencimento', 
+                    'Leitura Ant.', 
+                    'Leitura Atual', 
+                    'Vr. Fatura', 
+                    'Status'
+                ]],
+                body: tableBody,
+                theme: 'striped',
+                headStyles: { fillColor: [0, 51, 102], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8 },
+                bodyStyles: { fontSize: 8, textColor: [51, 65, 85] },
+                alternateRowStyles: { fillColor: [248, 250, 252] },
+                margin: { left: 14, right: 14 },
+                columnStyles: {
+                    0: { cellWidth: 32 },
+                    1: { cellWidth: 45 },
+                    2: { cellWidth: 16, halign: 'center' },
+                    3: { cellWidth: 28, halign: 'center' },
+                    4: { cellWidth: 26, halign: 'right' },
+                    5: { cellWidth: 24, halign: 'center' },
+                    6: { cellWidth: 22, halign: 'center' },
+                    7: { cellWidth: 22, halign: 'center' },
+                    8: { cellWidth: 26, halign: 'right' },
+                    9: { cellWidth: 28, halign: 'center' }
+                },
+                didDrawPage: (data) => {
+                    const str = `Página ${data.pageNumber}`;
+                    doc.setFontSize(8);
+                    doc.setFont('helvetica', 'normal');
+                    doc.setTextColor(148, 163, 184);
+                    doc.text(str, pageWidth - 14, doc.internal.pageSize.getHeight() - 10, { align: 'right' });
+                }
+            });
+
+            doc.save(`Extrato_Faturas_${new Date().toISOString().substring(0, 10)}.pdf`);
+            showAlert('Extrato gerado com sucesso!', 'success');
+        }
     };
 
     // Faturas/Contas list that ignores status filter for calculating totals dynamically
@@ -616,7 +812,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
     useEffect(() => {
         fetchInvoices();
         fetchUcs();
-    }, [monthFilter, filterCriterion]);
+    }, [monthFilter, filterCriterion, activeTab]);
 
     const fetchInvoices = async () => {
         setLoading(true);
@@ -654,7 +850,11 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                 if (filterCriterion === 'mes_referencia') {
                     query = query.gte('mes_referencia', startDate).lte('mes_referencia', endDate);
                 } else {
-                    query = query.gte('vencimento', startDate).lte('vencimento', endDate);
+                    if (activeTab === 'contas_energia') {
+                        query = query.or(`and(vencimento_concessionaria.gte.${startDate},vencimento_concessionaria.lte.${endDate}),and(vencimento_concessionaria.is.null,vencimento.gte.${startDate},vencimento.lte.${endDate})`);
+                    } else {
+                        query = query.gte('vencimento', startDate).lte('vencimento', endDate);
+                    }
                 }
             }
 
@@ -1176,10 +1376,10 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
             (Number(inv.valor_a_pagar) > 0 || Number(inv.valor_concessionaria) > 0)
         );
         const groupedInvoices = filteredEnergyInvoices.reduce((acc, inv) => {
-            if (inv.vencimento && !['cancelado', 'cancelada'].includes(inv.status)) {
-                // Prioriza a data de vencimento real da fatura para o calendário
-                const date = new Date(inv.vencimento);
-                const day = date.getUTCDate();
+            const dueStr = inv.vencimento_concessionaria || inv.vencimento;
+            if (dueStr) {
+                const date = new Date(dueStr.split('T')[0] + 'T12:00:00');
+                const day = date.getDate();
                 
                 if (!acc[day]) acc[day] = [];
                 acc[day].push(inv);
@@ -1188,9 +1388,10 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
         }, {});
         
         const stats = filteredEnergyInvoices.reduce((acc, inv) => {
-            if (inv.status === 'pago') acc.pago++;
-            else if (inv.status === 'atrasado') acc.atrasado++;
-            else if (inv.status === 'a_vencer') acc.a_vencer++;
+            const ebStatus = resolveEnergyStatus(inv);
+            if (ebStatus === 'pago') acc.pago++;
+            else if (ebStatus === 'atrasada') acc.atrasado++;
+            else if (ebStatus === 'a_vencer') acc.a_vencer++;
             return acc;
         }, { pago: 0, atrasado: 0, a_vencer: 0 });
 
@@ -1302,10 +1503,12 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                 ) : (
                                     dayInvoices.map(inv => {
                                         const today = new Date();
-                                        const dueDate = new Date(inv.vencimento);
-                                        const isPastDue = dueDate < today;
+                                        today.setHours(0, 0, 0, 0);
+                                        const dueStr = inv.vencimento_concessionaria || inv.vencimento;
+                                        const dueDate = dueStr ? new Date(dueStr.split('T')[0] + 'T12:00:00') : null;
+                                        const isPastDue = dueDate && dueDate < today;
                                         
-                                        const ebStatus = inv.energy_bill_status || 'pendente';
+                                        const ebStatus = resolveEnergyStatus(inv);
                                         
                                         const statusData = {
                                             'pago': { color: '#166534', label: 'PAGA', bg: '#dcfce7' },
@@ -2138,7 +2341,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                         }}>
                             <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginRight: '0.5rem' }}>Totais:</span>
                             <span style={{ fontSize: '1rem', fontWeight: '950', color: '#0f172a' }}>
-                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(activeTab === 'faturas' ? sortedInvoices.reduce((sum, inv) => sum + (inv.parent_invoice_id ? 0 : (Number(inv.valor_a_pagar) || 0)), 0) : sortedInvoices.reduce((sum, inv) => sum + (Number(inv.valor_concessionaria) || ((Number(inv.tarifa_minima || inv.tarifa_minima_excedentes) || 0) + (Number(inv.iluminacao_publica) || 0) + (Number(inv.outros_lancamentos) || 0) + (Number(inv.parcelamento) || 0))), 0))}
+                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(activeTab === 'faturas' ? sortedInvoices.reduce((sum, inv) => sum + (inv.parent_invoice_id ? 0 : (Number(inv.valor_a_pagar) || 0)), 0) : sortedInvoices.reduce((sum, inv) => sum + (getEnergyBillValue(inv)), 0))}
                             </span>
                         </div>
                     </div>
@@ -2434,7 +2637,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                                         </td>
 
                                                         {/* 5. Vencimento Corrigido */}
-                                                        <td style={{ padding: '1rem', color: '#334155', whiteSpace: 'nowrap', minWidth: '100px' }}>{getInvoiceDueDate(inv)}</td>
+                                                        <td style={{ padding: '1rem', color: '#334155', whiteSpace: 'nowrap', minWidth: '100px' }}>{inv.vencimento ? inv.vencimento.split('T')[0].split('-').reverse().join('/') : getInvoiceDueDate(inv)}</td>
                                                         
                                                         {/* 6. Leitura Ant. */}
                                                         <td style={{ padding: '1rem', textAlign: 'center', color: '#64748b', whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
@@ -2538,7 +2741,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                 </thead>
                                 <tbody>
                                     {sortedInvoices.map(inv => {
-                                        const cost = Number(inv.valor_concessionaria) || ((Number(inv.tarifa_minima || inv.tarifa_minima_excedentes) || 0) + (Number(inv.iluminacao_publica) || 0) + (Number(inv.outros_lancamentos) || 0) + (Number(inv.parcelamento) || 0));
+                                        const cost = getEnergyBillValue(inv);
                                         const today = new Date();
                                         today.setHours(0,0,0,0);
                                         const dueDate = (inv.vencimento_concessionaria || inv.vencimento) ? new Date(inv.vencimento_concessionaria || inv.vencimento) : null;
@@ -2740,7 +2943,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                             </div>
                                             <div className="kanban-column-content">
                                                 {invoicesInCol.map(inv => {
-                                                    const cost = Number(inv.valor_concessionaria) || ((Number(inv.tarifa_minima || inv.tarifa_minima_excedentes) || 0) + (Number(inv.iluminacao_publica) || 0) + (Number(inv.outros_lancamentos) || 0) + (Number(inv.parcelamento) || 0));
+                                                    const cost = getEnergyBillValue(inv);
                                                     return (
                                                         <div 
                                                             key={inv.id} 
