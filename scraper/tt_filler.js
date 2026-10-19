@@ -228,10 +228,14 @@ function conferirEndereco(mascarado, endereco) {
 
     const cidade = normalizar(endereco?.cidade);
     if (cidade) {
-        const casa = (palavra, padrao) => palavra.length === padrao.length &&
+        // A última palavra da tela pode vir cortada: "SA* GO***LO DO AM****" é
+        // São Gonçalo do AMARANTE (19/10/2026). Nela, basta casar o começo.
+        const ultima = palavrasTela.length - 1;
+        const casa = (palavra, padrao, cortada) =>
+            (palavra.length === padrao.length || (cortada && padrao.length < palavra.length)) &&
             [...padrao].every((c, i) => c === '*' || c === palavra[i]);
         const pals = cidade.split(' ').filter((p) => p.length > 2);
-        achados.push({ item: `cidade ${endereco.cidade}`, ok: pals.every((p) => palavrasTela.some((t) => casa(p, t))) });
+        achados.push({ item: `cidade ${endereco.cidade}`, ok: pals.every((p) => palavrasTela.some((t, i) => casa(p, t, i === ultima))) });
     }
     return { tela: mascarado, ok: achados.length > 0 && achados.every((a) => a.ok), achados };
 }
@@ -316,9 +320,9 @@ async function lerProtocolo(page) {
     return m ? m[1] : null;
 }
 
-/** Digita no campo de texto rotulado por `trecho`. Só dígitos; relê o valor. */
-async function digitarCampo(page, trecho, valor) {
-    const campo = page.locator('mat-form-field', { hasText: new RegExp(trecho, 'i') }).locator('input').first();
+/** Digita no campo `seletor` (CSS). Só dígitos; relê o valor. */
+async function digitarCampo(page, seletor, valor) {
+    const campo = page.locator(seletor).first();
     for (let t = 1; t <= 3; t++) {
         await campo.click({ force: true });
         await espera(page, 1500);
@@ -327,7 +331,7 @@ async function digitarCampo(page, trecho, valor) {
         await espera(page, 1500);
         if (so(await campo.inputValue()) === so(valor)) return;
     }
-    throw new ParadaTT(`O campo "${trecho}" não ficou com ${valor}.`);
+    throw new ParadaTT(`O campo ${seletor} não ficou com ${valor}.`);
 }
 
 async function lerCampo(page, trecho) {
@@ -353,7 +357,8 @@ async function preencherWizard(page, tt, confirmar) {
 
     // 2/8 — Dados da UC
     await esperarPasso(page, 2);
-    await digitarCampo(page, 'CODIGO DE CLIENTE', numeroUC);
+    // Rótulo com acento ("Código"); o formcontrolname é estável (visto em 19/10/2026).
+    await digitarCampo(page, 'input[formcontrolname="codCliente"]', numeroUC);
     await clicarTexto(page, 'Pesquisar');
     let endereco = null;
     for (let t = 0; t < 20 && !endereco; t++) { await espera(page, 1000); endereco = await lerCampo(page, 'Endere'); }
