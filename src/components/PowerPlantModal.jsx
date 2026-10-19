@@ -1482,7 +1482,6 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                         .from('invoices')
                         .select('id, uc_id, mes_referencia, data_leitura, consumo_compensado, valor_concessionaria, valor_a_pagar, status')
                         .in('uc_id', beneficiariaIds)
-                        .gt('consumo_compensado', 0)
                         .neq('status', 'cancelado');
 
                     if (!isYear) {
@@ -2507,7 +2506,6 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                     .from('invoices')
                     .select('id, uc_id, mes_referencia, data_leitura_anterior, data_leitura, consumo_kwh, consumo_compensado, valor_concessionaria, valor_a_pagar, status, desconto_aplicado')
                     .in('uc_id', beneficiariaIds)
-                    .gt('consumo_compensado', 0)
                     .neq('status', 'cancelado');
 
                 if (!isYear) {
