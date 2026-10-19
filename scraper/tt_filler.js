@@ -433,6 +433,25 @@ async function esperarTexto(page, regex, timeout) {
     return false;
 }
 
+/**
+ * Número de 11 ou 12 dígitos (padrão novo da ANEEL) não muda na TT. O número
+ * antigo (9–10 dígitos, começa com 7 ou 007) MUDA: a UC volta com número novo
+ * na lista da UG (dono, 19/10/2026).
+ */
+function numeroMudaNaTT(numero) {
+    const d = so(numero).replace(/^00/, '');
+    return d.length < 11;
+}
+
+/** Números de UC listados em Unidades Consumidoras ("2.289.895.032-69" → "228989503269"). */
+async function numerosNaLista(page) {
+    await page.evaluate((r) => { location.hash = r; }, MEUS_IMOVEIS);
+    await espera(page, 5000);
+    const texto = await textoDaTela(page);
+    const achados = texto.match(/UNIDADE CONSUMIDORA\s*([\d.\-]{9,20})/gi) || [];
+    return new Set(achados.map((a) => so(a)));
+}
+
 /** A TT só conta como feita se a UC (mesmo número) passar a constar na lista da UG. */
 async function ucNaLista(page, numeroUC) {
     await page.evaluate((r) => { location.hash = r; }, MEUS_IMOVEIS);
@@ -484,6 +503,10 @@ async function processar(browser, tt) {
         const estado = neoenergia.resolverEscopo({ uf: tt.ug.address?.uf, concessionaria: tt.ug.concessionaria });
         await neoenergia.selecionarEscopo(page, estado, ctx);
 
+        // Retrato da lista ANTES: com número antigo, a UC volta com número novo
+        // e só a diferença entre as listas o revela.
+        const antes = numeroMudaNaTT(numeroUC) ? await numerosNaLista(page) : null;
+
         const abertura = await abrirTT(page);
         if (abertura.debito) {
             await print(page, `tt_${numeroUC}_debito`);
@@ -498,15 +521,21 @@ async function processar(browser, tt) {
             return;
         }
 
-        const naLista = await ucNaLista(page, numeroUC);
+        let numeroFinal = null;   // número da UC na lista da UG depois da TT
+        if (antes) {
+            const novos = [...await numerosNaLista(page)].filter((n) => !antes.has(n));
+            if (novos.length === 1) numeroFinal = novos[0];
+            else console.log(`   [TT] Número antigo: esperava 1 UC nova na lista da UG, vieram ${novos.length} (${novos.join(', ') || 'nenhuma'}).`);
+        } else if (await ucNaLista(page, numeroUC)) {
+            numeroFinal = numeroUC;
+        }
         await print(page, `tt_${numeroUC}_lista`);
         await rpc('fn_tt_protocolar', { p_tt_id: tt.id, p_protocolo: r.protocolo || 'sem-numero' });
-        if (naLista) {
-            // O número da UC não muda na TT (dono, 19/10/2026).
-            await rpc('fn_concluir_tt', { p_tt_id: tt.id, p_numero_uc_novo: null });
-            console.log(`   [TT] Concluída: UC ${numeroUC} consta na lista da UG. Protocolo ${r.protocolo}.`);
+        if (numeroFinal) {
+            await rpc('fn_concluir_tt', { p_tt_id: tt.id, p_numero_uc_novo: numeroFinal === numeroUC ? null : numeroFinal });
+            console.log(`   [TT] Concluída: UC ${numeroFinal}${numeroFinal !== numeroUC ? ` (antes ${numeroUC})` : ''} consta na lista da UG. Protocolo ${r.protocolo}.`);
         } else {
-            console.log(`   [TT] Protocolada (${r.protocolo}), mas a UC ainda não aparece na lista da UG. Ficou como 'protocolada' para conferência.`);
+            console.log(`   [TT] Protocolada (${r.protocolo}), mas não confirmei a UC na lista da UG. Ficou como 'protocolada' para conferência.`);
         }
     } catch (e) {
         await print(page, `tt_${numeroUC}_parada`);
@@ -540,4 +569,4 @@ if (require.main === module) {
     main().catch((e) => { console.error(e); process.exit(1); });
 }
 
-module.exports = { conferirEndereco, vencimentoPreferido, valorDoDebito };
+module.exports = { conferirEndereco, vencimentoPreferido, valorDoDebito, numeroMudaNaTT };
