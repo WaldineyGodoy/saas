@@ -593,7 +593,45 @@ async function processar(browser, tt) {
     }
 }
 
+/**
+ * --conferir <protocolo>: o envio foi feito na janela, por uma pessoa (19/10/2026,
+ * 1º caso real). Só entra, procura a UC na lista da UG e registra o desfecho.
+ * Exige a TT em 'em_execucao' (o filler interrompido antes de enviar a deixa assim).
+ */
+async function conferir(browser, tt, protocolo) {
+    const numeroUC = so(tt.numero_uc_origem);
+    if (tt.status !== 'em_execucao') throw new Error(`TT em '${tt.status}'; --conferir só vale para 'em_execucao'.`);
+    if (numeroMudaNaTT(numeroUC)) throw new Error('Número antigo: o novo só aparece pela diferença da lista; confira à mão.');
+    const context = await browser.newContext(neoenergia.contextOptions());
+    const page = await context.newPage();
+    const ctx = { log: (m) => console.log(m), screenshot: (n) => print(page, n), downloadDir: './downloads' };
+    try {
+        await neoenergia.login(page, await credencialDaUG(tt), ctx);
+        await neoenergia.selecionarEscopo(page, neoenergia.resolverEscopo({ uf: tt.ug.address?.uf, concessionaria: tt.ug.concessionaria }), ctx);
+        const achou = await ucNaLista(page, numeroUC);
+        console.log(`   [TT] Print da busca: ${await print(page, `tt_${numeroUC}_conferencia`)}`);
+        await rpc('fn_tt_protocolar', { p_tt_id: tt.id, p_protocolo: protocolo });
+        if (achou) {
+            await rpc('fn_concluir_tt', { p_tt_id: tt.id, p_numero_uc_novo: null });
+            console.log(`   [TT] Concluída: UC ${numeroUC} consta na lista da UG. Protocolo ${protocolo}.`);
+        } else {
+            console.log(`   [TT] UC ${numeroUC} ainda NÃO aparece na lista da UG. TT registrada como 'protocolada' (${protocolo}).`);
+        }
+    } finally {
+        await context.close().catch(() => {});
+    }
+}
+
 async function main() {
+    if (args.includes('--conferir')) {
+        const protocolo = args[args.indexOf('--conferir') + 1];
+        if (!argTt || !protocolo) throw new Error('Uso: --tt <uuid> --conferir <protocolo>');
+        const [tt] = await carregarTTs();
+        if (!tt) throw new Error('TT não encontrada.');
+        const browser = await chromium.launch(neoenergia.launchOptions());
+        try { await conferir(browser, tt, protocolo); } finally { await browser.close().catch(() => {}); }
+        return;
+    }
     const tts = await carregarTTs();
     if (!tts.length) { console.log('Nenhuma TT a executar.'); return; }
     console.log(`${tts.length} TT(s) a executar${ATE_RESUMO ? ' (ENSAIO até o Resumo)' : ''}.`);
