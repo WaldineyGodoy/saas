@@ -125,7 +125,11 @@ export const getDisplayName = (inv) => {
 
 export const getEnergyBillValue = (inv) => {
     if (!inv) return 0;
-    return getEnergyBillValue(inv);
+    const tarifa = Number(inv.tarifa_minima || inv.tarifa_minima_excedentes) || 0;
+    const ip = Number(inv.iluminacao_publica) || 0;
+    const outros = Number(inv.outros_lancamentos) || 0;
+    const parc = Number(inv.parcelamento) || 0;
+    return Number(inv.valor_concessionaria) || (tarifa + ip + outros + parc);
 };
 
 export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = false }) {
