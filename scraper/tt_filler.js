@@ -129,34 +129,48 @@ async function clicarTexto(page, rotulo, { timeout = 20000, ultimo = false } = {
     throw new ParadaTT(`Botão "${rotulo}" não apareceu na tela.`);
 }
 
-/** Marca o checkbox cujo rótulo contém `trecho`. Confere o estado depois. */
-async function marcarCheckbox(page, trecho) {
-    const r = await page.evaluate((trecho) => {
-        const t = trecho.toUpperCase();
-        for (const box of document.querySelectorAll('mat-checkbox, label, .mat-checkbox, .mat-mdc-checkbox')) {
-            if (!(box.innerText || '').toUpperCase().includes(t)) continue;
-            const input = box.querySelector('input[type=checkbox]') ||
-                (box.htmlFor && document.getElementById(box.htmlFor));
-            if (!input) continue;
-            if (!input.checked) (box.querySelector('label') || box).click();
-            return { achou: true, marcado: input.checked };
+/**
+ * Acha o input (checkbox ou radio) ligado ao texto `trecho`. O texto pode estar
+ * FORA do mat-checkbox (passo 5: a declaração é um parágrafo ao lado da caixa,
+ * com link para o Termo de Adesão), então sobe pelos ancestrais do elemento
+ * que tem o texto até achar um container com o input.
+ */
+const ACHAR_INPUT = `(trecho, tipo) => {
+    const t = trecho.toUpperCase();
+    const folhas = [...document.querySelectorAll('body *')].filter((el) =>
+        (el.innerText || el.textContent || '').toUpperCase().includes(t) &&
+        ![...el.children].some((c) => (c.innerText || c.textContent || '').toUpperCase().includes(t)));
+    for (const folha of folhas) {
+        let caixa = folha;
+        for (let i = 0; i < 6 && caixa; i++, caixa = caixa.parentElement) {
+            const inputs = caixa.querySelectorAll('input[type=' + tipo + ']');
+            if (inputs.length === 1) return inputs[0];
+            if (inputs.length > 1) break;
         }
-        return { achou: false };
-    }, trecho);
-    if (!r.achou) throw new ParadaTT(`Caixa "${trecho}" não encontrada.`);
-    await espera(page, 600);
-    const marcado = await page.evaluate((trecho) => {
-        const t = trecho.toUpperCase();
-        for (const box of document.querySelectorAll('mat-checkbox, label, .mat-checkbox, .mat-mdc-checkbox')) {
-            if (!(box.innerText || '').toUpperCase().includes(t)) continue;
-            const input = box.querySelector('input[type=checkbox]') ||
-                (box.htmlFor && document.getElementById(box.htmlFor));
-            if (input) return input.checked;
+    }
+    return null;
+}`;
+
+async function marcarInput(page, trecho, tipo) {
+    const nome = tipo === 'radio' ? 'Opção' : 'Caixa';
+    const achou = await page.evaluate(({ src, trecho, tipo }) => {
+        const input = eval(src)(trecho, tipo);
+        if (!input) return false;
+        if (!input.checked) {
+            const alvo = input.closest('mat-checkbox, mat-radio-button')?.querySelector('label') || input;
+            alvo.click();
         }
-        return false;
-    }, trecho);
-    if (!marcado) throw new ParadaTT(`Caixa "${trecho}" não ficou marcada.`);
+        return true;
+    }, { src: ACHAR_INPUT, trecho, tipo });
+    if (!achou) throw new ParadaTT(`${nome} "${trecho}" não encontrada.`);
+    await espera(page, 800);
+    const marcado = await page.evaluate(({ src, trecho, tipo }) => !!eval(src)(trecho, tipo)?.checked,
+        { src: ACHAR_INPUT, trecho, tipo });
+    if (!marcado) throw new ParadaTT(`${nome} "${trecho}" não ficou marcada.`);
 }
+
+const marcarCheckbox = (page, trecho) => marcarInput(page, trecho, 'checkbox');
+const marcarRadio = (page, trecho) => marcarInput(page, trecho, 'radio');
 
 /** Abre o mat-select (ou <select>) rotulado por `trechoRotulo` e devolve as opções. */
 async function abrirSelect(page, trechoRotulo) {
@@ -388,8 +402,12 @@ async function preencherWizard(page, tt, confirmar) {
 
     // 5/8 — Entrega da fatura: e-mail da área logada + declaração de descadastramento
     await esperarPasso(page, 5);
+    // Tela real (19/10/2026): rádio "E-mail da área logada" | "outro e-mail";
+    // sem escolha o botão é "Pular", não "Continuar".
     r.email = (await textoDaTela(page)).match(/[\w.+-]+@[\w-]+\.[\w.]+/)?.[0] || '(não lido)';
+    await marcarRadio(page, 'rea logada');
     await marcarCheckbox(page, 'descadastramento');
+    await print(page, `tt_${numeroUC}_p5`);
     await clicarTexto(page, 'Continuar');
 
     // 6/8 — Forma de pagamento: recusar o débito automático
@@ -397,11 +415,21 @@ async function preencherWizard(page, tt, confirmar) {
 
     // 7/8 — Vencimento: a data mais próxima do dia 15 + ciente
     await esperarPasso(page, 7);
-    const { opcoes } = await abrirSelect(page, 'Vencimento');
-    await page.keyboard.press('Escape').catch(() => {});
-    r.vencimento = vencimentoPreferido(opcoes);
-    if (!r.vencimento) throw new ParadaTT(`Datas de vencimento não reconhecidas: ${opcoes.join(', ')}`);
-    await escolherOpcao(page, 'Vencimento', r.vencimento);
+    await print(page, `tt_${numeroUC}_p7_inicio`);
+    // As datas podem vir como rádios (como o passo 5) ou como lista suspensa.
+    const radios = await page.evaluate(() => [...document.querySelectorAll('input[type=radio]')]
+        .map((i) => (i.closest('mat-radio-button, label')?.innerText || i.value || '').trim()).filter(Boolean));
+    if (radios.length) {
+        r.vencimento = vencimentoPreferido(radios);
+        if (!r.vencimento) throw new ParadaTT(`Datas de vencimento não reconhecidas: ${radios.join(', ')}`);
+        await marcarRadio(page, r.vencimento);
+    } else {
+        const { opcoes } = await abrirSelect(page, 'Vencimento');
+        await page.keyboard.press('Escape').catch(() => {});
+        r.vencimento = vencimentoPreferido(opcoes);
+        if (!r.vencimento) throw new ParadaTT(`Datas de vencimento não reconhecidas: ${opcoes.join(', ')}`);
+        await escolherOpcao(page, 'Vencimento', r.vencimento);
+    }
     await marcarCheckbox(page, 'Ciente');
     r.printAntesDeEnviar = await print(page, `tt_${numeroUC}_p7`);
 
