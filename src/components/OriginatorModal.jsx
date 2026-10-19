@@ -5,10 +5,11 @@ import { fetchAddressByCep } from '../lib/api';
 import { maskCpfCnpj, maskPhone, validateDocument, validatePhone, cleanDigits } from '../lib/validators';
 import { buildReferralUrl, normalizarEndereco, normalizarPixKeyType, PIX_KEY_TYPES } from '../lib/originador';
 import { 
-    History, User, MapPin, Wallet, Link as LinkIcon, 
+    History, User, MapPin, Wallet, Link as LinkIcon, FileSignature,
     X, Save, Trash2, CheckCircle, AlertCircle, Copy, ExternalLink 
 } from 'lucide-react';
 import HistoryTimeline, { CollapsibleSection } from './HistoryTimeline';
+import ContratoOriginacao from './ContratoOriginacao';
 
 export default function OriginatorModal({ originator, onClose, onSave, onDelete }) {
     const { profile } = useAuth();
@@ -263,6 +264,7 @@ export default function OriginatorModal({ originator, onClose, onSave, onDelete 
                         { id: 'endereco', label: 'Endereço', icon: MapPin },
                         { id: 'financeiro', label: 'Financeiro', icon: Wallet },
                         { id: 'indicacao', label: 'Indicação', icon: LinkIcon },
+                        { id: 'contrato', label: 'Contrato', icon: FileSignature },
                         { id: 'historico', label: 'Histórico', icon: History }
                     ].map(tab => (
                         <button
@@ -546,6 +548,23 @@ export default function OriginatorModal({ originator, onClose, onSave, onDelete 
                         )}
 
                         {/* Tab Content: Histórico */}
+                        {/* Tab Content: Contrato */}
+                        {activeTab === 'contrato' && (
+                            <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
+                                {originator ? (
+                                    <ContratoOriginacao
+                                        originadorId={originator.id}
+                                        registrarHistorico={addHistory}
+                                    />
+                                ) : (
+                                    <div style={{ padding: '1rem 1.25rem', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '12px', color: '#92400e', fontSize: '0.88rem', display: 'flex', gap: '0.5rem' }}>
+                                        <AlertCircle size={18} style={{ flexShrink: 0 }} />
+                                        Salve o cadastro para gerar o Contrato de Originação.
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
                         {activeTab === 'historico' && (
                             <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
                                 {originator ? (
