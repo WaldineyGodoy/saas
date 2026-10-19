@@ -2708,7 +2708,7 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                     thresholdBannerRowIndex = tableRows.length;
                     tableRows.push([
                         {
-                            content: `▲ LIMITE DE ENERGIA INJETADA PELA UG (${energiaInjetadaNum.toLocaleString('pt-BR')} kWh) ATINGIDO NESTA UC — SOMATÓRIO ACUMULADO ATÉ AQUI: ${thresholdAccumulatedKwh.toLocaleString('pt-BR')} kWh`,
+                            content: `LIMITE DE ENERGIA INJETADA PELA UG (${energiaInjetadaNum.toLocaleString('pt-BR')} kWh) ATINGIDO NESTA UC  |  ACUMULADO ATÉ AQUI: ${thresholdAccumulatedKwh.toLocaleString('pt-BR')} kWh`,
                             colSpan: 9,
                             styles: {
                                 halign: 'center',
@@ -2716,7 +2716,7 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                 fillColor: [253, 230, 138],
                                 textColor: [146, 64, 14],
                                 fontStyle: 'bold',
-                                fontSize: 7.5
+                                fontSize: 8
                             }
                         }
                     ]);
@@ -2936,8 +2936,8 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                 doc.setFont('helvetica', 'normal');
                 doc.setFontSize(8);
                 doc.setTextColor(148, 163, 184);
-                doc.text(`Página ${i} de ${pageCount} — B2W Energia`, pageWidth - 14, pageHeight - 8, { align: 'right' });
-                doc.text(`Sistema de Gestão de Usinas — Extrato de Operação e Performance`, 14, pageHeight - 8);
+                doc.text(`Página ${i} de ${pageCount} - B2W Energia`, pageWidth - 14, pageHeight - 8, { align: 'right' });
+                doc.text(`Sistema de Gestão de Usinas - Extrato de Operação e Performance`, 14, pageHeight - 8);
             }
 
             const safeUsinaName = (formData.name || 'usina').toLowerCase().replace(/\s+/g, '_');
