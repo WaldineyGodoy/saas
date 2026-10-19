@@ -412,8 +412,15 @@ async function preencherWizard(page, tt, confirmar) {
     // o Cadastrar que protocola é o do passo 7, atrás da confirmação.
     await clicarTexto(page, 'Cadastrar');
 
-    // 6/8 — Forma de pagamento: recusar o débito automático
-    await clicarTexto(page, 'Não cadastrar', { timeout: 30000 });
+    // 6/8 — Forma de pagamento: recusar o débito automático. Tela real
+    // (19/10/2026): página com dados bancários e botão "Pular"; o pop-up
+    // "Não cadastrar" pode vir antes ou depois dele.
+    await esperarPasso(page, 6);
+    await clicarTexto(page, 'Não cadastrar', { timeout: 5000 }).catch(() => {});
+    if (await passoAtual(page) === 6) {
+        await clicarTexto(page, 'Pular');
+        await clicarTexto(page, 'Não cadastrar', { timeout: 10000 }).catch(() => {});
+    }
 
     // 7/8 — Vencimento: a data mais próxima do dia 15 + ciente
     await esperarPasso(page, 7);
