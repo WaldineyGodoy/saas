@@ -408,7 +408,9 @@ async function preencherWizard(page, tt, confirmar) {
     await marcarRadio(page, 'rea logada');
     await marcarCheckbox(page, 'descadastramento');
     await print(page, `tt_${numeroUC}_p5`);
-    await clicarTexto(page, 'Continuar');
+    // O botão do passo 5 é "Cadastrar" (cadastra a fatura digital, não a TT);
+    // o Cadastrar que protocola é o do passo 7, atrás da confirmação.
+    await clicarTexto(page, 'Cadastrar');
 
     // 6/8 — Forma de pagamento: recusar o débito automático
     await clicarTexto(page, 'Não cadastrar', { timeout: 30000 });
