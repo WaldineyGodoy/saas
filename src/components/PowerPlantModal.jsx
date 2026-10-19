@@ -1426,13 +1426,39 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                 }
             }
 
-            // 2. Definir o período civil para apuração das UCs beneficiárias (dia 01 ao último dia do mês ou ano)
+            // 2. Definir o período para apuração das UCs beneficiárias (dia seguinte à leitura da UG até a próxima leitura da UG)
             let ucPeriodoIni = null;
             let ucPeriodoFim = null;
             if (!isYear) {
-                const baseDate = parseISO(firstDay);
-                ucPeriodoIni = firstDay;
-                ucPeriodoFim = format(endOfMonth(baseDate), 'yyyy-MM-dd');
+                const ugEndObj = parseISO(ugDataFim);
+                const ucStartObj = new Date(ugEndObj.getFullYear(), ugEndObj.getMonth(), ugEndObj.getDate() + 1);
+                ucPeriodoIni = format(ucStartObj, 'yyyy-MM-dd');
+
+                let nextUgReadingDate = null;
+                if (ugId && nextMonthStr) {
+                    try {
+                        const { data: nextUgInv } = await supabase
+                            .from('invoices')
+                            .select('data_leitura')
+                            .eq('uc_id', ugId)
+                            .eq('mes_referencia', nextMonthStr)
+                            .order('created_at', { ascending: false })
+                            .limit(1)
+                            .maybeSingle();
+                        if (nextUgInv?.data_leitura) {
+                            nextUgReadingDate = nextUgInv.data_leitura;
+                        }
+                    } catch (nextUgErr) {
+                        console.error('Erro ao buscar próxima leitura da UG:', nextUgErr);
+                    }
+                }
+
+                if (nextUgReadingDate && nextUgReadingDate > ucPeriodoIni) {
+                    ucPeriodoFim = nextUgReadingDate;
+                } else {
+                    const ucEndObj = new Date(ugEndObj.getFullYear(), ugEndObj.getMonth() + 1, ugEndObj.getDate());
+                    ucPeriodoFim = format(ucEndObj, 'yyyy-MM-dd');
+                }
             } else {
                 ucPeriodoIni = `${yearStr}-01-01`;
                 ucPeriodoFim = `${yearStr}-12-31`;
@@ -1460,11 +1486,8 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                         .neq('status', 'cancelado');
 
                     if (!isYear) {
-                        const [yStr, mStr] = referenceMonth.split('-');
-                        let y = parseInt(yStr);
-                        let m = parseInt(mStr);
-                        const prevM = m === 1 ? `${y - 1}-11-01` : (m === 2 ? `${y - 1}-12-01` : `${y}-${String(m - 1).padStart(2, '0')}-01`);
-                        const nextM = m === 12 ? `${y + 1}-02-01` : (m === 11 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`);
+                        const prevM = format(subMonths(parseISO(firstDay), 1), 'yyyy-MM-01');
+                        const nextM = format(addMonths(parseISO(firstDay), 2), 'yyyy-MM-01');
                         invQuery = invQuery.gte('mes_referencia', prevM).lte('mes_referencia', nextM);
                     } else {
                         invQuery = invQuery.gte('mes_referencia', `${yearStr}-01-01`).lte('mes_referencia', `${yearStr}-12-31`);
@@ -2434,13 +2457,41 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                 ugDataFim = `${curYear}-12-31`;
             }
 
-            // Período de leitura civil para as UCs Beneficiárias (dia 01 ao último dia do mês ou ano)
+            // Período de leitura das UCs Beneficiárias (dia seguinte à leitura da UG até a próxima leitura da UG)
             let ucPeriodoIni = null;
             let ucPeriodoFim = null;
             if (!isYear) {
-                const baseDate = parseISO(`${referenceMonth}-01`);
-                ucPeriodoIni = `${referenceMonth}-01`;
-                ucPeriodoFim = format(endOfMonth(baseDate), 'yyyy-MM-dd');
+                const firstDay = `${referenceMonth}-01`;
+                const nextMonthStr = format(addMonths(parseISO(firstDay), 1), 'yyyy-MM-01');
+                const ugEndObj = parseISO(ugDataFim);
+                const ucStartObj = new Date(ugEndObj.getFullYear(), ugEndObj.getMonth(), ugEndObj.getDate() + 1);
+                ucPeriodoIni = format(ucStartObj, 'yyyy-MM-dd');
+
+                let nextUgReadingDate = null;
+                if (ugId) {
+                    try {
+                        const { data: nextUgInv } = await supabase
+                            .from('invoices')
+                            .select('data_leitura')
+                            .eq('uc_id', ugId)
+                            .eq('mes_referencia', nextMonthStr)
+                            .order('created_at', { ascending: false })
+                            .limit(1)
+                            .maybeSingle();
+                        if (nextUgInv?.data_leitura) {
+                            nextUgReadingDate = nextUgInv.data_leitura;
+                        }
+                    } catch (nextUgErr) {
+                        console.error('Erro ao buscar próxima leitura da UG para PDF:', nextUgErr);
+                    }
+                }
+
+                if (nextUgReadingDate && nextUgReadingDate > ucPeriodoIni) {
+                    ucPeriodoFim = nextUgReadingDate;
+                } else {
+                    const ucEndObj = new Date(ugEndObj.getFullYear(), ugEndObj.getMonth() + 1, ugEndObj.getDate());
+                    ucPeriodoFim = format(ucEndObj, 'yyyy-MM-dd');
+                }
             } else {
                 ucPeriodoIni = `${curYear}-01-01`;
                 ucPeriodoFim = `${curYear}-12-31`;
@@ -2460,29 +2511,22 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                     .neq('status', 'cancelado');
 
                 if (!isYear) {
-                    const [yStr, mStr] = referenceMonth.split('-');
-                    let y = parseInt(yStr);
-                    let m = parseInt(mStr);
-                    const prevM = m === 1 ? `${y - 1}-11-01` : (m === 2 ? `${y - 1}-12-01` : `${y}-${String(m - 1).padStart(2, '0')}-01`);
-                    const nextM = m === 12 ? `${y + 1}-02-01` : (m === 11 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`);
+                    const firstDay = `${referenceMonth}-01`;
+                    const prevM = format(subMonths(parseISO(firstDay), 1), 'yyyy-MM-01');
+                    const nextM = format(addMonths(parseISO(firstDay), 2), 'yyyy-MM-01');
                     invQuery = invQuery.gte('mes_referencia', prevM).lte('mes_referencia', nextM);
 
                     const { data: invs, error: invErr } = await invQuery;
                     if (invErr) console.error('Erro ao buscar faturas das beneficiárias:', invErr);
 
                     if (invs && invs.length > 0) {
-                        // Filtrar as faturas que tiveram leitura atual dentro do período civil do mês
+                        // Filtrar as faturas que tiveram leitura atual dentro do período após a leitura da UG
                         matchingInvoices = invs.filter(inv => {
                             if (inv.data_leitura) {
                                 return inv.data_leitura >= ucPeriodoIni && inv.data_leitura <= ucPeriodoFim;
                             }
                             return inv.mes_referencia === `${referenceMonth}-01`;
                         });
-
-                        // Se nenhuma fatura bateu pela data de leitura exata, fallback para o mês de referência
-                        if (matchingInvoices.length === 0) {
-                            matchingInvoices = invs.filter(inv => inv.mes_referencia === `${referenceMonth}-01`);
-                        }
                     }
                 } else {
                     invQuery = invQuery.gte('mes_referencia', `${curYear}-01-01`).lte('mes_referencia', `${curYear}-12-31`).order('mes_referencia', { ascending: true });
@@ -2497,8 +2541,20 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                 }
             }
 
-            // Ordenar faturas
+            // Ordenar faturas seguindo a ordem de prioridade da lista de rateio
+            const ucPriorityMap = new Map();
+            selectedUCs.forEach((uc, idx) => {
+                const prio = (uc.prioridade !== null && uc.prioridade !== undefined && uc.prioridade !== '' && Number(uc.prioridade) > 0)
+                    ? Number(uc.prioridade)
+                    : (idx + 1);
+                ucPriorityMap.set(uc.id, { prio, idx });
+            });
+
             matchingInvoices.sort((a, b) => {
+                const infoA = ucPriorityMap.get(a.uc_id) || { prio: 999999, idx: 999999 };
+                const infoB = ucPriorityMap.get(b.uc_id) || { prio: 999999, idx: 999999 };
+                if (infoA.prio !== infoB.prio) return infoA.prio - infoB.prio;
+                if (infoA.idx !== infoB.idx) return infoA.idx - infoB.idx;
                 const dateA = a.data_leitura || a.mes_referencia || '';
                 const dateB = b.data_leitura || b.mes_referencia || '';
                 return dateA.localeCompare(dateB);
@@ -2590,14 +2646,22 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                 return tarifaLiquida > 0 ? tarifaLiquida : (baseTariffs?.tarifaLiquida || 0);
             };
 
+            const energiaInjetadaNum = Number((!isYear && ugInvoice?.energia_injetada) ? ugInvoice.energia_injetada : (monthlyDetails?.geracao_mensal_kwh || 0));
+
             // Preparar dados das UCs beneficiárias compensadas no período
             let totalKwhConsumido = 0;
             let totalKwhCompensado = 0;
             let totalVrContaEnergia = 0;
             let totalVrFatura = 0;
             let totalVrFornecedor = 0;
+            let thresholdReached = false;
+            let thresholdUcRowIndex = -1;
+            let thresholdBannerRowIndex = -1;
+            let thresholdAccumulatedKwh = 0;
 
-            const tableRows = matchingInvoices.map(inv => {
+            const tableRows = [];
+
+            matchingInvoices.forEach(inv => {
                 const ucObj = selectedUCs.find(u => u.id === inv.uc_id) || availableUCs.find(u => u.id === inv.uc_id);
                 const sub = (ucObj?.subscriber_id ? currentSubscribers?.find(s => s.id === ucObj.subscriber_id) : null) 
                     || (ucObj?.titular_fatura_id ? currentSubscribers?.find(s => s.id === ucObj.titular_fatura_id) : null);
@@ -2617,13 +2681,15 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                     ? (kwhComp * tLiq) 
                     : Math.max(0, (vrFat - vrConc) * (1 - (gestaoPct / 100)));
 
+                const prevCompensado = totalKwhCompensado;
                 totalKwhConsumido += kwhCons;
                 totalKwhCompensado += kwhComp;
                 totalVrFatura += vrFat;
                 totalVrContaEnergia += vrConc;
                 totalVrFornecedor += vrFornecedor;
 
-                return [
+                const currentRowIdx = tableRows.length;
+                tableRows.push([
                     ucNum,
                     assinante,
                     mesRefInv,
@@ -2633,7 +2699,28 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                     formatCurrency(vrFat),
                     formatCurrency(vrConc),
                     formatCurrency(vrFornecedor)
-                ];
+                ]);
+
+                if (!thresholdReached && energiaInjetadaNum > 0 && prevCompensado < energiaInjetadaNum && totalKwhCompensado >= energiaInjetadaNum) {
+                    thresholdReached = true;
+                    thresholdUcRowIndex = currentRowIdx;
+                    thresholdAccumulatedKwh = totalKwhCompensado;
+                    thresholdBannerRowIndex = tableRows.length;
+                    tableRows.push([
+                        {
+                            content: `▲ LIMITE DE ENERGIA INJETADA PELA UG (${energiaInjetadaNum.toLocaleString('pt-BR')} kWh) ATINGIDO NESTA UC — SOMATÓRIO ACUMULADO ATÉ AQUI: ${thresholdAccumulatedKwh.toLocaleString('pt-BR')} kWh`,
+                            colSpan: 9,
+                            styles: {
+                                halign: 'center',
+                                valign: 'middle',
+                                fillColor: [253, 230, 138],
+                                textColor: [146, 64, 14],
+                                fontStyle: 'bold',
+                                fontSize: 7.5
+                            }
+                        }
+                    ]);
+                }
             });
 
             if (tableRows.length === 0) {
@@ -2678,7 +2765,7 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
             const mesRefTexto = isYear ? `Ano ${curYear}` : format(parseISO(`${referenceMonth}-01`), 'MM/yyyy');
             const periodoLeituraUG = `${formatDateBR(ugDataIni)} a ${formatDateBR(ugDataFim)}`;
             const energiaPrevistaKwh = Number(monthlyDetails?.geracao_prevista || 0).toLocaleString('pt-BR');
-            const energiaInjetadaKwh = Number(monthlyDetails?.geracao_mensal_kwh || 0).toLocaleString('pt-BR');
+            const energiaInjetadaKwh = energiaInjetadaNum.toLocaleString('pt-BR');
             const finalCompensada = (matchingInvoices.length > 0 || totalKwhCompensado > 0)
                 ? totalKwhCompensado
                 : Number(monthlyDetails?.energia_compensada || 0);
@@ -2813,6 +2900,20 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                 },
                 didParseCell: (data) => {
                     data.cell.styles.valign = 'middle';
+                    if (data.section === 'body') {
+                        if (data.row.index === thresholdUcRowIndex) {
+                            data.cell.styles.fillColor = [254, 243, 199];
+                            data.cell.styles.fontStyle = 'bold';
+                            if (data.column.index !== 5 && data.column.index !== 8) {
+                                data.cell.styles.textColor = [146, 64, 14];
+                            }
+                        } else if (data.row.index === thresholdBannerRowIndex) {
+                            data.cell.styles.fillColor = [253, 230, 138];
+                            data.cell.styles.textColor = [146, 64, 14];
+                            data.cell.styles.fontStyle = 'bold';
+                            data.cell.styles.halign = 'center';
+                        }
+                    }
                     if (data.section === 'foot') {
                         if (data.column.index >= 4) {
                             data.cell.styles.halign = 'right';
