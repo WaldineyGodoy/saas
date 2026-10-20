@@ -394,6 +394,11 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
         name: '',
         status: 'pre_operacao',
         compra_venda_assinada_em: '',
+        // Venda ao investidor: alimenta "Usinas à venda" na base do Agente
+        // Investidor do Deskcomm (supabase/functions/deskcomm-base).
+        a_venda: false,
+        previsao_entrega: '',
+        modelo_venda: 'integral',
         modalidade: 'geracao_compartilhada',
         valor_investido: '', // Stored as string for formatting
         qtd_modulos: '',
@@ -1109,6 +1114,9 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                 status: usina.status || 'pre_operacao',
                 compra_venda_assinada_em: usina.compra_venda_assinada_em
                     ? usina.compra_venda_assinada_em.slice(0, 10) : '',
+                a_venda: !!usina.a_venda,
+                previsao_entrega: usina.previsao_entrega ? usina.previsao_entrega.slice(0, 10) : '',
+                modelo_venda: usina.modelo_venda || 'integral',
                 modalidade: ['gd1', 'gd2', 'gd3', 'geracao_distribuida'].includes(usina.modalidade) ? 'geracao_compartilhada' : (usina.modalidade || 'geracao_compartilhada'),
                 valor_investido: usina.valor_investido ? formatCurrency(usina.valor_investido) : '',
                 qtd_modulos: usina.qtd_modulos || '',
@@ -3342,6 +3350,10 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
             grupo_tarifario: formData.grupo_tarifario,
             portal_credentials: semSenha(formData.portal_credentials),
             short_url: formData.short_url || null,
+            a_venda: !!formData.a_venda,
+            // String vazia num campo date e erro do Postgres, nao "sem data".
+            previsao_entrega: formData.previsao_entrega || null,
+            modelo_venda: formData.modelo_venda || 'integral',
             address: {
                 cep: formData.cep,
                 rua: formData.rua,
@@ -5545,6 +5557,49 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                     {/* Tab Content: Comunicados / Histórico */}
                     {activeTab === 'contratos' && (
                         <div className="no-print" style={{ animation: 'fadeIn 0.3s ease-out' }}>
+                            <div style={{ background: 'white', padding: '1.5rem', borderRadius: '16px', border: '1px solid #f1f5f9', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', marginBottom: '1.5rem' }}>
+                                <h4 style={{ margin: '0 0 0.35rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b' }}>
+                                    <DollarSign size={20} color="#3b82f6" /> Venda ao investidor
+                                </h4>
+                                <p style={{ margin: '0 0 1rem 0', fontSize: '0.78rem', color: '#94a3b8' }}>
+                                    Usina marcada como à venda entra em "Usinas à venda" do Agente Investidor no WhatsApp, com estágio, previsão, preço (Valor Investido) e o link da página da usina. Desmarque quando for vendida.
+                                </p>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', alignItems: 'end' }}>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.88rem', fontWeight: 600, color: '#475569', cursor: 'pointer', paddingBottom: '0.65rem' }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={!!formData.a_venda}
+                                            onChange={e => setFormData({ ...formData, a_venda: e.target.checked })}
+                                        />
+                                        À venda
+                                    </label>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#475569', marginBottom: '0.35rem' }}>Previsão de entrega</label>
+                                        <input
+                                            type="date"
+                                            style={{ width: '100%', padding: '0.65rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.88rem', outline: 'none', boxSizing: 'border-box' }}
+                                            value={formData.previsao_entrega || ''}
+                                            onChange={e => setFormData({ ...formData, previsao_entrega: e.target.value })}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#475569', marginBottom: '0.35rem' }}>Modelo de venda</label>
+                                        <select
+                                            style={{ width: '100%', padding: '0.65rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.88rem', outline: 'none', boxSizing: 'border-box' }}
+                                            value={formData.modelo_venda || 'integral'}
+                                            onChange={e => setFormData({ ...formData, modelo_venda: e.target.value })}
+                                        >
+                                            <option value="integral">Integral</option>
+                                            <option value="cotas">Cotas</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                {formData.a_venda && !formData.short_url && (
+                                    <p style={{ margin: '0.75rem 0 0 0', fontSize: '0.78rem', color: '#92400e' }}>
+                                        Sem link da página da usina: o agente vai dizer que o consultor envia o material.
+                                    </p>
+                                )}
+                            </div>
                             {!usina ? (
                                 <div style={{ background: 'white', padding: '1.5rem', borderRadius: '16px', border: '1px solid #f1f5f9', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', marginBottom: '1.5rem' }}>Salve a usina para gerar contratos.</div>
                             ) : (

@@ -213,3 +213,31 @@ As duas Edge Functions passaram só na checagem de sintaxe (esbuild). Não há D
 - `supabase/migrations/20261020a_ponte_deskcomm.sql` — schema `ponte_deskcomm`, categorias, mapeamento etapa ↔ status, vínculos, fila, gatilhos nos dois sentidos, RPCs restritas à service role, 2 crons.
 - `supabase/functions/deskcomm-ponte/index.ts` — drena a fila e move o card pelo MCP do Deskcomm (`crm_move_lead_stage`).
 - `supabase/functions/jev-temperatura/index.ts` — temperatura, probabilidade de fechamento, próximo passo e conferência de categoria pelo Jev.
+- `supabase/migrations/20261020b_base_agente_investidor.sql` — campos de venda da usina, `ponte_deskcomm.fontes_base`, RPCs da base, gatilho em `usinas` e cron `ponte-deskcomm-base`.
+- `supabase/functions/deskcomm-base/` — mantém a base do Agente Investidor no Deskcomm (FAQ em `bases/investidor-faq.ts`, montador em `montar.ts`).
+- `scripts/deskcomm/base_investidor.sql` — publica a versão do Agente Investidor com o roteiro e as fontes.
+
+## 8. Bases de conhecimento por produto
+
+Uma base por agente, desenhada com /brainstorming. Spec de cada uma em `docs/superpowers/specs/`.
+
+### 8.1 Agente Investidor (Usinas de Investimento) — no ar desde 20/10/2026
+
+Spec: `docs/superpowers/specs/2026-10-19-base-agente-investidor-design.md`.
+
+- **Fontes no Deskcomm** (ligadas à versão 2 publicada do agente):
+  - "Investidor — Perguntas e respostas" (faq, 15 pares);
+  - "Usinas à venda" (documento, gerado das usinas com **À venda** marcado na aba Contratos do modal da usina).
+- **Por que os números ficam na base:** a trava de promessas do Deskcomm só deixa passar afirmação comercial provada por fonte `faq`/`documento`.
+- **Cadastrar usina à venda:** no CRM, aba Contratos da usina → marcar **À venda**, preencher **Previsão de entrega** e **Modelo de venda**; o preço vem de Valor Investido e o link, do link encurtado da usina. O gatilho atualiza a base em segundos; desmarque quando vender.
+- **Mudar o FAQ:** editar `supabase/functions/deskcomm-base/bases/investidor-faq.ts`, rodar `npx vitest run tests/deskcomm-base.test.ts` (confere 15 pares e as palavras proibidas) e publicar a função (`npx supabase functions deploy deskcomm-base --project-ref abbysvxnnhwvvzhftoms`). O cron da hora seguinte, ou uma chamada manual, sincroniza.
+- **Mudar o roteiro do agente:** editar `scripts/deskcomm/base_investidor.sql` e rodar no SQL Editor (publica nova versão; idempotente).
+- **Chamada manual:** `select ponte_deskcomm.fn_chamar_funcao('deskcomm-base');` — com `'{"ensaio": true}'::jsonb` devolve os textos sem gravar (resposta em `net._http_response`).
+
+**Checklist depois de atualizar o Deskcomm** (a função grava direto nas tabelas dele):
+1. `select public.ponte_deskcomm_contrato_base();` deve voltar `{}`.
+2. Ensaio da `deskcomm-base` com status 200.
+3. Em `ai_knowledge_sources`, as duas fontes com `last_index_status = 'success'`.
+4. Se algo falhar, a função não grava e registra em `ponte_deskcomm.erros`; a base anterior continua valendo.
+
+Pendente (projetos seguintes): lista de cotistas por usina (aba Vínculos de Fornecedor) com cotas disponíveis, e divisão do repasse por cota.
