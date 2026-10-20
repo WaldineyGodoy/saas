@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import LeadModal from '../../components/LeadModal';
@@ -40,7 +40,45 @@ const KANBAN_STATUSES = [
     { status: 'negocio_perdido', label: 'Negócio Perdido', color: '#ef4444' }
 ];
 
-function KanbanCard({ lead, onClick, isOverlay }) {
+// Categorias do topo da página. O lead guarda a tag com '#' ('#Investidor').
+const CATEGORIAS = ['Embaixador', 'Energia por Assinatura', 'Investidor', 'Eletropostos', 'Cotas', 'Consorcio', 'Financiamento', 'Arrendamento de area', 'Locação de Vagas', 'Comercializadora'];
+// Lead sem nenhuma das categorias acima (o contato do Deskcomm chega assim).
+// Sem esta tag ele nunca teria onde clicar para apagar o aviso de novo.
+const SEM_CATEGORIA = '__sem_categoria__';
+const COR_SEM_CATEGORIA = { color: '#475569', bg: '#f1f5f9' };
+// Lead criado antes do aviso de novo existir não conta como novo.
+const INICIO_AVISO_NOVO = '2026-10-20T03:00:00Z';
+
+const semCerquilha = (t) => String(t).replace(/^#/, '').trim().toLowerCase();
+
+// Compara sem '#' e sem caixa: o filtro lista 'Investidor' e o lead guarda
+// '#Investidor'.
+function categoriasDoLead(lead) {
+    const doLead = (lead.tags || []).map(semCerquilha);
+    const categorias = CATEGORIAS.filter(c => doLead.includes(semCerquilha(c)));
+    return categorias.length > 0 ? categorias : [SEM_CATEGORIA];
+}
+
+// Texto branco ou escuro, o que contrastar mais com o fundo. Branco sobre o
+// amarelo da Comercializadora ou o verde-limão do Arrendamento não se lê.
+function textoSobre(hex) {
+    const m = /^#([0-9a-f]{6})$/i.exec(hex || '');
+    if (!m) return 'white';
+    const canal = (i) => {
+        const c = parseInt(m[1].slice(i, i + 2), 16) / 255;
+        return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    };
+    const lum = 0.2126 * canal(0) + 0.7152 * canal(2) + 0.0722 * canal(4);
+    const comBranco = 1.05 / (lum + 0.05);
+    const comEscuro = (lum + 0.05) / (0.0091 + 0.05); // #0f172a
+    return comBranco >= comEscuro ? 'white' : '#0f172a';
+}
+
+function SeloNew() {
+    return <span className="lead-selo-new" title="Lead novo">NEW</span>;
+}
+
+function KanbanCard({ lead, onClick, isOverlay, novo }) {
     const {
         attributes,
         listeners,
@@ -68,7 +106,10 @@ function KanbanCard({ lead, onClick, isOverlay }) {
             {...(!isOverlay ? listeners : {})}
             onClick={() => !isOverlay && onClick(lead)}
         >
-            <div style={{ fontWeight: 'bold', marginBottom: '0.3rem', color: 'var(--color-text-dark)' }}>{lead.name}</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem', marginBottom: '0.3rem' }}>
+                <span style={{ fontWeight: 'bold', color: 'var(--color-text-dark)' }}>{lead.name}</span>
+                {novo && <SeloNew />}
+            </div>
 
             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
                 <span style={{ fontSize: '0.7rem', color: 'var(--color-blue)', background: '#eff6ff', padding: '0.1rem 0.4rem', borderRadius: '4px' }}>
@@ -114,7 +155,7 @@ function KanbanCard({ lead, onClick, isOverlay }) {
     );
 }
 
-function KanbanColumn({ status, label, color, leads, onCardClick }) {
+function KanbanColumn({ status, label, color, leads, onCardClick, leadEhNovo }) {
     const { setNodeRef, isOver } = useDroppable({
         id: status,
     });
@@ -130,8 +171,11 @@ function KanbanColumn({ status, label, color, leads, onCardClick }) {
             }}
         >
             <div className="kanban-column-header" style={{ color: color }}>
-                <span style={{ textTransform: 'uppercase', fontSize: '0.8rem', fontWeight: 'bold' }}>
-                    {label}
+                <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <span style={{ textTransform: 'uppercase', fontSize: '0.8rem', fontWeight: 'bold' }}>
+                        {label}
+                    </span>
+                    {leads.some(leadEhNovo) && <SeloNew />}
                 </span>
                 <span style={{ fontSize: '0.8rem', background: color, color: 'white', padding: '0.1rem 0.5rem', borderRadius: '99px' }}>
                     {leads.length}
@@ -143,7 +187,7 @@ function KanbanColumn({ status, label, color, leads, onCardClick }) {
                     strategy={verticalListSortingStrategy}
                 >
                     {leads.map(lead => (
-                        <KanbanCard key={lead.id} lead={lead} onClick={onCardClick} />
+                        <KanbanCard key={lead.id} lead={lead} onClick={onCardClick} novo={leadEhNovo(lead)} />
                     ))}
                 </SortableContext>
             </div>
@@ -168,6 +212,12 @@ export default function LeadsList() {
     // Simulação parada há 90 dias é arquivada (20261006b) e some do padrão.
     const [mostrarArquivados, setMostrarArquivados] = useState(false);
     const [activeId, setActiveId] = useState(null);
+    // Até quando este usuário já viu cada categoria ({ Investidor: iso }).
+    const [vistoEm, setVistoEm] = useState({});
+    // Leads que ficaram vistos nesta visita: o selo NEW continua neles até
+    // recarregar a página, senão sumiria no clique que serve para achá-los.
+    const [revelados, setRevelados] = useState(() => new Set());
+    const arrastandoRef = useRef(false);
 
     const sensors = useSensors(
         useSensor(PointerSensor, {
@@ -196,15 +246,8 @@ export default function LeadsList() {
         }
 
         if (selectedTags.length > 0) {
-            if (!lead.tags || lead.tags.length === 0) {
-                matchesTags = false;
-            } else {
-                // O filtro lista os nomes sem '#', e o lead guarda '#Investidor':
-                // compara sem o '#' e sem caixa, senão nenhum lead aparece.
-                const semCerquilha = (t) => String(t).replace(/^#/, '').trim().toLowerCase();
-                const doLead = lead.tags.map(semCerquilha);
-                matchesTags = selectedTags.some(t => doLead.includes(semCerquilha(t)));
-            }
+            const doLead = categoriasDoLead(lead);
+            matchesTags = selectedTags.some(t => doLead.includes(t));
         }
         
         if (selectedStatuses.length > 0) {
@@ -214,12 +257,63 @@ export default function LeadsList() {
         return matchesSearch && matchesTags && matchesStatus;
     });
 
+    // Lead novo = criado depois da última vez que o usuário abriu a categoria.
+    const ehNovoNaCategoria = (lead, categoria) =>
+        new Date(lead.created_at) > new Date(vistoEm[categoria] || INICIO_AVISO_NOVO);
+
+    const novosPorCategoria = {};
+    for (const lead of leads) {
+        if (lead.arquivado_em) continue;
+        for (const categoria of categoriasDoLead(lead)) {
+            if (ehNovoNaCategoria(lead, categoria)) {
+                (novosPorCategoria[categoria] ||= []).push(lead);
+            }
+        }
+    }
+
+    const leadEhNovo = (lead) =>
+        revelados.has(lead.id) ||
+        (!lead.arquivado_em && categoriasDoLead(lead).some(c => ehNovoNaCategoria(lead, c)));
+
+    const alternarCategoria = (categoria) => {
+        setSelectedTags(prev => prev.includes(categoria)
+            ? prev.filter(t => t !== categoria)
+            : [...prev, categoria]);
+
+        const novos = novosPorCategoria[categoria];
+        if (!novos?.length) return;
+
+        // Avança só até o lead mais recente que está na tela: um lead que
+        // chegue depois do carregamento continua novo.
+        const ate = novos.reduce((max, l) => (new Date(l.created_at) > new Date(max) ? l.created_at : max), novos[0].created_at);
+        setVistoEm(prev => ({ ...prev, [categoria]: ate }));
+        setRevelados(prev => new Set([...prev, ...novos.map(l => l.id)]));
+        supabase.rpc('fn_marcar_novidade_vista', { p_categoria: categoria, p_ate: ate })
+            .then(({ error }) => { if (error) console.error('Erro ao marcar categoria como vista:', error); });
+    };
+
     useEffect(() => {
         fetchLeads();
+        supabase.from('lead_novidade_vista').select('categoria, visto_em')
+            .then(({ data, error }) => {
+                if (error) { console.error('Erro ao ler leads vistos:', error); return; }
+                setVistoEm(Object.fromEntries((data || []).map(r => [r.categoria, r.visto_em])));
+            });
+
+        // Lead que chega com a página aberta aparece sem recarregar. Durante
+        // um arraste o recarregamento desfaria a posição do card.
+        const canal = supabase
+            .channel('leads-kanban')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, () => {
+                if (!arrastandoRef.current) fetchLeads({ silencioso: true });
+            })
+            .subscribe();
+
+        return () => { supabase.removeChannel(canal); };
     }, []);
 
-    const fetchLeads = async () => {
-        setLoading(true);
+    const fetchLeads = async ({ silencioso = false } = {}) => {
+        if (!silencioso) setLoading(true);
         try {
             const { data, error } = await supabase
                 .from('leads')
@@ -290,6 +384,7 @@ export default function LeadsList() {
     };
 
     const handleDragStart = (event) => {
+        arrastandoRef.current = true;
         setActiveId(event.active.id);
     };
 
@@ -321,6 +416,7 @@ export default function LeadsList() {
 
     const handleDragEnd = async (event) => {
         const { active, over } = event;
+        arrastandoRef.current = false;
         setActiveId(null);
         if (!over) {
             fetchLeads(); // Reset to original if dropped outside
@@ -385,30 +481,38 @@ export default function LeadsList() {
                     />
                     
                     <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', flex: 1, alignItems: 'center' }}>
-                        {['Embaixador', 'Energia por Assinatura', 'Investidor', 'Eletropostos', 'Cotas', 'Consorcio', 'Financiamento', 'Arrendamento de area', 'Locação de Vagas', 'Comercializadora'].map(tag => (
-                            <button
-                                key={tag}
-                                onClick={() => {
-                                    if (selectedTags.includes(tag)) {
-                                        setSelectedTags(selectedTags.filter(t => t !== tag));
-                                    } else {
-                                        setSelectedTags([...selectedTags, tag]);
-                                    }
-                                }}
-                                style={{
-                                    fontSize: '0.75rem',
-                                    padding: '0.2rem 0.6rem',
-                                    borderRadius: '16px',
-                                    border: selectedTags.includes(tag) ? '1px solid var(--color-primary)' : '1px solid #cbd5e1',
-                                    background: selectedTags.includes(tag) ? 'var(--color-primary)' : 'white',
-                                    color: selectedTags.includes(tag) ? 'white' : '#475569',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.2s'
-                                }}
-                            >
-                                {tag}
-                            </button>
-                        ))}
+                        {[...CATEGORIAS, SEM_CATEGORIA].map(tag => {
+                            // A tag selecionada usava var(--color-primary), que
+                            // não existe no CSS: o fundo sumia e o texto branco
+                            // ficava sobre a página. Cada tag usa a própria cor,
+                            // no mesmo padrão do filtro de status.
+                            const cor = tag === SEM_CATEGORIA ? COR_SEM_CATEGORIA : getTagColor(`#${tag}`);
+                            const selecionada = selectedTags.includes(tag);
+                            const qtdNovos = novosPorCategoria[tag]?.length || 0;
+                            return (
+                                <button
+                                    key={tag}
+                                    onClick={() => alternarCategoria(tag)}
+                                    className={qtdNovos > 0 ? 'lead-tag-pulso' : undefined}
+                                    title={qtdNovos > 0 ? `${qtdNovos} lead${qtdNovos > 1 ? 's' : ''} novo${qtdNovos > 1 ? 's' : ''}` : undefined}
+                                    aria-pressed={selecionada}
+                                    style={{
+                                        '--pulso-cor': cor.color,
+                                        fontSize: '0.75rem',
+                                        padding: '0.2rem 0.6rem',
+                                        borderRadius: '16px',
+                                        border: `1px solid ${cor.color}`,
+                                        background: selecionada ? cor.color : cor.bg,
+                                        color: selecionada ? textoSobre(cor.color) : cor.color,
+                                        fontWeight: selecionada ? 600 : 500,
+                                        cursor: 'pointer',
+                                        transition: 'background 0.2s, color 0.2s'
+                                    }}
+                                >
+                                    {tag === SEM_CATEGORIA ? 'Sem categoria' : tag}
+                                </button>
+                            );
+                        })}
                     </div>
                     <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', flex: 1, alignItems: 'center', marginTop: '0.5rem' }}>
                         <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>Filtrar Status:</span>
@@ -511,7 +615,7 @@ export default function LeadsList() {
                                         <tbody>
                                             {filteredLeads.map(lead => (
                                                 <tr key={lead.id}>
-                                                    <td style={{ fontWeight: 'bold' }}>{lead.name}</td>
+                                                    <td style={{ fontWeight: 'bold' }}>{lead.name}{leadEhNovo(lead) && <> <SeloNew /></>}</td>
                                                     <td>{lead.concessionaria || '-'}</td>
                                                     <td>{lead.consumo_kwh ? `${Number(lead.consumo_kwh).toLocaleString('pt-BR')} kWh` : '-'}</td>
                                                     <td>
@@ -596,7 +700,7 @@ export default function LeadsList() {
                             onDragStart={handleDragStart}
                             onDragOver={handleDragOver}
                             onDragEnd={handleDragEnd}
-                            onDragCancel={() => { setActiveId(null); fetchLeads(); }}
+                            onDragCancel={() => { arrastandoRef.current = false; setActiveId(null); fetchLeads(); }}
                         >
                             <div className="kanban-box">
                                 <div className="kanban-board">
@@ -611,6 +715,7 @@ export default function LeadsList() {
                                                 color={color}
                                                 leads={leadsInStatus}
                                                 onCardClick={(lead) => { setEditingLead(lead); setIsModalOpen(true); }}
+                                                leadEhNovo={leadEhNovo}
                                             />
                                         );
                                     })}

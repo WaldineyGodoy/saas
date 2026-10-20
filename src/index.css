@@ -1090,3 +1090,40 @@ textarea {
 .hide-number-spin {
   -moz-appearance: textfield;
 }
+
+/* Leads — aviso de lead novo. A tag da categoria pulsa até ser clicada; a
+   cor do pulso vem da própria tag (--pulso-cor). */
+.lead-tag-pulso {
+  animation: lead-tag-pulso-anim 1.6s ease-out infinite;
+}
+
+@keyframes lead-tag-pulso-anim {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--pulso-cor) 55%, transparent);
+  }
+  70% {
+    box-shadow: 0 0 0 8px color-mix(in srgb, var(--pulso-cor) 0%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--pulso-cor) 0%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lead-tag-pulso {
+    animation: none;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--pulso-cor) 45%, transparent);
+  }
+}
+
+.lead-selo-new {
+  display: inline-block;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  background: #16a34a;
+  color: #fff;
+}
