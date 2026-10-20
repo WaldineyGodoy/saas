@@ -6,6 +6,7 @@ Bem-vindo à Base de Conhecimento oficial do sistema. Este diretório contém a 
 
 - **[CRM.md](./CRM.md)**: Documentação focada na gestão administrativa, operacional e back-office.
 - **[APP.md](./APP.md)**: Documentação focada na experiência do cliente final, simulações e área do assinante.
+- **[DESKCOMM.md](./DESKCOMM.md)**: Atendimento por WhatsApp no DeskcommCRM — agentes por linha de negócio, Jev (categoria e temperatura) e ponte de leads com o CRM.
 - **[HISTORICO_ATUALIZACOES.md](./HISTORICO_ATUALIZACOES.md)**: Registro cronológico de todas as mudanças informadas.
 
 ---

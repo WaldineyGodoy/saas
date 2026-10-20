@@ -40,9 +40,9 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
     // 'convertido' nunca existiu: escolher qualquer um dos dois fazia o
     // salvamento falhar com "invalid input value for enum lead_status".
     const statusOptions = [
+        { value: 'sem_interacao', label: 'Sem Interação' },
         { value: 'indicado', label: 'Indicado' },
         { value: 'simulacao', label: 'Simulação' },
-        { value: 'sem_interacao', label: 'Sem Interação' },
         { value: 'negociacao', label: 'Negociação' },
         { value: 'reuniao_agendada', label: 'Reunião Agendada/Apresentação' },
         { value: 'contrato_enviado', label: 'Contrato Enviado' },
