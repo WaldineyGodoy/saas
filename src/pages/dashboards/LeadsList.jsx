@@ -25,10 +25,12 @@ import {
 import { useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 
+// 'sem_interacao' abre o kanban: e onde nasce o contato que chegou pelo
+// WhatsApp do Deskcomm e ainda nao disse sobre qual produto quer falar.
 const KANBAN_STATUSES = [
+    { status: 'sem_interacao', label: 'Sem Interação', color: '#a8a29e' },
     { status: 'indicado', label: 'Indicado', color: '#0ea5e9' },
     { status: 'simulacao', label: 'Simulação', color: '#64748b' },
-    { status: 'sem_interacao', label: 'Sem Interação', color: '#a8a29e' },
     { status: 'negociacao', label: 'Negociação', color: '#eab308' },
     { status: 'reuniao_agendada', label: 'Reunião Agendada/Apresentação', color: '#f97316' },
     { status: 'contrato_enviado', label: 'Contrato Enviado', color: '#8b5cf6' },
