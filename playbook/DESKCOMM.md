@@ -216,6 +216,9 @@ As duas Edge Functions passaram só na checagem de sintaxe (esbuild). Não há D
 - `supabase/migrations/20261020b_base_agente_investidor.sql` — campos de venda da usina, `ponte_deskcomm.fontes_base`, RPCs da base, gatilho em `usinas` e cron `ponte-deskcomm-base`.
 - `supabase/functions/deskcomm-base/` — mantém a base do Agente Investidor no Deskcomm (FAQ em `bases/investidor-faq.ts`, montador em `montar.ts`).
 - `scripts/deskcomm/base_investidor.sql` — publica a versão do Agente Investidor com o roteiro e as fontes.
+- `supabase/migrations/20261020c_bel_recepcao.sql` (+ `20261020d`) — RPCs do b2w-mcp, campos do card → lead, rastreio, não-lead, termômetro só no especialista.
+- `supabase/functions/b2w-mcp/` — servidor MCP da B2W (concessionária e identificação do contato).
+- `scripts/deskcomm/campos_funis.sql` e `scripts/deskcomm/bel_recepcao.sql` — campos dos funis; Bel v3, abertura comum e membro suporte.
 
 ## 8. Bases de conhecimento por produto
 
@@ -241,3 +244,18 @@ Spec: `docs/superpowers/specs/2026-10-19-base-agente-investidor-design.md`.
 4. Se algo falhar, a função não grava e registra em `ponte_deskcomm.erros`; a base anterior continua valendo.
 
 Pendente (projetos seguintes): lista de cotistas por usina (aba Vínculos de Fornecedor) com cotas disponíveis, e divisão do repasse por cota.
+
+### 8.2 Bel, a recepção — no ar desde 20/10/2026
+
+Spec: `docs/superpowers/specs/2026-10-20-bel-recepcao-design.md`.
+
+- **Abertura comum nos 8 agentes** (o roteador troca de agente na mesma mensagem em que o cliente diz o produto, então quem estiver atendendo pergunta o que faltar): nome → cidade → estado → `b2w_concessionaria`. Energia por Assinatura fora da Cosern = lista de espera + oferta de Investidor/Cotas. Sem indicação conhecida, pergunta onde viu a oferta.
+- **Bel v3:** identifica o contato (`b2w_identificar_contato`: cliente ativo, lead que voltou ou novo), saudação sem lista de produtos, "economizar na conta de luz ou investir conosco?", não-lead com tag `nao_lead`. Divisão de mensagens desligada.
+- **Servidor MCP `b2w-mcp`** (Edge Function, `verify_jwt` desligado, Bearer `B2W_MCP_TOKEN`). O telefone vem do cabeçalho `X-Deskcomm-Contato-Telefone`, nunca de argumento. Cadastro no Deskcomm: Configurações › Servidor MCP externo (endereço `https://abbysvxnnhwvvzhftoms.supabase.co/functions/v1/b2w-mcp` + a mesma chave). Os agentes já têm `ai_agents.config.mcp_externo_no_atendimento = true`.
+- **Campos dos funis** (`scripts/deskcomm/campos_funis.sql`): cidade, uf, concessionaria, consumo_kwh, origem, indicado_por, lista_espera. A ponte (`20261020c_bel_recepcao.sql`) preenche a concessionária pela cidade/UF e copia tudo para o lead da B2W, só onde estiver vazio. Nome real do contato substitui o nome do WhatsApp no lead.
+- **Rastreio do site** (PR em `WaldineyGodoy/paginas`): `(cód. IND-xxxxxxxx | IG | GG | FB)` no texto do WhatsApp; a ponte grava indicador e origem.
+- **Não-lead:** tag `nao_lead` no contato arquiva o lead "Sem Interação" intocado e a ponte deixa de criar lead para ele.
+- **Termômetro:** só em funil de produto, com 3+ mensagens do cliente desde que o card chegou ao funil.
+- **Suporte:** membro "Suporte ao cliente" no roteador, atendido pela Bel com passagem a humano até existir o Agente Suporte.
+- **Mudar a abertura:** o bloco `v_comum` é o mesmo em `scripts/deskcomm/bel_recepcao.sql` e `base_investidor.sql`; altere os dois e rode `bel_recepcao.sql` (idempotente).
+- **Dado pendente:** a tabela `"Concessionaria"` está incompleta (ex.: São Gonçalo do Amarante/RN não está; RN tem 143 de 167 municípios). Cidade fora da tabela cai em "lista de espera".

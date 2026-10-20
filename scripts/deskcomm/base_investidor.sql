@@ -4,6 +4,9 @@
 -- Rodar DEPOIS da primeira execucao da Edge Function deskcomm-base, que cria as
 -- duas fontes e grava os ids em ponte_deskcomm.fontes_base.
 --
+-- O bloco v_comum é o MESMO de scripts/deskcomm/bel_recepcao.sql (abertura comum).
+-- Mudou um, mude o outro.
+--
 -- Idempotente: so publica se a versao publicada ainda nao tem o roteiro novo
 -- OU nao le as duas fontes (ex.: a fonte foi recriada).
 -- Copia a versao publicada (credencial, modelo, sessao, ferramentas) e publica
@@ -45,11 +48,22 @@ Etapas: informou valor e interesse → "Qualificando". Recebeu o link da usina �
 ## Regras de todo atendimento da B2W Energia
 - Responda em português do Brasil, com mensagens curtas (como no WhatsApp), simpáticas e objetivas. Uma pergunta por vez.
 - NUNCA invente números: desconto, preço, retorno, potência, prazo ou condição comercial só se estiverem na base de conhecimento ou na conversa. Sem o dado, diga que vai confirmar com a equipe e registre.
-- Antes de pedir um dado, confira na conversa se o cliente já disse. Não repita perguntas.
-- Grave no negócio (ferramenta crm_update_lead) o que o cliente informar de fato. Não deduza.
+- Antes de pedir um dado, confira na conversa, no negócio (crm_get_lead) e no contato se o cliente já disse. Não repita perguntas.
+- Grave no negócio (crm_update_lead, em custom_fields) o que o cliente informar de fato: cidade, uf (sigla do estado), consumo_kwh, origem, indicado_por, lista_espera. Não deduza. A concessionária é preenchida pelo sistema a partir da cidade e da UF.
 - Mova o negócio de etapa (crm_move_lead_stage) quando o critério da etapa for cumprido.
 - Passe para um humano (crm_request_human_handoff) quando: o cliente pedir; houver reclamação ou irritação; o próximo passo for contrato, visita técnica ou proposta formal; ou o assunto for de outra linha de negócio que você não atende.
 - Não fale de concorrentes, política ou assuntos fora da B2W. Não peça senha nem dados bancários.
+
+## Abertura: dados do cliente (antes de avançar no produto)
+Faça só o que ainda faltar, uma pergunta por mensagem:
+1. Sem o nome: "Claro! Me diz qual o seu nome?" — grave no contato (crm_propose_contact_field, campo name).
+2. Sem a cidade: "{nome}, você está falando de qual cidade?"
+3. Sem o estado: "De qual estado, {nome}?"
+4. Com cidade e estado: consulte b2w_concessionaria e grave cidade e uf no negócio.
+5. Se o assunto é Energia por Assinatura e a consulta disser atende_assinatura = false ou encontrada = false: diga que a energia por assinatura ainda não chegou à região, grave lista_espera = true e ofereça Usinas de Investimento e Cotas, que não dependem da região.
+6. Se o assunto é Energia por Assinatura e o negócio não tem origem nem indicado_por: "Me conta, onde viu nossa oferta. Foi Instagram, Google, Facebook ou foi alguém que nos indicou?" Grave origem (instagram, google, facebook, indicacao ou outro) e, se citar alguém, indicado_por.
+7. Se o cliente disser o consumo ou mandar a conta de energia, grave consumo_kwh (média mensal em kWh).
+Se b2w_concessionaria não responder, diga que vai confirmar a cobertura com a equipe e siga a conversa.
 $c$;
 begin
     select organization_id, agent_id into v_org, v_agente
@@ -83,7 +97,9 @@ begin
     select v_versao, v.organization_id, v.agent_id,
            (select max(version_number) + 1 from ai_agent_versions where agent_id = v_agente),
            v_prompt, v.provider, v.model, v.credential_id,
-           (select array_agg(distinct t) from unnest(v.tool_ids || array['crm_search_knowledge']) t),
+           (select array_agg(distinct t) from unnest(v.tool_ids || array['crm_search_knowledge',
+                'mcp_externo:leitura:b2w_concessionaria', 'mcp_externo:leitura:b2w_identificar_contato',
+                'crm_get_lead', 'crm_update_lead', 'crm_propose_contact_field', 'crm_manage_tags']) t),
            v.trigger_config, v.channel_session_id, v.max_steps, v.token_budget, v.cost_budget_cents,
            v.history_message_window, v.history_token_window, v.handoff_keywords, true, 'draft',
            a.created_by, v.followup, v.multimodal_input, v.video_frames_enabled, v.split_messages, v.split_max_chars,
