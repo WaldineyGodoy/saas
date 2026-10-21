@@ -1,6 +1,7 @@
 /**
- * Monta os textos da base do Agente Investidor no Deskcomm
- * (spec docs/superpowers/specs/2026-10-19-base-agente-investidor-design.md §4).
+ * Monta os textos das bases do Agente Investidor
+ * (spec docs/superpowers/specs/2026-10-19-base-agente-investidor-design.md §4)
+ * e do Agente Assinatura (spec 2026-10-20-base-agente-assinatura-design.md §4).
  *
  * Sem dependencia de Deno nem de Supabase: roda na Edge Function e no vitest.
  * Quem filtra o que pode sair (sem CPF/CNPJ, dono, credenciais) e a RPC
@@ -26,6 +27,17 @@ export interface ParFaq {
     question: string
     answer: string
 }
+
+export interface CoberturaAssinatura {
+    concessionaria: string
+    ufs: string | null
+    desconto_pct: number | null
+    tarifa: number | null
+    credito_indicacao_100kwh: number | null
+}
+
+export const SEM_COBERTURA =
+    '# Assinatura: cobertura, desconto e indicação\n\nNo momento a energia por assinatura não está disponível em nenhuma região.\n'
 
 const A_CONFIRMAR = 'a confirmar com o consultor'
 
@@ -83,6 +95,38 @@ export function montarUsinasAVenda(usinas: UsinaAVenda[]): string {
     const ordenadas = [...validas].sort((a, b) =>
         (a.previsao_entrega ?? '9999').localeCompare(b.previsao_entrega ?? '9999') || a.nome.localeCompare(b.nome))
     return '# Usinas à venda\n\n' + ordenadas.map(blocoUsina).join('\n\n') + '\n'
+}
+
+const reais = (v: number) => `R$ ${numero(v, 2)}`
+
+function blocoCobertura(c: CoberturaAssinatura) {
+    const d = Number(c.desconto_pct)
+    const t = Number(c.tarifa)
+    // Mesma conta do simulador do site e da RPC b2w_mcp_simular_assinatura.
+    const mensal = Math.round(300 * t * d) / 100
+    const anual = Math.round(300 * t * d * 12) / 100
+    const linhas = [
+        `## ${c.concessionaria}${c.ufs ? ` (${c.ufs})` : ''}`,
+        `Desconto do assinante: ${numero(d)}% sobre a energia compensada (Fio B incluído; bandeira tarifária não é cobrada)`,
+        `Tarifa usada na estimativa: R$ ${t.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 5 })}/kWh`,
+        'Fórmula: economia mensal estimada = consumo (kWh) × tarifa × desconto',
+        `Exemplo: 300 kWh/mês → economia estimada de ${reais(mensal)}/mês (${reais(anual)}/ano)`,
+        'Custo mínimo da distribuidora: 30 kWh (mono), 50 kWh (bi), 100 kWh (tri)',
+        'Consumo mínimo para assinar: 150 kWh/mês',
+    ]
+    if (c.credito_indicacao_100kwh && Number(c.credito_indicacao_100kwh) > 0) {
+        linhas.push(`Crédito de indicação: cerca de ${reais(Number(c.credito_indicacao_100kwh))} a cada 100 kWh compensados pelo indicado`)
+    }
+    linhas.push('Vencimento do boleto: dia 5')
+    return linhas.join('\n')
+}
+
+/** Documento "Assinatura: cobertura, desconto e indicação". Só distribuidora com desconto e tarifa. */
+export function montarCoberturaAssinatura(linhas: CoberturaAssinatura[]): string {
+    const validas = linhas.filter((c) => c.desconto_pct != null && Number(c.desconto_pct) > 0 && Number(c.tarifa) > 0)
+    if (validas.length === 0) return SEM_COBERTURA
+    const ordenadas = [...validas].sort((a, b) => a.concessionaria.localeCompare(b.concessionaria))
+    return '# Assinatura: cobertura, desconto e indicação\n\n' + ordenadas.map(blocoCobertura).join('\n\n') + '\n'
 }
 
 /**

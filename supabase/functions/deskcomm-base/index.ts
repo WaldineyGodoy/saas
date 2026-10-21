@@ -1,16 +1,24 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'npm:@supabase/supabase-js@2.45.0'
-import { hashTexto, lerFaq, montarUsinasAVenda, type UsinaAVenda } from './montar.ts'
+import {
+    hashTexto, lerFaq, montarUsinasAVenda, montarCoberturaAssinatura, type UsinaAVenda, type CoberturaAssinatura,
+} from './montar.ts'
 import { FAQ_INVESTIDOR } from './bases/investidor-faq.ts'
+import { FAQ_ASSINATURA } from './bases/assinatura-faq.ts'
 
 /**
- * Base de conhecimento do Agente Investidor no DeskcommCRM
- * (spec docs/superpowers/specs/2026-10-19-base-agente-investidor-design.md §5.3).
+ * Bases de conhecimento dos agentes Investidor e Assinatura no DeskcommCRM
+ * (specs docs/superpowers/specs/2026-10-19-base-agente-investidor-design.md §5.3
+ * e 2026-10-20-base-agente-assinatura-design.md §6).
  *
- * Mantem duas fontes do Deskcomm:
+ * Mantem quatro fontes do Deskcomm, cada uma ligada ao agente da sua categoria:
  *   - "Investidor — Perguntas e respostas" (faq): texto de bases/investidor-faq.ts.
- *     Mudar o FAQ = editar o arquivo e publicar esta funcao de novo.
  *   - "Usinas à venda" (documento): gerado das usinas com a_venda = true.
+ *   - "Assinatura — Perguntas e respostas" (faq): texto de bases/assinatura-faq.ts.
+ *   - "Assinatura: cobertura, desconto e indicação" (documento): gerado por
+ *     ponte_deskcomm_assinatura_cobertura (desconto do plano vigente, tarifa,
+ *     credito de indicacao).
+ * Mudar um FAQ = editar o arquivo e publicar esta funcao de novo.
  *
  * Por que grava direto nas tabelas do Deskcomm: cadastrar material la exige
  * sessao de gerente na tela (nao ha token como o do MCP). Esta funcao repete o
@@ -29,13 +37,12 @@ import { FAQ_INVESTIDOR } from './bases/investidor-faq.ts'
  * emit_event. Se uma atualizacao do Deskcomm mudou algo, nada e gravado e a
  * base anterior continua valendo.
  *
- * Quem chama e o banco (gatilho em usinas e cron), com o token do Vault em
+ * Quem chama e o banco (gatilhos em usinas, planos e tarifa, e cron), com o token do Vault em
  * x-ponte-token, conferido pelo banco, como na deskcomm-ponte.
  * Corpo {"ensaio": true} devolve os textos sem gravar.
  */
 
 const BUCKET = 'ai-policy'
-const CATEGORIA = 'usina_investimento'
 
 const json = (status: number, body: unknown) =>
     new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
@@ -43,7 +50,8 @@ const json = (status: number, body: unknown) =>
 type Supa = ReturnType<typeof createClient>
 
 interface Conteudo {
-    chave: 'investidor_faq' | 'usinas_a_venda'
+    chave: 'investidor_faq' | 'usinas_a_venda' | 'assinatura_faq' | 'assinatura_cobertura'
+    categoria: 'usina_investimento' | 'energia_assinatura'
     tipo: 'faq' | 'documento'
     nome: string
     texto: string
@@ -68,15 +76,20 @@ interface Fonte {
 const COLUNAS_FONTE = 'id, is_active, source_metadata, last_indexed_at, last_index_status'
 
 async function montarConteudos(supabase: Supa): Promise<Conteudo[]> {
-    const pares = lerFaq(FAQ_INVESTIDOR)
-    if (pares.length === 0) throw new Error('faq_vazio')
+    const paresInv = lerFaq(FAQ_INVESTIDOR)
+    const paresAss = lerFaq(FAQ_ASSINATURA)
+    if (paresInv.length === 0 || paresAss.length === 0) throw new Error('faq_vazio')
 
     const { data: usinas, error } = await supabase.rpc('ponte_deskcomm_usinas_a_venda')
     if (error) throw new Error(`usinas_ilegiveis: ${error.message}`)
+    const { data: cobertura, error: cobErr } = await supabase.rpc('ponte_deskcomm_assinatura_cobertura')
+    if (cobErr) throw new Error(`cobertura_ilegivel: ${cobErr.message}`)
 
     return [
-        { chave: 'investidor_faq', tipo: 'faq', nome: 'Investidor — Perguntas e respostas', texto: JSON.stringify(pares), pares },
-        { chave: 'usinas_a_venda', tipo: 'documento', nome: 'Usinas à venda', texto: montarUsinasAVenda((usinas ?? []) as UsinaAVenda[]) },
+        { chave: 'investidor_faq', categoria: 'usina_investimento', tipo: 'faq', nome: 'Investidor — Perguntas e respostas', texto: JSON.stringify(paresInv), pares: paresInv },
+        { chave: 'usinas_a_venda', categoria: 'usina_investimento', tipo: 'documento', nome: 'Usinas à venda', texto: montarUsinasAVenda((usinas ?? []) as UsinaAVenda[]) },
+        { chave: 'assinatura_faq', categoria: 'energia_assinatura', tipo: 'faq', nome: 'Assinatura — Perguntas e respostas', texto: JSON.stringify(paresAss), pares: paresAss },
+        { chave: 'assinatura_cobertura', categoria: 'energia_assinatura', tipo: 'documento', nome: 'Assinatura: cobertura, desconto e indicação', texto: montarCoberturaAssinatura((cobertura ?? []) as CoberturaAssinatura[]) },
     ]
 }
 
@@ -159,10 +172,11 @@ async function sincronizar(supabase: Supa, org: string, agente: string, c: Conte
     }
 
     // Fonte recriada fica fora da versao publicada do agente ate uma nova versao
-    // (scripts/deskcomm/base_investidor.sql le os ids de fontes_base).
+    // (scripts/deskcomm/base_*.sql leem os ids de fontes_base).
     if (reg.knowledge_source_id && fonte.id !== reg.knowledge_source_id) {
+        const script = c.categoria === 'energia_assinatura' ? 'base_assinatura.sql' : 'base_investidor.sql'
         await supabase.rpc('ponte_deskcomm_erro_base', {
-            p_onde: 'deskcomm-base', p_mensagem: `fonte ${c.chave} recriada (${fonte.id}): rode scripts/deskcomm/base_investidor.sql`,
+            p_onde: 'deskcomm-base', p_mensagem: `fonte ${c.chave} recriada (${fonte.id}): rode scripts/deskcomm/${script}`,
         })
     }
     return { chave: c.chave, fonte: fonte.id, criada: nova, gravou: mudou, emitiu: emitir }
@@ -201,12 +215,13 @@ serve(async (req) => {
             return json(200, { ok: false, motivo: 'contrato_deskcomm_mudou', falta })
         }
 
-        const { data: alvo } = await supabase.rpc('ponte_deskcomm_agente_da_categoria', { p_slug: CATEGORIA })
-        const org = (alvo as any[] | null)?.[0]?.organization_id as string | undefined
-        const agente = (alvo as any[] | null)?.[0]?.agent_id as string | undefined
-        if (!org || !agente) {
-            await erro('agente da categoria usina_investimento não encontrado')
-            return json(200, { ok: false, motivo: 'agente_nao_encontrado' })
+        const alvos = new Map<string, { org: string; agente: string }>()
+        for (const cat of new Set(conteudos.map((c) => c.categoria))) {
+            const { data: alvo } = await supabase.rpc('ponte_deskcomm_agente_da_categoria', { p_slug: cat })
+            const org = (alvo as any[] | null)?.[0]?.organization_id as string | undefined
+            const agente = (alvo as any[] | null)?.[0]?.agent_id as string | undefined
+            if (org && agente) alvos.set(cat, { org, agente })
+            else await erro(`agente da categoria ${cat} não encontrado`)
         }
 
         const { data: registros, error: regErr } = await supabase.rpc('ponte_deskcomm_fontes_base')
@@ -215,9 +230,14 @@ serve(async (req) => {
 
         const resultado = []
         for (const c of conteudos) {
+            const alvo = alvos.get(c.categoria)
+            if (!alvo) {
+                resultado.push({ chave: c.chave, erro: 'agente_nao_encontrado' })
+                continue
+            }
             const reg = porChave.get(c.chave) ?? { chave: c.chave, knowledge_source_id: null, ultimo_hash: null, sincronizado_em: null }
             try {
-                resultado.push(await sincronizar(supabase, org, agente, c, reg))
+                resultado.push(await sincronizar(supabase, alvo.org, alvo.agente, c, reg))
             } catch (e) {
                 const msg = `${c.chave}: ${String((e as Error)?.message ?? e)}`
                 await erro(msg)
