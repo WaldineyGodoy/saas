@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import {
-    responder, normalizarTexto, normalizarUf, normalizarTelefone, tokenConfere, FERRAMENTAS,
+    responder, normalizarTexto, normalizarUf, normalizarTelefone, lerNumero, tokenConfere, FERRAMENTAS,
     type Dependencias,
 } from '../supabase/functions/b2w-mcp/logica'
 
@@ -9,6 +9,12 @@ const deps = (over: Partial<Dependencias> = {}): Dependencias => ({
         encontrada: true, cidade: 'Santa Maria', uf, concessionaria: 'Neoenergia Cosern', atende_assinatura: true,
     })),
     identificar: vi.fn(async () => ({ tipo: 'novo' as const, primeiro_nome: null })),
+    simular: vi.fn(async () => ({
+        atende: true, concessionaria: 'Neoenergia Cosern', desconto_pct: 15, tarifa: 1.0347,
+        consumo_kwh: 300, consumo_convertido: false, economia_mensal: 46.56, economia_anual: 558.74,
+        atinge_minimo: true, vaga: 'imediata' as const, previsao_operacao: null,
+        link_adesao: 'https://b2wenergia.com.br/',
+    })),
     ...over,
 })
 const chamar = (name: string, args: unknown, d = deps(), telefone: string | null = null) =>
@@ -44,9 +50,9 @@ describe('protocolo MCP', () => {
     it('notificação não tem resposta', async () => {
         expect(await responder({ jsonrpc: '2.0', method: 'notifications/initialized' }, { telefone: null }, deps())).toBeNull()
     })
-    it('tools/list anuncia as duas ferramentas como somente leitura', async () => {
+    it('tools/list anuncia as três ferramentas como somente leitura', async () => {
         const r: any = await responder({ jsonrpc: '2.0', id: 2, method: 'tools/list' }, { telefone: null }, deps())
-        expect(r.result.tools.map((t: any) => t.name)).toEqual(['b2w_concessionaria', 'b2w_identificar_contato'])
+        expect(r.result.tools.map((t: any) => t.name)).toEqual(['b2w_concessionaria', 'b2w_identificar_contato', 'b2w_simular_assinatura'])
         for (const t of FERRAMENTAS) expect(t.annotations.readOnlyHint).toBe(true)
     })
     it('método desconhecido e pedido inválido', async () => {
@@ -89,6 +95,43 @@ describe('b2w_identificar_contato', () => {
         const r: any = await chamar('b2w_identificar_contato', {}, d, null)
         expect(d.identificar).not.toHaveBeenCalled()
         expect(r.result.structuredContent.tipo).toBe('novo')
+    })
+})
+
+describe('b2w_simular_assinatura', () => {
+    it('normaliza cidade e UF e passa o telefone do cabeçalho, nunca de argumento', async () => {
+        const d = deps()
+        const r: any = await chamar('b2w_simular_assinatura',
+            { cidade: 'Natal', uf: 'rn', consumo_kwh: 300, telefone: '5511000000000' }, d, '(84) 99999-0001')
+        expect(d.simular).toHaveBeenCalledWith('natal', 'RN', 300, null, '5584999990001')
+        expect(r.result.structuredContent.economia_mensal).toBe(46.56)
+    })
+    it('aceita valor da conta em reais', async () => {
+        const d = deps()
+        await chamar('b2w_simular_assinatura', { cidade: 'Natal', uf: 'RN', valor_conta_reais: 'R$ 310,41' }, d)
+        expect(d.simular).toHaveBeenCalledWith('natal', 'RN', null, 310.41, null)
+    })
+    it('sem consumo nem valor vira erro de ferramenta, sem consultar', async () => {
+        const d = deps()
+        const r: any = await chamar('b2w_simular_assinatura', { cidade: 'Natal', uf: 'RN' }, d)
+        expect(r.result.isError).toBe(true)
+        expect(d.simular).not.toHaveBeenCalled()
+    })
+    it('falha do banco vira erro de ferramenta', async () => {
+        const d = deps({ simular: vi.fn(async () => { throw new Error('db') }) })
+        const r: any = await chamar('b2w_simular_assinatura', { cidade: 'Natal', uf: 'RN', consumo_kwh: 300 }, d)
+        expect(r.result.isError).toBe(true)
+    })
+})
+
+describe('lerNumero', () => {
+    it('lê número, texto com vírgula e com milhar', () => {
+        expect(lerNumero(300)).toBe(300)
+        expect(lerNumero('300 kWh')).toBe(300)
+        expect(lerNumero('R$ 1.250,90')).toBe(1250.9)
+        expect(lerNumero('0')).toBeNull()
+        expect(lerNumero('abc')).toBeNull()
+        expect(lerNumero(undefined)).toBeNull()
     })
 })
 

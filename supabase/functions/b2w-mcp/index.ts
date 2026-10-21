@@ -1,17 +1,17 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.45.0'
-import { responder, tokenConfere, type Concessionaria, type Identificacao } from './logica.ts'
+import { responder, tokenConfere, type Concessionaria, type Identificacao, type Simulacao } from './logica.ts'
 
 /**
  * b2w-mcp — servidor MCP (Streamable HTTP, resposta em JSON) cadastrado no
  * DeskcommCRM como servidor externo. Ferramentas so de leitura:
- * b2w_concessionaria e b2w_identificar_contato (logica.ts).
+ * b2w_concessionaria, b2w_identificar_contato e b2w_simular_assinatura (logica.ts).
  *
  * Autenticacao: Authorization: Bearer <B2W_MCP_TOKEN> (Secrets da funcao; a
  * mesma chave cadastrada no Deskcomm). Publicada com verify_jwt = false porque
  * o Bearer e o nosso, nao um JWT do Supabase.
  *
  * O banco entra por RPCs restritas a service_role
- * (migration 20261020c_bel_recepcao.sql).
+ * (migrations 20261020c_bel_recepcao.sql e 20261021a_base_agente_assinatura.sql).
  */
 
 const json = (status: number, body: unknown) =>
@@ -42,6 +42,14 @@ Deno.serve(async (req) => {
             const { data, error } = await supabase.rpc('b2w_mcp_identificar', { p_telefone: telefone })
             if (error) throw error
             return data as Identificacao
+        },
+        async simular(cidade: string, uf: string, consumoKwh: number | null, valorReais: number | null,
+                      telefone: string | null): Promise<Simulacao> {
+            const { data, error } = await supabase.rpc('b2w_mcp_simular_assinatura', {
+                p_cidade: cidade, p_uf: uf, p_consumo_kwh: consumoKwh, p_valor_reais: valorReais, p_telefone: telefone,
+            })
+            if (error) throw error
+            return data as Simulacao
         },
     }
     const ctx = { telefone: req.headers.get('x-deskcomm-contato-telefone') }
