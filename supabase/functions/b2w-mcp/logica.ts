@@ -1,6 +1,8 @@
 /**
  * Servidor MCP da B2W para os agentes do DeskcommCRM
  * (spec docs/superpowers/specs/2026-10-20-bel-recepcao-design.md §8).
+ * Ferramentas: b2w_concessionaria, b2w_identificar_contato e
+ * b2w_simular_assinatura (spec 2026-10-20-base-agente-assinatura-design.md §5).
  *
  * Sem dependencia de Deno nem de Supabase: roda na Edge Function e no vitest.
  * O acesso ao banco entra por `Dependencias` (RPCs restritas a service_role).
@@ -27,9 +29,26 @@ export interface Identificacao {
     primeiro_nome: string | null
 }
 
+export interface Simulacao {
+    atende: boolean
+    concessionaria: string | null
+    desconto_pct: number | null
+    tarifa?: number
+    consumo_kwh?: number | null
+    consumo_convertido?: boolean
+    economia_mensal?: number | null
+    economia_anual?: number | null
+    atinge_minimo?: boolean | null
+    vaga?: 'imediata' | 'pre_operacao' | 'fila' | null
+    previsao_operacao?: string | null
+    link_adesao: string
+}
+
 export interface Dependencias {
     concessionaria(cidadeNormalizada: string, uf: string): Promise<Concessionaria>
     identificar(telefone: string): Promise<Identificacao>
+    simular(cidade: string, uf: string, consumoKwh: number | null, valorReais: number | null,
+            telefone: string | null): Promise<Simulacao>
 }
 
 export interface Contexto {
@@ -65,6 +84,16 @@ export function normalizarTelefone(texto: string | null): string | null {
     return d.length <= 11 ? `55${d}` : d
 }
 
+/** 300, "300 kWh", "R$ 1.250,90" -> número positivo; o resto -> null. */
+export function lerNumero(valor: unknown): number | null {
+    if (typeof valor === 'number') return Number.isFinite(valor) && valor > 0 ? valor : null
+    if (typeof valor !== 'string') return null
+    const limpo = valor.replace(/[^\d.,]/g, '')
+    const normal = limpo.includes(',') ? limpo.replace(/\./g, '').replace(',', '.') : limpo
+    const n = Number(normal)
+    return Number.isFinite(n) && n > 0 ? n : null
+}
+
 export const FERRAMENTAS = [
     {
         name: 'b2w_concessionaria',
@@ -90,6 +119,26 @@ export const FERRAMENTAS = [
             'Diz se o contato desta conversa já é cliente ativo da B2W Energia, se é um lead que voltou ' +
             'ou se é novo, e o primeiro nome cadastrado. Não recebe argumentos: usa o telefone da conversa.',
         inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+        annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    {
+        name: 'b2w_simular_assinatura',
+        title: 'Simular Energia por Assinatura',
+        description:
+            'Estima a economia mensal e anual na Energia por Assinatura (mesma conta do simulador do site), ' +
+            'diz se o consumo atinge o mínimo, se há vaga em usina (imediata, pre_operacao ou fila) e devolve ' +
+            'o link de adesão. Informe o consumo em kWh OU o valor da conta em reais.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                cidade: { type: 'string', description: 'Nome da cidade, como o cliente escreveu.' },
+                uf: { type: 'string', description: 'Estado: sigla (RN) ou nome (Rio Grande do Norte).' },
+                consumo_kwh: { type: 'number', description: 'Consumo médio mensal em kWh.' },
+                valor_conta_reais: { type: 'number', description: 'Valor médio da conta em reais, se o cliente não souber o kWh.' },
+            },
+            required: ['cidade', 'uf'],
+            additionalProperties: false,
+        },
         annotations: { readOnlyHint: true, openWorldHint: false },
     },
 ] as const
@@ -120,6 +169,19 @@ async function chamarFerramenta(nome: string, args: any, ctx: Contexto, deps: De
         const telefone = normalizarTelefone(ctx.telefone)
         if (!telefone) return resultadoDeFerramenta({ tipo: 'novo', primeiro_nome: null })
         return resultadoDeFerramenta(await deps.identificar(telefone))
+    }
+    if (nome === 'b2w_simular_assinatura') {
+        const cidade = typeof args?.cidade === 'string' ? normalizarTexto(args.cidade) : ''
+        const uf = typeof args?.uf === 'string' ? normalizarUf(args.uf) : null
+        const kwh = lerNumero(args?.consumo_kwh)
+        const reais = kwh === null ? lerNumero(args?.valor_conta_reais) : null
+        if (!cidade || !uf) {
+            return resultadoDeFerramenta({ erro: 'Informe a cidade e o estado (sigla ou nome).' }, true)
+        }
+        if (kwh === null && reais === null) {
+            return resultadoDeFerramenta({ erro: 'Informe o consumo em kWh ou o valor da conta em reais.' }, true)
+        }
+        return resultadoDeFerramenta(await deps.simular(cidade, uf, kwh, reais, normalizarTelefone(ctx.telefone)))
     }
     return null
 }
