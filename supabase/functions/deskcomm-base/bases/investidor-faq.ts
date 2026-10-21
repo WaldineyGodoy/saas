@@ -8,7 +8,7 @@ export const FAQ_INVESTIDOR = `## Pergunta: Como funciona o investimento em usin
 ## Resposta: Você compra uma usina solar de cerca de 100 kWp com inversor de 75 kW. Esse porte fica no limite da microgeração e por isso a usina não paga demanda contratada. Ela é GD2, de autoconsumo remoto, e aluga os equipamentos a uma associação, estrutura prevista na Lei 14.300, que permite a locação de equipamentos a associações, cooperativas e consórcios. Os assinantes da associação consomem a energia com desconto na conta de luz, e você recebe o repasse mensal.
 
 ## Pergunta: Quanto custa uma usina de investimento?
-## Resposta: A partir de R$ 290.000. O valor depende do estágio da obra e da previsão de entrega: quanto antes você entra, menor o preço. Também é possível comprar cotas de uma usina, a partir de R$ 35.000.
+## Resposta: A partir de R$ 290.000. O valor depende do estágio da obra e da previsão de entrega: quanto antes você entra, menor o preço. Também é possível comprar cotas de uma usina, pelo preço da usina dividido por 10, mais 10%.
 
 ## Pergunta: Qual é o retorno do investimento? Quanto rende por mês?
 ## Resposta: A projeção é de cerca de 2% ao mês, antes do Simples Nacional. É uma projeção, não garantia: varia com a geração anual da usina, a tarifa da concessionária e o estágio da obra no momento do aporte. Payback e rentabilidade detalhada são apresentados pelo consultor em uma reunião.
@@ -26,7 +26,7 @@ export const FAQ_INVESTIDOR = `## Pergunta: Como funciona o investimento em usin
 ## Resposta: Sim. A usina é um ativo seu e pode ser vendida. A B2W ajuda a encontrar o comprador, e os contratos de gestão e de arrendamento são transferidos ao novo dono.
 
 ## Pergunta: Não tenho o valor de uma usina inteira. Dá para comprar só uma parte?
-## Resposta: Sim, por cotas. A cota mínima é de R$ 35.000, equivalente a 1/10 da usina. Um consultor de cotas continua o atendimento com você.
+## Resposta: Sim, por cotas: o preço da usina dividido por 10, mais 10% de taxa, que cobre a estruturação jurídica da associação e a gestão da divisão do repasse. Os valores por usina estão em "Usinas com cotas". Um consultor de cotas continua o atendimento com você.
 
 ## Pergunta: Como é o pagamento? Dá para parcelar ou financiar?
 ## Resposta: O pagamento pode ser parcelado, e o número de aportes depende do estágio da obra. Aceitamos financiamento bancário para usinas na fase de obras civis ou anterior, porque as notas fiscais dos equipamentos precisam sair em nome do investidor. Quanto antes você entra, menor o preço e maior a facilidade de pagamento.

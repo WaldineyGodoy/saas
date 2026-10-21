@@ -1,10 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import {
-    montarUsinasAVenda, montarCoberturaAssinatura, lerFaq, hashTexto, SEM_USINAS, SEM_COBERTURA,
-    type UsinaAVenda, type CoberturaAssinatura,
+    montarUsinasAVenda, montarCoberturaAssinatura, montarUsinasCotas, lerFaq, hashTexto,
+    SEM_USINAS, SEM_COBERTURA, SEM_COTAS, type UsinaAVenda, type CoberturaAssinatura, type UsinaCotas,
 } from '../supabase/functions/deskcomm-base/montar'
 import { FAQ_INVESTIDOR } from '../supabase/functions/deskcomm-base/bases/investidor-faq'
 import { FAQ_ASSINATURA } from '../supabase/functions/deskcomm-base/bases/assinatura-faq'
+import { FAQ_COTAS } from '../supabase/functions/deskcomm-base/bases/cotas-faq'
 
 const santaMaria: UsinaAVenda = {
     nome: 'UFV Santa Maria', cidade: 'Santa Maria', uf: 'RN', status: 'pre_operacao',
@@ -142,5 +143,59 @@ describe('FAQ da Assinatura', () => {
         // Números que mudam ficam na Fonte B, não aqui.
         expect(tudo).not.toMatch(/\b15%/)
         expect(tudo).not.toContain('1,0347')
+    })
+})
+
+const cotaSantaMaria: UsinaCotas = {
+    nome: 'UFV Santa Maria', cidade: 'Santa Maria', uf: 'RN', status: 'pre_operacao',
+    previsao_entrega: '2026-12-01', valor_investido: 315000, cotas_vendidas: 3,
+    short_url: 'https://link.b2wenergia.com.br/ufvsantamariausina',
+}
+
+describe('montarUsinasCotas', () => {
+    it('monta preço da cota, cotas livres, pagamento e link', () => {
+        const md = montarUsinasCotas([cotaSantaMaria])
+        expect(md).toContain('## UFV Santa Maria — Santa Maria/RN')
+        expect(md).toContain('Estágio: em obra (pré-operação) · Previsão de entrega: dez/2026')
+        expect(md).toContain('Preço da cota: R$ 34.650 (usina R$ 315.000 ÷ 10 + 10%)')
+        expect(md).toContain('Cotas livres: 7 de 10')
+        expect(md).toContain('Pagamento: somente à vista')
+        expect(md).toContain('Página da usina: https://link.b2wenergia.com.br/ufvsantamariausina')
+    })
+    it('sem preço e sem link saem como "a confirmar com o consultor"', () => {
+        const md = montarUsinasCotas([{ ...cotaSantaMaria, valor_investido: 0, short_url: null, previsao_entrega: null }])
+        expect(md).toContain('Preço da cota: a confirmar com o consultor')
+        expect(md).toContain('Página da usina: a confirmar com o consultor')
+        expect(md).toContain('Previsão de entrega: a confirmar com o consultor')
+    })
+    it('esgotada, cancelada ou lista vazia → aviso', () => {
+        expect(montarUsinasCotas([])).toBe(SEM_COTAS)
+        expect(montarUsinasCotas([{ ...cotaSantaMaria, cotas_vendidas: 10 }])).toBe(SEM_COTAS)
+        expect(montarUsinasCotas([{ ...cotaSantaMaria, status: 'cancelada' }])).toBe(SEM_COTAS)
+    })
+    it('ordena pela previsão e não carrega campo fora do contrato', () => {
+        const md = montarUsinasCotas([
+            { ...cotaSantaMaria, nome: 'B', previsao_entrega: null },
+            { ...cotaSantaMaria, nome: 'A', previsao_entrega: '2026-11-01', cpf: '529.982.247-25' } as UsinaCotas,
+        ])
+        expect(md.indexOf('## A')).toBeLessThan(md.indexOf('## B'))
+        expect(md).not.toContain('529.982')
+    })
+})
+
+describe('FAQ de Cotas', () => {
+    it('tem as 14 perguntas aprovadas e respeita as proibições', () => {
+        expect(lerFaq(FAQ_COTAS)).toHaveLength(14)
+        const tudo = FAQ_COTAS.toLowerCase()
+        for (const proibido of ['garantid', 'risco zero', 'blindad', '100% segur', 'parcel', 'financiamento', 'multa']) {
+            expect(tudo, proibido).not.toContain(proibido)
+        }
+        expect(tudo).toContain('somente à vista')
+        expect(tudo).toContain('1,8% a 2% ao mês')
+        expect(tudo).toContain('título de propriedade')
+    })
+    it('o FAQ do Investidor não cita mais R$ 35.000', () => {
+        expect(FAQ_INVESTIDOR).not.toContain('35.000')
+        expect(FAQ_INVESTIDOR).toContain('dividido por 10, mais 10%')
     })
 })
