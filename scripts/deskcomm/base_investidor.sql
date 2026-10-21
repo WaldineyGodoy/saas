@@ -2,7 +2,8 @@
 -- (spec docs/superpowers/specs/2026-10-19-base-agente-investidor-design.md §3 e §5.4).
 --
 -- Rodar DEPOIS da primeira execucao da Edge Function deskcomm-base, que cria as
--- duas fontes e grava os ids em ponte_deskcomm.fontes_base.
+-- fontes e grava os ids em ponte_deskcomm.fontes_base (inclui "Usinas com cotas",
+-- da base do Agente Cotas, para a pergunta da cota).
 --
 -- O bloco v_comum é o MESMO de scripts/deskcomm/bel_recepcao.sql (abertura comum).
 -- Mudou um, mude o outro.
@@ -39,7 +40,7 @@ Payback, TIR e rentabilidade ano a ano são apresentados pelo consultor, mesmo q
 Nunca diga "garantido", "risco zero", "blindado" ou "100% seguro". Não fale de multa ou retenção por rescisão (encaminhe ao consultor). Não diga que o arrendamento é registrado na matrícula do imóvel.
 
 Desvios:
-- Quer investir menos que uma usina inteira: explique a cota (a partir de R$ 35.000, 1/10 da usina) e passe para humano com o motivo "quer cota — mover para o funil Cotas".
+- Quer investir menos que uma usina inteira: explique a cota (preço da usina dividido por 10, mais 10%; valores em "Usinas com cotas") e passe para humano com o motivo "quer cota — mover para o funil Cotas".
 - Tem usina de outra empresa e quer só a gestão: passe para humano com o motivo "gestão de usina de terceiro — funil Gestora/Comercializadora".
 
 Etapas: informou valor e interesse → "Qualificando". Recebeu o link da usina → "Simulação / Proposta enviada". Aceitou reunião ou visita → "Reunião agendada" (passe para humano marcar o horário).$r$;
@@ -72,8 +73,8 @@ begin
 
     select array_agg(knowledge_source_id order by chave) into v_fontes
       from ponte_deskcomm.fontes_base
-     where chave in ('investidor_faq', 'usinas_a_venda') and knowledge_source_id is not null;
-    if coalesce(array_length(v_fontes, 1), 0) < 2 then
+     where chave in ('investidor_faq', 'usinas_a_venda', 'usinas_cotas') and knowledge_source_id is not null;
+    if coalesce(array_length(v_fontes, 1), 0) < 3 then
         raise exception 'Fontes ainda nao criadas: rode a Edge Function deskcomm-base primeiro';
     end if;
 
