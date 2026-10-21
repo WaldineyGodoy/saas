@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { addMonths, subMonths, endOfMonth, format, parseISO } from 'date-fns';
 import { supabase } from '../lib/supabase';
 import { ucEncerrada } from '../lib/ucStatus';
+import { calcularCapacidade } from '../lib/capacidade';
 import { fetchAddressByCep, fetchOfferData, sendWhatsapp, shortenLink, salvarSenhaPortal, semSenha, createAutentiqueDocument, cancelAutentiqueDocument } from '../lib/api';
 import IrradianceChart from './IrradianceChart';
 import { useUI } from '../contexts/UIContext';
@@ -918,10 +919,10 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
     // Calculated Field: Potencia Kwp
     const [potenciaKwp, setPotenciaKwp] = useState(0);
 
-    // Calc Total Franchise - Exclude disconnected/canceled units from commitment
-    const totalFranquiaVinculada = selectedUCs
-        .filter(uc => uc.status !== 'desconectado' && uc.status !== 'cancelado')
-        .reduce((acc, uc) => acc + (Number(uc.consumo_medio_kwh) || Number(uc.franquia) || 0), 0);
+    // Regra unica de capacidade (src/lib/capacidade.js): franquia das beneficiarias que
+    // ocupam; so desconectada/cancelada devolvem; o consumo da UG sai da geracao.
+    const capacidadeUsina = calcularCapacidade({ ucs: selectedUCs, geracao: formData.geracao_estimada_kwh });
+    const totalFranquiaVinculada = capacidadeUsina.comprometido;
     
     const ucStats = {
         total: selectedUCs.length,
@@ -935,7 +936,7 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
             .reduce((acc, uc) => acc + (Number(uc.consumo_medio_kwh) || Number(uc.franquia) || 0), 0)
     };
 
-    const geracaoDisponivel = Math.max(0, (Number(formData.geracao_estimada_kwh) || 0) - totalFranquiaVinculada);
+    const geracaoDisponivel = Math.max(0, capacidadeUsina.livre ?? 0);
 
     const [concessionariaTarifas, setConcessionariaTarifas] = useState(null);
 
