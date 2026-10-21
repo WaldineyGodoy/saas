@@ -577,6 +577,8 @@ textarea {
 }
 
 .kanban-card {
+  /* a coluna rola na vertical: sem isto o card encolhe (overflow hidden) e esconde o conteudo */
+  flex-shrink: 0;
   background: white;
   padding: 1.25rem;
   border-radius: 10px;

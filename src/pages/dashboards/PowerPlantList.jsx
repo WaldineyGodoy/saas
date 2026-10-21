@@ -112,14 +112,16 @@ function KanbanCard({ plant, onClick, onClosingsClick, isOverlay }) {
                 </div>
             </div>
 
-            {plant.geracao_estimada_kwh > 0 && plant.consumer_units?.length > 0 && (
+            {plant.geracao_estimada_kwh > 0 && (
                 <div style={{ marginBottom: '0.8rem' }}>
                     {(() => {
-                        const totalComprometido = plant.consumer_units
+                        const totalComprometido = (plant.consumer_units || [])
                             .filter(uc => uc.status !== 'desconectado' && uc.status !== 'cancelado')
                             .reduce((acc, uc) => acc + (Number(uc.consumo_medio_kwh) || Number(uc.franquia) || 0), 0);
                         const pct = Math.min(100, (totalComprometido / plant.geracao_estimada_kwh) * 100);
                         const style = getCommitmentStyle(pct);
+                        const disponivel = Math.max(0, Number(plant.geracao_estimada_kwh) - totalComprometido);
+                        const kwh = (v) => `${Math.round(v).toLocaleString('pt-BR')} kWh`;
                         
                         return (
                             <>
@@ -136,6 +138,10 @@ function KanbanCard({ plant, onClick, onClosingsClick, isOverlay }) {
                                         width: `${pct}%`,
                                         transition: 'all 0.5s ease'
                                     }} />
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem', fontSize: '0.65rem', marginTop: '0.25rem' }}>
+                                    <span style={{ color: style.color, fontWeight: 600 }}>Ocupado: {kwh(totalComprometido)}</span>
+                                    <span style={{ color: '#166534', fontWeight: 600 }}>Disponível: {kwh(disponivel)}</span>
                                 </div>
                             </>
                         );
