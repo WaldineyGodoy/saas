@@ -222,6 +222,9 @@ As duas Edge Functions passaram só na checagem de sintaxe (esbuild). Não há D
 - `supabase/migrations/20261021a_base_agente_assinatura.sql` — simulação (b2w_mcp_simular_assinatura), cobertura da Fonte B e gatilhos de planos/tarifa.
 - `supabase/functions/deskcomm-base/bases/assinatura-faq.ts` — FAQ do Agente Assinatura.
 - `scripts/deskcomm/base_assinatura.sql` — publica a versão do Agente Assinatura com roteiro, fontes e a ferramenta de simulação.
+- `supabase/migrations/20261021b_base_agente_cotas.sql` — `usinas.cotas_vendidas` (0 a 10), RPC das usinas com cotas, gatilho de usinas com a coluna nova.
+- `supabase/functions/deskcomm-base/bases/cotas-faq.ts` — FAQ do Agente Cotas.
+- `scripts/deskcomm/base_cotas.sql` — publica a versão do Agente Cotas com roteiro e fontes.
 
 ## 8. Bases de conhecimento por produto
 
@@ -272,3 +275,12 @@ Spec: `docs/superpowers/specs/2026-10-20-base-agente-assinatura-design.md`.
 - **Vaga:** geração estimada da usina − franquias das UCs que a ocupam (todas menos canceladas, desconectadas e desligadas por TT). Usina sem `geracao_estimada_kwh` não conta; sem `previsao_entrega`, o agente não cita data.
 - **Mudar o FAQ:** editar `bases/assinatura-faq.ts` e publicar `deskcomm-base`. **Mudar o roteiro:** editar `base_assinatura.sql` e rodar (idempotente).
 - **Pendências:** termo de adesão diverge do roteiro (titularidade, Fio B, bandeira, vencimento dia 5) — revisar com o jurídico; UFV Bom Jesus com franquias acima da geração estimada; usinas em pré-operação sem previsão de entrega.
+
+### 8.4 Base do Agente Cotas — no ar desde 20/10/2026
+
+Spec: `docs/superpowers/specs/2026-10-20-base-agente-cotas-design.md`.
+
+- **Fontes:** "Cotas — Perguntas e respostas" (faq, `bases/cotas-faq.ts`, 14 pares) e "Usinas com cotas" (documento gerado por `ponte_deskcomm_usinas_cotas`: usinas com "À venda" marcado, modelo "Cotas" e cota livre; preço da cota e cotas livres). O Agente Investidor também lê "Usinas com cotas" para a pergunta da cota.
+- **Regras:** 10 cotas por usina; preço da cota = preço da usina ÷ 10 + 10% (estruturação da associação e gestão do repasse); projeção de 1,8% a 2% ao mês, a depender do mês de geração; somente à vista; associação dos cotistas já formada, título de propriedade da cota; revenda com a ajuda da B2W.
+- **Ofertar uma usina em cotas:** na aba Contratos da usina, marcar "À venda", "Modelo de venda" = Cotas e manter "Cotas vendidas (de 10)" atualizado. O documento se atualiza pelo gatilho de usinas.
+- **Pendências (projetos seguintes):** cadastro de cotistas por usina (substitui o contador manual) e divisão do repasse por cota no motor de split (hoje a associação divide fora do sistema).

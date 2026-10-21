@@ -1,6 +1,6 @@
 # Base de conhecimento do Agente Cotas (cotas de usina)
 
-Data: 20/10/2026 · Estado: spec aprovado em 20/10/2026, em implementação
+Data: 20/10/2026 · Estado: implementado em 20/10/2026 (ver `playbook/DESKCOMM.md` §8.4)
 Contexto: `playbook/DESKCOMM.md` (§8.1 Investidor, §8.2 Bel, §8.3 Assinatura). Terceira base por produto.
 
 ## 1. Objetivo
