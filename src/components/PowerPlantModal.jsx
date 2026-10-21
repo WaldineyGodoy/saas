@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { addMonths, subMonths, endOfMonth, format, parseISO } from 'date-fns';
 import { supabase } from '../lib/supabase';
+import { ucEncerrada } from '../lib/ucStatus';
 import { fetchAddressByCep, fetchOfferData, sendWhatsapp, shortenLink, salvarSenhaPortal, semSenha, createAutentiqueDocument, cancelAutentiqueDocument } from '../lib/api';
 import IrradianceChart from './IrradianceChart';
 import { useUI } from '../contexts/UIContext';
@@ -354,14 +355,14 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
     const [showSupplierDropdown, setShowSupplierDropdown] = useState(false);
     const [activeSupplierForModal, setActiveSupplierForModal] = useState(null);
 
-    // Options Lists
+    // Options Lists (ordem do ciclo; cores iguais as do Kanban de usinas)
     const statusOptions = [
-        { value: 'pre_operacao', label: 'Pré-Operação' },
-        { value: 'gerando', label: 'Gerando' },
-        { value: 'em_conexao', label: 'Em Conexão' },
-        { value: 'manutencao', label: 'Manutenção' },
-        { value: 'inativa', label: 'Inativa' },
-        { value: 'cancelada', label: 'Cancelada' }
+        { value: 'pre_operacao', label: 'Pré-Operação', color: '#6d28d9', bg: '#ede9fe' },
+        { value: 'em_conexao', label: 'Em Conexão', color: '#9a3412', bg: '#ffedd5' },
+        { value: 'gerando', label: 'Gerando', color: '#166534', bg: '#dcfce7' },
+        { value: 'manutencao', label: 'Manutenção', color: '#991b1b', bg: '#fee2e2' },
+        { value: 'inativa', label: 'Inativa', color: '#64748b', bg: '#f1f5f9' },
+        { value: 'cancelada', label: 'Cancelada', color: '#94a3b8', bg: '#f1f5f9' }
     ];
 
     const modalidadeOptions = [
@@ -1801,7 +1802,7 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
         if (!usina?.id && !usina) {
             // New plant case: only show available ones
             const { data } = await supabase.from('consumer_units').select('*').is('usina_id', null);
-            setAvailableUCs(data || []);
+            setAvailableUCs((data || []).filter(uc => !ucEncerrada(uc)));
             return;
         }
 
@@ -1814,9 +1815,12 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                     supabase.from('consumer_units').select('*').is('usina_id', null)
                 ]);
 
+                // Livres so as UCs em operacao: desconectada, desligada por TT e
+                // cancelada nao voltam a ser candidatas a vinculo. As ja vinculadas
+                // continuam na lista para poderem ser desvinculadas.
                 const combined = [
                     ...(linkedRes.data || []),
-                    ...(availableRes.data || [])
+                    ...(availableRes.data || []).filter(uc => !ucEncerrada(uc))
                 ];
 
                 // De-duplicate just in case, though logically they should be distinct
@@ -1938,11 +1942,10 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
         // 1. Find if active item is linked or available
         const activeItemLinked = selectedUCs.find(uc => uc.id === activeId);
         
-        // Filter out canceled statuses for Available UCs
+        // UCs encerradas (desconectada, desligada por TT, cancelada) nao sao candidatas
         const filteredAvailable = availableUCs.filter(uc => 
             !selectedUCs.some(s => s.id === uc.id) &&
-            uc.status !== 'cancelado' &&
-            uc.status !== 'cancelado_inadimplente'
+            !ucEncerrada(uc)
         );
         const activeItemAvailable = filteredAvailable.find(uc => uc.id === activeId);
         
@@ -2217,8 +2220,7 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
             // Available UCs list filtered to remove duplicates (already linked UCs) and canceled UCs
             const cleanAvailableUCs = availableUCs.filter(uc => 
                 !selectedUCs.some(s => s.id === uc.id) &&
-                uc.status !== 'cancelado' &&
-                uc.status !== 'cancelado_inadimplente' &&
+                !ucEncerrada(uc) &&
                 !(uc.status || '').toLowerCase().includes('cancelad')
             );
 
@@ -3126,11 +3128,10 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
     };
 
     const renderUCList = () => {
-        // Filter out selected UCs AND cancelled statuses for Available UCs
+        // Livres: fora as ja vinculadas e as UCs encerradas (desconectada, desligada por TT, cancelada)
         const filteredAvailable = availableUCs.filter(uc => 
             !selectedUCs.some(s => s.id === uc.id) &&
-            uc.status !== 'cancelado' &&
-            uc.status !== 'cancelado_inadimplente'
+            !ucEncerrada(uc)
         );
 
         return (
@@ -3549,6 +3550,48 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                     ))}
                 </div>
 
+                {/* Barra de Status Operacional: visivel em todas as secoes */}
+                {(() => {
+                    const statusSalvo = usina?.status || 'pre_operacao';
+                    const mudouStatus = (formData.status || 'pre_operacao') !== statusSalvo;
+                    return (
+                        <div style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', padding: '0.75rem 1.5rem', display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>Status Operacional</span>
+                            <div role="radiogroup" aria-label="Status Operacional" style={{ display: 'flex', gap: '0.5rem', overflowX: 'auto', scrollbarWidth: 'none' }}>
+                                {statusOptions.map(o => {
+                                    const ativo = (formData.status || 'pre_operacao') === o.value;
+                                    return (
+                                        <button
+                                            key={o.value}
+                                            type="button"
+                                            role="radio"
+                                            aria-checked={ativo}
+                                            onClick={() => setFormData({ ...formData, status: o.value })}
+                                            style={{
+                                                padding: '0.4rem 0.9rem', borderRadius: '999px', cursor: 'pointer', whiteSpace: 'nowrap',
+                                                fontSize: '0.8rem', fontWeight: ativo ? 800 : 600,
+                                                border: `1.5px solid ${ativo ? o.color : '#e2e8f0'}`,
+                                                background: ativo ? o.bg : 'white',
+                                                color: ativo ? o.color : '#64748b',
+                                                transition: 'all 0.15s ease'
+                                            }}
+                                        >
+                                            {o.label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                            {mudouStatus && (
+                                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#b45309' }}>
+                                    {formData.status === 'gerando'
+                                        ? 'Ao salvar, as UCs vinculadas (exceto desconectadas, canceladas, aguardando conexão e em troca de titularidade) passam para Ativo.'
+                                        : 'Alteração pendente: salve a usina para gravar o status.'}
+                                </span>
+                            )}
+                        </div>
+                    );
+                })()}
+
                 <form onSubmit={handleSubmit} style={{ padding: '2rem', minHeight: '750px' }}>
 
                     {/* Floating Summary Card (Técnico e Financeiro) */}
@@ -3618,17 +3661,6 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                     borderRadius: '16px',
                                     border: '1px solid #e2e8f0'
                                 }}>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.5rem', color: '#475569', fontWeight: 600 }}>Status Operacional</label>
-                                        <select
-                                            value={formData.status}
-                                            onChange={e => setFormData({ ...formData, status: e.target.value })}
-                                            style={{ width: '100%', padding: '0.8rem 1rem', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '1rem', background: 'white', outline: 'none' }}
-                                        >
-                                            {statusOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                                        </select>
-                                    </div>
-
                                     <div>
                                         <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.5rem', color: '#475569', fontWeight: 600 }}>Compra e Venda assinada em</label>
                                         <input
