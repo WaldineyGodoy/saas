@@ -52,3 +52,14 @@ export function calcularCapacidade({ ucs = [], geracao = null } = {}) {
 
     return { geracao: bruta, autoconsumoUG, disponivel, comprometido, livre, ocupacao };
 }
+
+/**
+ * Leitura de tela: Ocupado = consumo da UG + franquias das beneficiárias, para que
+ * Ocupado + Disponível feche na geração estimada. A conta de livre é a mesma de
+ * calcularCapacidade (a UG não é somada duas vezes).
+ */
+export function ocupacaoDaGeracao(cap) {
+    const ocupado = cap.autoconsumoUG + cap.comprometido;
+    const pct = cap.geracao > 0 ? (ocupado / cap.geracao) * 100 : (ocupado > 0 ? 100 : 0);
+    return { ocupado, pct };
+}

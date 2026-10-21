@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { calcularCapacidade } from '../../lib/capacidade';
+import { calcularCapacidade, ocupacaoDaGeracao } from '../../lib/capacidade';
 import { useBranding } from '../../contexts/BrandingContext';
 import PowerPlantModal from '../../components/PowerPlantModal';
 import PlantClosingsHistoryModal from '../../components/PlantClosingsHistoryModal';
@@ -119,8 +119,8 @@ function KanbanCard({ plant, onClick, onClosingsClick, isOverlay }) {
                         // Regra unica de capacidade: ocupado = franquia das beneficiarias que
                         // ocupam (so desconectada/cancelada devolvem), e o consumo da UG sai da geracao.
                         const cap = calcularCapacidade({ ucs: plant.consumer_units, geracao: plant.geracao_estimada_kwh });
-                        const totalComprometido = cap.comprometido;
-                        const pct = Math.min(100, cap.ocupacao ?? (totalComprometido > 0 ? 100 : 0));
+                        const { ocupado: totalComprometido, pct: pctBruto } = ocupacaoDaGeracao(cap);
+                        const pct = Math.min(100, pctBruto);
                         const style = getCommitmentStyle(pct);
                         const livre = cap.livre ?? 0;
                         const kwh = (v) => `${Math.round(v).toLocaleString('pt-BR')} kWh`;
@@ -142,10 +142,10 @@ function KanbanCard({ plant, onClick, onClosingsClick, isOverlay }) {
                                     }} />
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem', fontSize: '0.65rem', marginTop: '0.25rem' }}>
-                                    <span style={{ color: style.color, fontWeight: 600 }}>Ocupado: {kwh(totalComprometido)}</span>
+                                    <span style={{ color: style.color, fontWeight: 600 }} title={cap.autoconsumoUG > 0 ? `UG ${kwh(cap.autoconsumoUG)} + assinantes ${kwh(cap.comprometido)}` : undefined}>Ocupado: {kwh(totalComprometido)}</span>
                                     {livre < 0
                                         ? <span style={{ color: '#991b1b', fontWeight: 700 }} title="Franquias acima da geração estimada (overbook)">Excedente: {kwh(-livre)}</span>
-                                        : <span style={{ color: '#166534', fontWeight: 600 }} title={cap.autoconsumoUG > 0 ? `Geração estimada menos o consumo da UG (${kwh(cap.autoconsumoUG)}) e menos as franquias ocupadas` : undefined}>Disponível: {kwh(livre)}</span>}
+                                        : <span style={{ color: '#166534', fontWeight: 600 }} >Disponível: {kwh(livre)}</span>}
                                 </div>
                             </>
                         );
