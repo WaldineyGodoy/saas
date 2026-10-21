@@ -1,6 +1,6 @@
 # Base de conhecimento do Agente Cotas (cotas de usina)
 
-Data: 20/10/2026 · Estado: desenho aprovado, aguardando revisão do spec
+Data: 20/10/2026 · Estado: spec aprovado em 20/10/2026, em implementação
 Contexto: `playbook/DESKCOMM.md` (§8.1 Investidor, §8.2 Bel, §8.3 Assinatura). Terceira base por produto.
 
 ## 1. Objetivo
@@ -21,12 +21,12 @@ Fora do escopo (projetos seguintes, cada um com seu brainstorming):
 | Divisão | Toda usina de cotas tem **10 cotas**. |
 | Preço da cota | Preço da usina (`valor_investido`) ÷ 10 + **10%** de taxa. Ex.: usina de R$ 300.000 → cota de R$ 33.000. |
 | Taxa de 10% | Cobre a estruturação jurídica da associação dos cotistas e a gestão da divisão do repasse. Fixa hoje; pode ser revista no futuro. |
-| Retorno | A cota recebe 1/10 do repasse líquido da usina. Projeção de ~2% a.m. sobre o valor da usina, ~1,8% a.m. sobre o valor pago pela cota, antes de impostos. Mesma ressalva do Investidor. Payback, TIR e rentabilidade ano a ano só com o consultor. |
-| Recebimento | Os 10 cotistas formam uma associação, que recebe o repasse da B2W e transfere a parte de cada um. Tributação: orientar com o contador. |
+| Retorno | A cota recebe 1/10 do repasse líquido da usina. Projeção **entre 1,8% e 2% ao mês, a depender do mês de geração**, antes de impostos. Mesma ressalva do Investidor. Payback, TIR e rentabilidade ano a ano só com o consultor. |
+| Recebimento | A associação dos cotistas **já está formada**: quem compra se associa e recebe um **título de propriedade da cota**. A associação recebe o repasse da B2W e transfere a parte de cada cotista. Tributação: orientar com o contador. |
 | Abater a conta | A cota é investimento (renda). Para ter desconto, o cotista faz uma adesão separada como assinante, com o imóvel na área da mesma distribuidora. |
 | Pagamento | Somente à vista. Sem parcelamento e sem financiamento. |
 | Fechamento | Link da página da usina + humano (consultor), motivo "fechar cota". |
-| Revenda | A cota é transferível: a B2W ajuda a achar comprador e a associação registra o novo cotista. |
+| Revenda | A cota é transferível: a B2W ajuda a achar comprador, e a associação transfere o título ao novo cotista. |
 | Fatos que valem igual ao Investidor (proporcionais) | Custos mensais descontados do repasse antes da divisão; ~90 dias para começar a receber; Fio B na projeção; inadimplência e fila de espera; garantias; visita. |
 | Proibido | "garantido", "risco zero", "blindado", "100% seguro"; parcelamento ou financiamento; multa ou retenção; preço que não esteja no documento; nome de cotista. |
 
@@ -36,11 +36,13 @@ Mantém o bloco comum (`## Regras de todo atendimento` + `## Abertura`, de `scri
 bloco próprio pelo roteiro:
 
 1. **Interesse:** valor que pretende investir ou quantas cotas; pessoa física ou empresa.
-2. **Modelo em até 3 frases:** a usina é dividida em 10 cotas; os cotistas formam uma associação, que recebe o repasse
-   da B2W e divide entre eles; cada cota recebe 1/10 do repasse líquido.
+2. **Modelo em até 3 frases:** a usina é dividida em 10 cotas; quem compra se associa à associação dos cotistas (já
+   formada) e recebe o título de propriedade da cota; a associação recebe o repasse da B2W e divide entre os cotistas,
+   1/10 do repasse líquido para cada cota.
 3. **Oferta:** consulta "Usinas com cotas"; envia o preço da cota e o link da usina com cota livre.
 4. **Números**, sempre com a ressalva "projeção, não garantia: varia com a geração anual, a tarifa da concessionária e o
-   estágio da obra; antes de impostos": preço da cota (do documento) e ~1,8% a.m. sobre o valor pago.
+   estágio da obra; antes de impostos": preço da cota (do documento) e projeção entre 1,8% e 2% ao mês, a depender do mês
+   de geração.
 5. **Fechamento:** com valor e usina definidos, `crm_request_human_handoff` "fechar cota". Somente à vista.
 
 Desvios:
@@ -67,17 +69,18 @@ Etapas:
 Arquivo `supabase/functions/deskcomm-base/bases/cotas-faq.ts` (formato `## Pergunta:` / `## Resposta:`). Sem preços nem
 cotas livres (ficam na Fonte B). 14 pares aprovados:
 
-1. **O que é uma cota de usina?** É 1/10 de uma usina solar da B2W. Os 10 cotistas formam uma associação, que recebe da
-   B2W o repasse mensal da usina e divide igualmente entre eles. Cada cota recebe 1/10 do repasse líquido.
+1. **O que é uma cota de usina?** É 1/10 de uma usina solar da B2W. Quem compra se associa à associação dos cotistas,
+   que já está formada, e recebe um título de propriedade da cota. A associação recebe da B2W o repasse mensal da usina
+   e divide igualmente entre os cotistas: cada cota recebe 1/10 do repasse líquido.
 2. **Quanto custa uma cota?** O preço da usina dividido por 10, mais 10% de taxa, que cobre a estruturação jurídica da
    associação e a gestão da divisão do repasse. O valor de cada usina está em "Usinas com cotas".
-3. **Qual o retorno?** A projeção da usina é de cerca de 2% ao mês, antes de impostos. Como a cota custa 10% a mais que
-   1/10 da usina, sobre o valor pago fica em torno de 1,8% ao mês. Projeção, não garantia: varia com a geração anual, a
-   tarifa da concessionária e o estágio da obra. Payback e rentabilidade detalhada são apresentados pelo consultor.
+3. **Qual o retorno?** A projeção é de 1,8% a 2% ao mês, a depender do mês de geração, antes de impostos. Projeção, não
+   garantia: varia com a geração anual, a tarifa da concessionária e o estágio da obra. Payback e rentabilidade
+   detalhada são apresentados pelo consultor.
 4. **De onde vem a receita?** Os assinantes pagam a energia da usina com desconto. Desse valor saem o Fio B e a gestão
    da B2W; o que sobra é o repasse da usina, dividido entre os cotistas.
-5. **Como eu recebo?** A associação dos cotistas recebe o repasse da B2W e transfere a parte de cada um, todo mês. A
-   tributação é orientada pelo contador.
+5. **Como eu recebo?** A associação dos cotistas recebe o repasse da B2W e transfere a parte de cada cotista, todo mês.
+   A tributação é orientada pelo contador.
 6. **Quais são os custos mensais?** Os custos da usina — arrendamento da área, internet, água e energia do local e, a
    partir do 13º mês, manutenção e seguro — são descontados do repasse antes da divisão. Cada cota arca com 1/10.
 7. **Quando começo a receber?** Cerca de 90 dias depois que a usina começa a gerar: 30 de geração, 30 de compensação e
@@ -87,7 +90,8 @@ cotas livres (ficam na Fonte B). 14 pares aprovados:
 9. **E o Fio B?** Ele sobe até 2029, como prevê a Lei 14.300, e isso já está na projeção. A projeção ano a ano é
    apresentada pelo consultor.
 10. **Como é o pagamento?** Somente à vista.
-11. **Posso vender minha cota?** Sim. A B2W ajuda a encontrar o comprador, e a associação registra o novo cotista.
+11. **Posso vender minha cota?** Sim. A B2W ajuda a encontrar o comprador, e a associação transfere o título da cota ao
+    novo cotista.
 12. **A cota dá desconto na minha conta de luz?** Não: a cota é investimento. Para ter desconto, você faz uma adesão
     separada como assinante da Energia por Assinatura, com o imóvel na área da mesma distribuidora.
 13. **Que garantias tenho?** As mesmas da usina: instalação, 12 meses (B2W); inversor, 5 anos; módulos, 12 anos contra
