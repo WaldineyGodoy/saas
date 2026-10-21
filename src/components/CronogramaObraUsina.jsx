@@ -1,6 +1,9 @@
-import { HardHat } from 'lucide-react';
+import { useState } from 'react';
+import { HardHat, Pause, Play } from 'lucide-react';
 import {
-    itemDoCronograma, textoItem, resumoCronograma, diasAte, formatarData
+    textoItem, resumoCronograma, diasAte, formatarData, hojeISO,
+    iniciarCronograma, alterarInicio, suspenderCronograma, retomarCronograma,
+    previsaoParaGravar, diasSuspensoAtual, diasSuspensosTotal
 } from '../lib/cronogramaObra';
 
 // Cronograma da obra na aba Planta do modal da usina. Edita
@@ -31,18 +34,27 @@ const campo = {
     fontSize: '0.8rem', background: 'white', outline: 'none'
 };
 
+const botao = (cor, fundo) => ({
+    display: 'inline-flex', alignItems: 'center', gap: '0.35rem', padding: '0.45rem 0.9rem',
+    borderRadius: '8px', border: `1px solid ${cor}`, background: fundo, color: cor,
+    fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap'
+});
+
 export default function CronogramaObraUsina({ value, onChange }) {
     const cronograma = value || {};
     const resumo = resumoCronograma(cronograma);
+    const [dataInicio, setDataInicio] = useState(hojeISO());
+    const iniciado = !!cronograma.inicio;
+    const suspensa = resumo.suspensa;
 
+    // Grava sobre o item GRAVADO (nunca sobre a previsão efetiva da tela, que
+    // já soma a suspensão em curso; gravá-la empurraria o prazo duas vezes).
     const atualizarItem = (itemId, patch) => {
-        const atual = itemDoCronograma(cronograma, itemId);
-        const novo = { ...atual, ...patch };
-        // Ao concluir sem data, assume hoje; ao começar, parte de 0%.
-        if (patch.status === 'concluido' && !novo.concluido_em) {
-            const d = new Date();
-            novo.concluido_em = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-        }
+        const gravado = cronograma.itens?.[itemId] || {};
+        const novo = { ...gravado, ...patch };
+        if ('previsto_para' in patch) novo.previsto_para = previsaoParaGravar(cronograma, patch.previsto_para);
+        // Ao concluir sem data, assume hoje.
+        if (patch.status === 'concluido' && !novo.concluido_em) novo.concluido_em = hojeISO();
         onChange({
             ...cronograma,
             itens: { ...(cronograma.itens || {}), [itemId]: novo }
@@ -58,11 +70,11 @@ export default function CronogramaObraUsina({ value, onChange }) {
 
     return (
         <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '0.5rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: '#f8fafc', padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', background: '#f8fafc', padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
                 <div style={{ padding: '0.75rem', background: 'white', borderRadius: '10px', color: '#b45309', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
                     <HardHat size={24} />
                 </div>
-                <div style={{ flex: 1 }}>
+                <div style={{ flex: 1, minWidth: '200px' }}>
                     <h4 style={{ margin: 0, fontSize: '1rem', color: '#1e293b' }}>Cronograma da Obra</h4>
                     <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b' }}>{textoInicio}</p>
                 </div>
@@ -70,6 +82,56 @@ export default function CronogramaObraUsina({ value, onChange }) {
                     <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#1e293b' }}>{resumo.geral}%</div>
                     <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>executado</div>
                 </div>
+                {iniciado && (
+                    suspensa ? (
+                        <button type="button" onClick={() => onChange(retomarCronograma(cronograma))} style={botao('#166534', '#dcfce7')}
+                            title="Retoma a contagem: as previsões pendentes andam os dias em que a obra ficou suspensa">
+                            <Play size={14} /> Retomar
+                        </button>
+                    ) : (
+                        <button type="button" onClick={() => onChange(suspenderCronograma(cronograma))} style={botao('#b45309', '#fff7ed')}
+                            title="Suspende a contagem dos prazos até retomar">
+                            <Pause size={14} /> Suspender
+                        </button>
+                    )
+                )}
+            </div>
+
+            {/* Início da obra e suspensão */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', fontSize: '0.8rem', color: '#475569' }}>
+                {iniciado ? (
+                    <>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                            Início da obra
+                            <input
+                                type="date"
+                                value={cronograma.inicio}
+                                onChange={e => e.target.value && onChange(alterarInicio(cronograma, e.target.value))}
+                                style={campo}
+                                title="Mudar o início desloca as previsões pendentes pela mesma diferença"
+                            />
+                        </label>
+                        {suspensa && (
+                            <span style={{ fontWeight: 700, color: '#991b1b', background: '#fee2e2', border: '1px solid #fca5a5', padding: '0.2rem 0.6rem', borderRadius: '999px' }}>
+                                Suspensa desde {formatarData(cronograma.suspensao.desde)} ({diasSuspensoAtual(cronograma)} dias) · prazos congelados
+                            </span>
+                        )}
+                        {diasSuspensosTotal(cronograma) > 0 && !suspensa && (
+                            <span style={{ color: '#64748b' }}>Prazos já estendidos em {diasSuspensosTotal(cronograma)} dias por suspensão.</span>
+                        )}
+                    </>
+                ) : (
+                    <>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                            Início da obra
+                            <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} style={campo} />
+                        </label>
+                        <button type="button" disabled={!dataInicio} onClick={() => onChange(iniciarCronograma(cronograma, dataInicio))} style={botao('#1d4ed8', '#eff6ff')}>
+                            Iniciar cronograma
+                        </button>
+                        <span style={{ color: '#64748b' }}>Preenche as previsões pelos prazos padrão (30 a 240 dias do início).</span>
+                    </>
+                )}
             </div>
 
             {/* Status das macroetapas */}

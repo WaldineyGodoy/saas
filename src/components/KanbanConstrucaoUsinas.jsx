@@ -32,8 +32,15 @@ function CardConstrucao({ usina, onClick }) {
 
     return (
         <div className="kanban-card" style={{ cursor: 'pointer' }} onClick={() => onClick(usina)}>
-            <div style={{ display: 'inline-block', padding: '0.2rem 0.6rem', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 'bold', background: cfg.fundo, color: cfg.cor, marginBottom: '0.5rem' }}>
-                {etapa ? etapa.selo : 'OBRA CONCLUÍDA'}
+            <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+                <span style={{ padding: '0.2rem 0.6rem', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 'bold', background: cfg.fundo, color: cfg.cor }}>
+                    {etapa ? etapa.selo : 'OBRA CONCLUÍDA'}
+                </span>
+                {resumo.suspensa && (
+                    <span style={{ padding: '0.2rem 0.6rem', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 'bold', background: '#fee2e2', color: '#991b1b' }}>
+                        SUSPENSA
+                    </span>
+                )}
             </div>
 
             <div style={{ fontWeight: 'bold', fontSize: '1rem', color: 'var(--color-text-dark)', lineHeight: 1.2, marginBottom: '0.5rem' }}>{usina.name}</div>
