@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { addMonths, subMonths, endOfMonth, format, parseISO } from 'date-fns';
 import { supabase } from '../lib/supabase';
 import { ucEncerrada } from '../lib/ucStatus';
-import { calcularCapacidade } from '../lib/capacidade';
+import { calcularCapacidade, ocupacaoDaGeracao } from '../lib/capacidade';
+import CronogramaObraUsina from './CronogramaObraUsina';
 import { fetchAddressByCep, fetchOfferData, sendWhatsapp, shortenLink, salvarSenhaPortal, semSenha, createAutentiqueDocument, cancelAutentiqueDocument } from '../lib/api';
 import IrradianceChart from './IrradianceChart';
 import { useUI } from '../contexts/UIContext';
@@ -344,7 +345,7 @@ const CAMPOS_COMPRA_VENDA = [
     { key: 'qtdInversores', label: 'Quantidade de inversores' }
 ];
 
-export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
+export default function PowerPlantModal({ usina, onClose, onSave, onDelete, initialTab = 'geral' }) {
     const { profile } = useAuth();
     const { branding } = useBranding();
     const { showAlert, showConfirm } = useUI();
@@ -395,6 +396,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
         supplier_id: '',
         name: '',
         status: 'pre_operacao',
+        cronograma_obra: {},
         compra_venda_assinada_em: '',
         // Venda ao investidor: alimenta "Usinas à venda" na base do Agente
         // Investidor do Deskcomm (supabase/functions/deskcomm-base).
@@ -438,7 +440,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
     const [subscribers, setSubscribers] = useState([]);
     const [previewUC, setPreviewUC] = useState(null);
     const [showPreviewModal, setShowPreviewModal] = useState(false);
-    const [activeTab, setActiveTab] = useState('geral'); // 'geral' | 'endereco' | 'tecnico' | 'financeiro' | 'ucs' | 'portal' | 'comunicacao'
+    const [activeTab, setActiveTab] = useState(initialTab); // 'geral' | 'endereco' | 'tecnico' | 'financeiro' | 'ucs' | 'portal' | 'comunicacao'
     const [manualMessage, setManualMessage] = useState('');
     const [manualFile, setManualFile] = useState(null);
     const [isSendingManualWA, setIsSendingManualWA] = useState(false);
@@ -922,7 +924,8 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
     // Regra unica de capacidade (src/lib/capacidade.js): franquia das beneficiarias que
     // ocupam; so desconectada/cancelada devolvem; o consumo da UG sai da geracao.
     const capacidadeUsina = calcularCapacidade({ ucs: selectedUCs, geracao: formData.geracao_estimada_kwh });
-    const totalFranquiaVinculada = capacidadeUsina.comprometido;
+    // Ocupado = consumo da UG + franquias das beneficiarias: fecha com o Disponivel.
+    const totalFranquiaVinculada = ocupacaoDaGeracao(capacidadeUsina).ocupado;
     
     const ucStats = {
         total: selectedUCs.length,
@@ -1115,6 +1118,7 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                 supplier_id: usina.supplier_id || '',
                 name: usina.name || '',
                 status: usina.status || 'pre_operacao',
+                cronograma_obra: usina.cronograma_obra || {},
                 compra_venda_assinada_em: usina.compra_venda_assinada_em
                     ? usina.compra_venda_assinada_em.slice(0, 10) : '',
                 a_venda: !!usina.a_venda,
@@ -3322,6 +3326,7 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
             name: formData.name,
             concessionaria: formData.concessionaria,
             status: formData.status,
+            cronograma_obra: formData.cronograma_obra || {},
             // Só grava a data se ela mudou: a da Autentique tem hora, e
             // regravar o dia puro a truncaria a cada salvamento.
             ...((formData.compra_venda_assinada_em || '') !== (usina?.compra_venda_assinada_em?.slice(0, 10) || '')
@@ -3517,7 +3522,7 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                 }}>
                     {[
                         { id: 'geral', label: 'Geral', icon: LayoutDashboard },
-                        { id: 'endereco', label: 'Localização', icon: MapPin },
+                        { id: 'endereco', label: 'Planta', icon: MapPin },
                         { id: 'tecnico', label: 'Técnico', icon: Activity },
                         { id: 'financeiro', label: 'Financeiro', icon: Wallet2 },
                         { id: 'ucs', label: 'UCs & Rateio', icon: Link },
@@ -4141,6 +4146,11 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                         style={{ width: '100%', padding: '0.8rem 1rem', border: '1px solid #f1f5f9', borderRadius: '10px', fontSize: '1rem', color: '#64748b' }}
                                     />
                                 </div>
+
+                                <CronogramaObraUsina
+                                    value={formData.cronograma_obra}
+                                    onChange={cronograma => setFormData(prev => ({ ...prev, cronograma_obra: cronograma }))}
+                                />
                             </div>
                         </div>
                     )}
@@ -5066,6 +5076,11 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                                         `${((totalFranquiaVinculada / formData.geracao_estimada_kwh) * 100).toFixed(1)}% do potencial` : 
                                                         'Defina a geração estimada'}
                                                 </span>
+                                                {capacidadeUsina.autoconsumoUG > 0 && (
+                                                    <span style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 600 }}>
+                                                        inclui consumo da UG: {capacidadeUsina.autoconsumoUG.toFixed(0)} kWh
+                                                    </span>
+                                                )}
                                             </div>
                                         </div>
 

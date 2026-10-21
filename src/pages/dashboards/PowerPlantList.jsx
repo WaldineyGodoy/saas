@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { calcularCapacidade } from '../../lib/capacidade';
+import { calcularCapacidade, ocupacaoDaGeracao } from '../../lib/capacidade';
 import { useBranding } from '../../contexts/BrandingContext';
 import PowerPlantModal from '../../components/PowerPlantModal';
+import KanbanConstrucaoUsinas from '../../components/KanbanConstrucaoUsinas';
 import PlantClosingsHistoryModal from '../../components/PlantClosingsHistoryModal';
 import { FileText } from 'lucide-react';
 import {
@@ -119,8 +120,8 @@ function KanbanCard({ plant, onClick, onClosingsClick, isOverlay }) {
                         // Regra unica de capacidade: ocupado = franquia das beneficiarias que
                         // ocupam (so desconectada/cancelada devolvem), e o consumo da UG sai da geracao.
                         const cap = calcularCapacidade({ ucs: plant.consumer_units, geracao: plant.geracao_estimada_kwh });
-                        const totalComprometido = cap.comprometido;
-                        const pct = Math.min(100, cap.ocupacao ?? (totalComprometido > 0 ? 100 : 0));
+                        const { ocupado: totalComprometido, pct: pctBruto } = ocupacaoDaGeracao(cap);
+                        const pct = Math.min(100, pctBruto);
                         const style = getCommitmentStyle(pct);
                         const livre = cap.livre ?? 0;
                         const kwh = (v) => `${Math.round(v).toLocaleString('pt-BR')} kWh`;
@@ -142,10 +143,10 @@ function KanbanCard({ plant, onClick, onClosingsClick, isOverlay }) {
                                     }} />
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem', fontSize: '0.65rem', marginTop: '0.25rem' }}>
-                                    <span style={{ color: style.color, fontWeight: 600 }}>Ocupado: {kwh(totalComprometido)}</span>
+                                    <span style={{ color: style.color, fontWeight: 600 }} title={cap.autoconsumoUG > 0 ? `UG ${kwh(cap.autoconsumoUG)} + assinantes ${kwh(cap.comprometido)}` : undefined}>Ocupado: {kwh(totalComprometido)}</span>
                                     {livre < 0
                                         ? <span style={{ color: '#991b1b', fontWeight: 700 }} title="Franquias acima da geração estimada (overbook)">Excedente: {kwh(-livre)}</span>
-                                        : <span style={{ color: '#166534', fontWeight: 600 }} title={cap.autoconsumoUG > 0 ? `Geração estimada menos o consumo da UG (${kwh(cap.autoconsumoUG)}) e menos as franquias ocupadas` : undefined}>Disponível: {kwh(livre)}</span>}
+                                        : <span style={{ color: '#166534', fontWeight: 600 }} >Disponível: {kwh(livre)}</span>}
                                 </div>
                             </>
                         );
@@ -216,6 +217,8 @@ export default function PowerPlantList() {
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingUsina, setEditingUsina] = useState(null);
+    // Aba em que o modal abre: o Kanban Construção leva direto ao cronograma (Planta).
+    const [modalTab, setModalTab] = useState('geral');
     const [isClosingsModalOpen, setIsClosingsModalOpen] = useState(false);
     const [selectedUsinaForClosings, setSelectedUsinaForClosings] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
@@ -329,7 +332,7 @@ export default function PowerPlantList() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
                 <h2>Usinas Geradoras</h2>
                 <button
-                    onClick={() => { setEditingUsina(null); setIsModalOpen(true); }}
+                    onClick={() => { setEditingUsina(null); setModalTab('geral'); setIsModalOpen(true); }}
                     className="btn btn-primary"
                 >
                     + Nova Usina
@@ -358,7 +361,14 @@ export default function PowerPlantList() {
                             className={`btn ${viewMode === 'kanban' ? 'btn-primary' : 'btn-secondary'}`}
                             style={{ borderRadius: 0, border: 'none' }}
                         >
-                            Kanban
+                            Operação
+                        </button>
+                        <button
+                            onClick={() => setViewMode('construcao')}
+                            className={`btn ${viewMode === 'construcao' ? 'btn-primary' : 'btn-secondary'}`}
+                            style={{ borderRadius: 0, border: 'none' }}
+                        >
+                            Construção
                         </button>
                     </div>
                 </div>
@@ -414,7 +424,7 @@ export default function PowerPlantList() {
                                                         </td>
                                                         <td>
                                                             <button
-                                                                onClick={() => { setEditingUsina(u); setIsModalOpen(true); }}
+                                                                onClick={() => { setEditingUsina(u); setModalTab('geral'); setIsModalOpen(true); }}
                                                                 className="btn btn-secondary"
                                                                 style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', marginRight: '0.5rem' }}
                                                             >
@@ -436,6 +446,11 @@ export default function PowerPlantList() {
                                 )}
                             </div>
                         </div>
+                    ) : viewMode === 'construcao' ? (
+                        <KanbanConstrucaoUsinas
+                            usinas={filteredUsinas}
+                            onCardClick={(u) => { setEditingUsina(u); setModalTab('endereco'); setIsModalOpen(true); }}
+                        />
                     ) : (
                         <DndContext
                             sensors={sensors}
@@ -455,7 +470,7 @@ export default function PowerPlantList() {
                                                 label={label}
                                                 color={color}
                                                 plants={usinasInStatus}
-                                                onCardClick={(u) => { setEditingUsina(u); setIsModalOpen(true); }}
+                                                onCardClick={(u) => { setEditingUsina(u); setModalTab('geral'); setIsModalOpen(true); }}
                                                 onClosingsClick={(u) => { setSelectedUsinaForClosings(u); setIsClosingsModalOpen(true); }}
                                             />
                                         );
@@ -478,6 +493,7 @@ export default function PowerPlantList() {
             {isModalOpen && (
                 <PowerPlantModal
                     usina={editingUsina}
+                    initialTab={modalTab}
                     onClose={() => setIsModalOpen(false)}
                     onSave={handleSave}
                     onDelete={handleDelete}
