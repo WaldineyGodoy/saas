@@ -399,6 +399,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
         a_venda: false,
         previsao_entrega: '',
         modelo_venda: 'integral',
+        cotas_vendidas: 0,
         modalidade: 'geracao_compartilhada',
         valor_investido: '', // Stored as string for formatting
         qtd_modulos: '',
@@ -1117,6 +1118,7 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                 a_venda: !!usina.a_venda,
                 previsao_entrega: usina.previsao_entrega ? usina.previsao_entrega.slice(0, 10) : '',
                 modelo_venda: usina.modelo_venda || 'integral',
+                cotas_vendidas: usina.cotas_vendidas ?? 0,
                 modalidade: ['gd1', 'gd2', 'gd3', 'geracao_distribuida'].includes(usina.modalidade) ? 'geracao_compartilhada' : (usina.modalidade || 'geracao_compartilhada'),
                 valor_investido: usina.valor_investido ? formatCurrency(usina.valor_investido) : '',
                 qtd_modulos: usina.qtd_modulos || '',
@@ -3354,6 +3356,9 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
             // String vazia num campo date e erro do Postgres, nao "sem data".
             previsao_entrega: formData.previsao_entrega || null,
             modelo_venda: formData.modelo_venda || 'integral',
+            // Contador manual ate existir o cadastro de cotistas; alimenta "Usinas com cotas".
+            cotas_vendidas: formData.modelo_venda === 'cotas'
+                ? Math.min(10, Math.max(0, parseInt(formData.cotas_vendidas, 10) || 0)) : 0,
             address: {
                 cep: formData.cep,
                 rua: formData.rua,
@@ -5593,6 +5598,17 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                             <option value="cotas">Cotas</option>
                                         </select>
                                     </div>
+                                    {formData.modelo_venda === 'cotas' && (
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#475569', marginBottom: '0.35rem' }}>Cotas vendidas (de 10)</label>
+                                            <input
+                                                type="number" min="0" max="10" step="1"
+                                                style={{ width: '100%', padding: '0.65rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.88rem', outline: 'none', boxSizing: 'border-box' }}
+                                                value={formData.cotas_vendidas ?? 0}
+                                                onChange={e => setFormData({ ...formData, cotas_vendidas: e.target.value })}
+                                            />
+                                        </div>
+                                    )}
                                 </div>
                                 {formData.a_venda && !formData.short_url && (
                                     <p style={{ margin: '0.75rem 0 0 0', fontSize: '0.78rem', color: '#92400e' }}>
