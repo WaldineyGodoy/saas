@@ -345,7 +345,7 @@ const CAMPOS_COMPRA_VENDA = [
     { key: 'qtdInversores', label: 'Quantidade de inversores' }
 ];
 
-export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
+export default function PowerPlantModal({ usina, onClose, onSave, onDelete, initialTab = 'geral' }) {
     const { profile } = useAuth();
     const { branding } = useBranding();
     const { showAlert, showConfirm } = useUI();
@@ -440,7 +440,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
     const [subscribers, setSubscribers] = useState([]);
     const [previewUC, setPreviewUC] = useState(null);
     const [showPreviewModal, setShowPreviewModal] = useState(false);
-    const [activeTab, setActiveTab] = useState('geral'); // 'geral' | 'endereco' | 'tecnico' | 'financeiro' | 'ucs' | 'portal' | 'comunicacao'
+    const [activeTab, setActiveTab] = useState(initialTab); // 'geral' | 'endereco' | 'tecnico' | 'financeiro' | 'ucs' | 'portal' | 'comunicacao'
     const [manualMessage, setManualMessage] = useState('');
     const [manualFile, setManualFile] = useState(null);
     const [isSendingManualWA, setIsSendingManualWA] = useState(false);

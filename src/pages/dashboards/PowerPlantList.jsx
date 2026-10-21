@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { calcularCapacidade, ocupacaoDaGeracao } from '../../lib/capacidade';
 import { useBranding } from '../../contexts/BrandingContext';
 import PowerPlantModal from '../../components/PowerPlantModal';
+import KanbanConstrucaoUsinas from '../../components/KanbanConstrucaoUsinas';
 import PlantClosingsHistoryModal from '../../components/PlantClosingsHistoryModal';
 import { FileText } from 'lucide-react';
 import {
@@ -216,6 +217,8 @@ export default function PowerPlantList() {
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingUsina, setEditingUsina] = useState(null);
+    // Aba em que o modal abre: o Kanban Construção leva direto ao cronograma (Planta).
+    const [modalTab, setModalTab] = useState('geral');
     const [isClosingsModalOpen, setIsClosingsModalOpen] = useState(false);
     const [selectedUsinaForClosings, setSelectedUsinaForClosings] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
@@ -329,7 +332,7 @@ export default function PowerPlantList() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
                 <h2>Usinas Geradoras</h2>
                 <button
-                    onClick={() => { setEditingUsina(null); setIsModalOpen(true); }}
+                    onClick={() => { setEditingUsina(null); setModalTab('geral'); setIsModalOpen(true); }}
                     className="btn btn-primary"
                 >
                     + Nova Usina
@@ -358,7 +361,14 @@ export default function PowerPlantList() {
                             className={`btn ${viewMode === 'kanban' ? 'btn-primary' : 'btn-secondary'}`}
                             style={{ borderRadius: 0, border: 'none' }}
                         >
-                            Kanban
+                            Operação
+                        </button>
+                        <button
+                            onClick={() => setViewMode('construcao')}
+                            className={`btn ${viewMode === 'construcao' ? 'btn-primary' : 'btn-secondary'}`}
+                            style={{ borderRadius: 0, border: 'none' }}
+                        >
+                            Construção
                         </button>
                     </div>
                 </div>
@@ -414,7 +424,7 @@ export default function PowerPlantList() {
                                                         </td>
                                                         <td>
                                                             <button
-                                                                onClick={() => { setEditingUsina(u); setIsModalOpen(true); }}
+                                                                onClick={() => { setEditingUsina(u); setModalTab('geral'); setIsModalOpen(true); }}
                                                                 className="btn btn-secondary"
                                                                 style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', marginRight: '0.5rem' }}
                                                             >
@@ -436,6 +446,11 @@ export default function PowerPlantList() {
                                 )}
                             </div>
                         </div>
+                    ) : viewMode === 'construcao' ? (
+                        <KanbanConstrucaoUsinas
+                            usinas={filteredUsinas}
+                            onCardClick={(u) => { setEditingUsina(u); setModalTab('endereco'); setIsModalOpen(true); }}
+                        />
                     ) : (
                         <DndContext
                             sensors={sensors}
@@ -455,7 +470,7 @@ export default function PowerPlantList() {
                                                 label={label}
                                                 color={color}
                                                 plants={usinasInStatus}
-                                                onCardClick={(u) => { setEditingUsina(u); setIsModalOpen(true); }}
+                                                onCardClick={(u) => { setEditingUsina(u); setModalTab('geral'); setIsModalOpen(true); }}
                                                 onClosingsClick={(u) => { setSelectedUsinaForClosings(u); setIsClosingsModalOpen(true); }}
                                             />
                                         );
@@ -478,6 +493,7 @@ export default function PowerPlantList() {
             {isModalOpen && (
                 <PowerPlantModal
                     usina={editingUsina}
+                    initialTab={modalTab}
                     onClose={() => setIsModalOpen(false)}
                     onSave={handleSave}
                     onDelete={handleDelete}
