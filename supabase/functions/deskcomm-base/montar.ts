@@ -1,7 +1,8 @@
 /**
  * Monta os textos das bases do Agente Investidor
  * (spec docs/superpowers/specs/2026-10-19-base-agente-investidor-design.md §4)
- * e do Agente Assinatura (spec 2026-10-20-base-agente-assinatura-design.md §4).
+ * do Agente Assinatura (spec 2026-10-20-base-agente-assinatura-design.md §4)
+ * e do Agente Cotas (spec 2026-10-20-base-agente-cotas-design.md §4).
  *
  * Sem dependencia de Deno nem de Supabase: roda na Edge Function e no vitest.
  * Quem filtra o que pode sair (sem CPF/CNPJ, dono, credenciais) e a RPC
@@ -127,6 +128,45 @@ export function montarCoberturaAssinatura(linhas: CoberturaAssinatura[]): string
     if (validas.length === 0) return SEM_COBERTURA
     const ordenadas = [...validas].sort((a, b) => a.concessionaria.localeCompare(b.concessionaria))
     return '# Assinatura: cobertura, desconto e indicação\n\n' + ordenadas.map(blocoCobertura).join('\n\n') + '\n'
+}
+
+export interface UsinaCotas {
+    nome: string
+    cidade: string | null
+    uf: string | null
+    status: string
+    previsao_entrega: string | null
+    valor_investido: number | null
+    cotas_vendidas: number
+    short_url: string | null
+}
+
+export const SEM_COTAS =
+    '# Usinas com cotas\n\nNo momento não há cota disponível; o consultor avisa quando a próxima abrir.\n'
+
+function blocoCotas(u: UsinaCotas) {
+    const local = [u.cidade, u.uf].filter(Boolean).join('/')
+    const usina = Number(u.valor_investido) || 0
+    const preco = usina > 0
+        ? `R$ ${numero(Math.round(usina / 10 * 1.1))} (usina R$ ${numero(usina)} ÷ 10 + 10%)`
+        : A_CONFIRMAR
+    return [
+        `## ${u.nome}${local ? ` — ${local}` : ''}`,
+        `Estágio: ${ESTAGIO[u.status] ?? u.status} · Previsão de entrega: ${mesAno(u.previsao_entrega)}`,
+        `Preço da cota: ${preco}`,
+        `Cotas livres: ${10 - Number(u.cotas_vendidas)} de 10`,
+        'Pagamento: somente à vista',
+        `Página da usina: ${u.short_url || A_CONFIRMAR}`,
+    ].join('\n')
+}
+
+/** Documento "Usinas com cotas". Só usina válida e com cota livre; ordem pela previsão. */
+export function montarUsinasCotas(usinas: UsinaCotas[]): string {
+    const validas = usinas.filter((u) => u.status in ESTAGIO && Number(u.cotas_vendidas) < 10)
+    if (validas.length === 0) return SEM_COTAS
+    const ordenadas = [...validas].sort((a, b) =>
+        (a.previsao_entrega ?? '9999').localeCompare(b.previsao_entrega ?? '9999') || a.nome.localeCompare(b.nome))
+    return '# Usinas com cotas\n\n' + ordenadas.map(blocoCotas).join('\n\n') + '\n'
 }
 
 /**

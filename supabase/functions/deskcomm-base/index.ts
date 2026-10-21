@@ -1,23 +1,28 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'npm:@supabase/supabase-js@2.45.0'
 import {
-    hashTexto, lerFaq, montarUsinasAVenda, montarCoberturaAssinatura, type UsinaAVenda, type CoberturaAssinatura,
+    hashTexto, lerFaq, montarUsinasAVenda, montarCoberturaAssinatura, montarUsinasCotas,
+    type UsinaAVenda, type CoberturaAssinatura, type UsinaCotas,
 } from './montar.ts'
 import { FAQ_INVESTIDOR } from './bases/investidor-faq.ts'
 import { FAQ_ASSINATURA } from './bases/assinatura-faq.ts'
+import { FAQ_COTAS } from './bases/cotas-faq.ts'
 
 /**
- * Bases de conhecimento dos agentes Investidor e Assinatura no DeskcommCRM
- * (specs docs/superpowers/specs/2026-10-19-base-agente-investidor-design.md §5.3
- * e 2026-10-20-base-agente-assinatura-design.md §6).
+ * Bases de conhecimento dos agentes Investidor, Assinatura e Cotas no DeskcommCRM
+ * (specs docs/superpowers/specs/2026-10-19-base-agente-investidor-design.md §5.3,
+ * 2026-10-20-base-agente-assinatura-design.md §6 e 2026-10-20-base-agente-cotas-design.md §5.2).
  *
- * Mantem quatro fontes do Deskcomm, cada uma ligada ao agente da sua categoria:
+ * Mantem seis fontes do Deskcomm, cada uma ligada ao agente da sua categoria:
  *   - "Investidor — Perguntas e respostas" (faq): texto de bases/investidor-faq.ts.
  *   - "Usinas à venda" (documento): gerado das usinas com a_venda = true.
  *   - "Assinatura — Perguntas e respostas" (faq): texto de bases/assinatura-faq.ts.
  *   - "Assinatura: cobertura, desconto e indicação" (documento): gerado por
  *     ponte_deskcomm_assinatura_cobertura (desconto do plano vigente, tarifa,
  *     credito de indicacao).
+ *   - "Cotas — Perguntas e respostas" (faq): texto de bases/cotas-faq.ts.
+ *   - "Usinas com cotas" (documento): gerado por ponte_deskcomm_usinas_cotas
+ *     (usinas a venda em cotas com cota livre; preco da cota e cotas livres).
  * Mudar um FAQ = editar o arquivo e publicar esta funcao de novo.
  *
  * Por que grava direto nas tabelas do Deskcomm: cadastrar material la exige
@@ -50,8 +55,8 @@ const json = (status: number, body: unknown) =>
 type Supa = ReturnType<typeof createClient>
 
 interface Conteudo {
-    chave: 'investidor_faq' | 'usinas_a_venda' | 'assinatura_faq' | 'assinatura_cobertura'
-    categoria: 'usina_investimento' | 'energia_assinatura'
+    chave: 'investidor_faq' | 'usinas_a_venda' | 'assinatura_faq' | 'assinatura_cobertura' | 'cotas_faq' | 'usinas_cotas'
+    categoria: 'usina_investimento' | 'energia_assinatura' | 'cotas'
     tipo: 'faq' | 'documento'
     nome: string
     texto: string
@@ -78,18 +83,23 @@ const COLUNAS_FONTE = 'id, is_active, source_metadata, last_indexed_at, last_ind
 async function montarConteudos(supabase: Supa): Promise<Conteudo[]> {
     const paresInv = lerFaq(FAQ_INVESTIDOR)
     const paresAss = lerFaq(FAQ_ASSINATURA)
-    if (paresInv.length === 0 || paresAss.length === 0) throw new Error('faq_vazio')
+    const paresCot = lerFaq(FAQ_COTAS)
+    if (paresInv.length === 0 || paresAss.length === 0 || paresCot.length === 0) throw new Error('faq_vazio')
 
     const { data: usinas, error } = await supabase.rpc('ponte_deskcomm_usinas_a_venda')
     if (error) throw new Error(`usinas_ilegiveis: ${error.message}`)
     const { data: cobertura, error: cobErr } = await supabase.rpc('ponte_deskcomm_assinatura_cobertura')
     if (cobErr) throw new Error(`cobertura_ilegivel: ${cobErr.message}`)
+    const { data: cotas, error: cotErr } = await supabase.rpc('ponte_deskcomm_usinas_cotas')
+    if (cotErr) throw new Error(`cotas_ilegiveis: ${cotErr.message}`)
 
     return [
         { chave: 'investidor_faq', categoria: 'usina_investimento', tipo: 'faq', nome: 'Investidor — Perguntas e respostas', texto: JSON.stringify(paresInv), pares: paresInv },
         { chave: 'usinas_a_venda', categoria: 'usina_investimento', tipo: 'documento', nome: 'Usinas à venda', texto: montarUsinasAVenda((usinas ?? []) as UsinaAVenda[]) },
         { chave: 'assinatura_faq', categoria: 'energia_assinatura', tipo: 'faq', nome: 'Assinatura — Perguntas e respostas', texto: JSON.stringify(paresAss), pares: paresAss },
         { chave: 'assinatura_cobertura', categoria: 'energia_assinatura', tipo: 'documento', nome: 'Assinatura: cobertura, desconto e indicação', texto: montarCoberturaAssinatura((cobertura ?? []) as CoberturaAssinatura[]) },
+        { chave: 'cotas_faq', categoria: 'cotas', tipo: 'faq', nome: 'Cotas — Perguntas e respostas', texto: JSON.stringify(paresCot), pares: paresCot },
+        { chave: 'usinas_cotas', categoria: 'cotas', tipo: 'documento', nome: 'Usinas com cotas', texto: montarUsinasCotas((cotas ?? []) as UsinaCotas[]) },
     ]
 }
 
@@ -174,7 +184,8 @@ async function sincronizar(supabase: Supa, org: string, agente: string, c: Conte
     // Fonte recriada fica fora da versao publicada do agente ate uma nova versao
     // (scripts/deskcomm/base_*.sql leem os ids de fontes_base).
     if (reg.knowledge_source_id && fonte.id !== reg.knowledge_source_id) {
-        const script = c.categoria === 'energia_assinatura' ? 'base_assinatura.sql' : 'base_investidor.sql'
+        const script = c.categoria === 'energia_assinatura' ? 'base_assinatura.sql'
+            : c.categoria === 'cotas' ? 'base_cotas.sql' : 'base_investidor.sql'
         await supabase.rpc('ponte_deskcomm_erro_base', {
             p_onde: 'deskcomm-base', p_mensagem: `fonte ${c.chave} recriada (${fonte.id}): rode scripts/deskcomm/${script}`,
         })
