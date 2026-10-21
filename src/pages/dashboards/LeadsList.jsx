@@ -74,6 +74,8 @@ function textoSobre(hex) {
     return comBranco >= comEscuro ? 'white' : '#0f172a';
 }
 
+const textoNovos = (qtd) => `${qtd} lead${qtd > 1 ? 's' : ''} novo${qtd > 1 ? 's' : ''}`;
+
 function SeloNew() {
     return <span className="lead-selo-new" title="Lead novo">NEW</span>;
 }
@@ -212,11 +214,9 @@ export default function LeadsList() {
     // Simulação parada há 90 dias é arquivada (20261006b) e some do padrão.
     const [mostrarArquivados, setMostrarArquivados] = useState(false);
     const [activeId, setActiveId] = useState(null);
-    // Até quando este usuário já viu cada categoria ({ Investidor: iso }).
-    const [vistoEm, setVistoEm] = useState({});
-    // Leads que ficaram vistos nesta visita: o selo NEW continua neles até
-    // recarregar a página, senão sumiria no clique que serve para achá-los.
-    const [revelados, setRevelados] = useState(() => new Set());
+    // Leads que este usuário já viu. `null` até carregar: antes disso nenhum
+    // lead é tratado como novo, senão todos piscariam como novos ao abrir.
+    const [vistos, setVistos] = useState(null);
     const arrastandoRef = useRef(false);
 
     const sensors = useSensors(
@@ -227,7 +227,9 @@ export default function LeadsList() {
         })
     );
 
-    const filteredLeads = leads.filter(lead => {
+    // Recebe os filtros por parâmetro para o clique numa tag ou num status
+    // saber quais leads a tela vai mostrar depois dele.
+    const passaNoFiltro = (lead, tags, statuses) => {
         if (lead.arquivado_em && !mostrarArquivados) return false;
         let matchesSearch = true;
         let matchesTags = true;
@@ -245,59 +247,77 @@ export default function LeadsList() {
             );
         }
 
-        if (selectedTags.length > 0) {
+        if (tags.length > 0) {
             const doLead = categoriasDoLead(lead);
-            matchesTags = selectedTags.some(t => doLead.includes(t));
+            matchesTags = tags.some(t => doLead.includes(t));
         }
-        
-        if (selectedStatuses.length > 0) {
-            matchesStatus = selectedStatuses.includes(lead.status);
+
+        if (statuses.length > 0) {
+            matchesStatus = statuses.includes(lead.status);
         }
 
         return matchesSearch && matchesTags && matchesStatus;
-    });
+    };
 
-    // Lead novo = criado depois da última vez que o usuário abriu a categoria.
-    const ehNovoNaCategoria = (lead, categoria) =>
-        new Date(lead.created_at) > new Date(vistoEm[categoria] || INICIO_AVISO_NOVO);
+    const filteredLeads = leads.filter(lead => passaNoFiltro(lead, selectedTags, selectedStatuses));
 
-    const novosPorCategoria = {};
-    for (const lead of leads) {
-        if (lead.arquivado_em) continue;
-        for (const categoria of categoriasDoLead(lead)) {
-            if (ehNovoNaCategoria(lead, categoria)) {
-                (novosPorCategoria[categoria] ||= []).push(lead);
-            }
-        }
-    }
+    const statusDoLead = (lead) => lead.status || 'simulacao';
 
     const leadEhNovo = (lead) =>
-        revelados.has(lead.id) ||
-        (!lead.arquivado_em && categoriasDoLead(lead).some(c => ehNovoNaCategoria(lead, c)));
+        vistos !== null &&
+        !lead.arquivado_em &&
+        new Date(lead.created_at) > new Date(INICIO_AVISO_NOVO) &&
+        !vistos.has(lead.id);
+
+    const novosPorCategoria = {};
+    const novosPorStatus = {};
+    for (const lead of leads) {
+        if (!leadEhNovo(lead)) continue;
+        for (const categoria of categoriasDoLead(lead)) {
+            (novosPorCategoria[categoria] ||= []).push(lead);
+        }
+        (novosPorStatus[statusDoLead(lead)] ||= []).push(lead);
+    }
+
+    const marcarVistos = (ids) => {
+        if (ids.length === 0) return;
+        setVistos(prev => new Set([...(prev || []), ...ids]));
+        supabase.rpc('fn_marcar_leads_vistos', { p_leads: ids })
+            .then(({ error }) => { if (error) console.error('Erro ao marcar leads como vistos:', error); });
+    };
+
+    // Ligar uma tag ou um status conta como ver os leads novos daquele filtro
+    // que a tela passa a mostrar. Lead novo escondido por outro filtro ligado
+    // continua novo, porque ninguém olhou para ele.
+    const marcarVistosNaTela = (novos, tags, statuses) =>
+        marcarVistos((novos || []).filter(l => passaNoFiltro(l, tags, statuses)).map(l => l.id));
 
     const alternarCategoria = (categoria) => {
-        setSelectedTags(prev => prev.includes(categoria)
-            ? prev.filter(t => t !== categoria)
-            : [...prev, categoria]);
+        const ligando = !selectedTags.includes(categoria);
+        const proximas = ligando ? [...selectedTags, categoria] : selectedTags.filter(t => t !== categoria);
+        setSelectedTags(proximas);
+        if (ligando) marcarVistosNaTela(novosPorCategoria[categoria], proximas, selectedStatuses);
+    };
 
-        const novos = novosPorCategoria[categoria];
-        if (!novos?.length) return;
+    const alternarStatus = (status) => {
+        const ligando = !selectedStatuses.includes(status);
+        const proximos = ligando ? [...selectedStatuses, status] : selectedStatuses.filter(s => s !== status);
+        setSelectedStatuses(proximos);
+        if (ligando) marcarVistosNaTela(novosPorStatus[status], selectedTags, proximos);
+    };
 
-        // Avança só até o lead mais recente que está na tela: um lead que
-        // chegue depois do carregamento continua novo.
-        const ate = novos.reduce((max, l) => (new Date(l.created_at) > new Date(max) ? l.created_at : max), novos[0].created_at);
-        setVistoEm(prev => ({ ...prev, [categoria]: ate }));
-        setRevelados(prev => new Set([...prev, ...novos.map(l => l.id)]));
-        supabase.rpc('fn_marcar_novidade_vista', { p_categoria: categoria, p_ate: ate })
-            .then(({ error }) => { if (error) console.error('Erro ao marcar categoria como vista:', error); });
+    const abrirLead = (lead) => {
+        setEditingLead(lead);
+        setIsModalOpen(true);
+        if (leadEhNovo(lead)) marcarVistos([lead.id]);
     };
 
     useEffect(() => {
         fetchLeads();
-        supabase.from('lead_novidade_vista').select('categoria, visto_em')
+        supabase.from('lead_visto').select('lead_id')
             .then(({ data, error }) => {
                 if (error) { console.error('Erro ao ler leads vistos:', error); return; }
-                setVistoEm(Object.fromEntries((data || []).map(r => [r.categoria, r.visto_em])));
+                setVistos(new Set((data || []).map(r => r.lead_id)));
             });
 
         // Lead que chega com a página aberta aparece sem recarregar. Durante
@@ -494,7 +514,7 @@ export default function LeadsList() {
                                     key={tag}
                                     onClick={() => alternarCategoria(tag)}
                                     className={qtdNovos > 0 ? 'lead-tag-pulso' : undefined}
-                                    title={qtdNovos > 0 ? `${qtdNovos} lead${qtdNovos > 1 ? 's' : ''} novo${qtdNovos > 1 ? 's' : ''}` : undefined}
+                                    title={qtdNovos > 0 ? textoNovos(qtdNovos) : undefined}
                                     aria-pressed={selecionada}
                                     style={{
                                         '--pulso-cor': cor.color,
@@ -516,17 +536,17 @@ export default function LeadsList() {
                     </div>
                     <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', flex: 1, alignItems: 'center', marginTop: '0.5rem' }}>
                         <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>Filtrar Status:</span>
-                        {KANBAN_STATUSES.map(s => (
+                        {KANBAN_STATUSES.map(s => {
+                            const qtdNovos = novosPorStatus[s.status]?.length || 0;
+                            return (
                             <button
                                 key={s.status}
-                                onClick={() => {
-                                    if (selectedStatuses.includes(s.status)) {
-                                        setSelectedStatuses(selectedStatuses.filter(st => st !== s.status));
-                                    } else {
-                                        setSelectedStatuses([...selectedStatuses, s.status]);
-                                    }
-                                }}
+                                onClick={() => alternarStatus(s.status)}
+                                className={qtdNovos > 0 ? 'lead-tag-pulso' : undefined}
+                                title={qtdNovos > 0 ? textoNovos(qtdNovos) : undefined}
+                                aria-pressed={selectedStatuses.includes(s.status)}
                                 style={{
+                                    '--pulso-cor': s.color,
                                     fontSize: '0.75rem',
                                     padding: '0.2rem 0.6rem',
                                     borderRadius: '16px',
@@ -540,7 +560,8 @@ export default function LeadsList() {
                             >
                                 {s.label}
                             </button>
-                        ))}
+                            );
+                        })}
                     </div>
                     {viewMode === 'kanban' && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginLeft: 'auto', marginTop: '0.5rem' }}>
@@ -593,7 +614,7 @@ export default function LeadsList() {
             {loading ? <p>Carregando...</p> : (
                 <>
                     {viewMode === 'agenda' ? (
-                        <LeadAgenda onLeadClick={(lead) => { setEditingLead(lead); setIsModalOpen(true); }} />
+                        <LeadAgenda onLeadClick={abrirLead} />
                     ) : viewMode === 'list' ? (
                         <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
                             <div className="table-container">
@@ -650,7 +671,7 @@ export default function LeadsList() {
                                                     <td>{lead.originator?.name || '-'}</td>
                                                     <td style={{ display: 'flex', gap: '0.5rem' }}>
                                                         <button
-                                                            onClick={() => { setEditingLead(lead); setIsModalOpen(true); }}
+                                                            onClick={() => abrirLead(lead)}
                                                             className="btn btn-secondary"
                                                             style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}
                                                         >
@@ -714,7 +735,7 @@ export default function LeadsList() {
                                                 label={label}
                                                 color={color}
                                                 leads={leadsInStatus}
-                                                onCardClick={(lead) => { setEditingLead(lead); setIsModalOpen(true); }}
+                                                onCardClick={abrirLead}
                                                 leadEhNovo={leadEhNovo}
                                             />
                                         );
