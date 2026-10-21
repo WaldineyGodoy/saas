@@ -219,6 +219,9 @@ As duas Edge Functions passaram só na checagem de sintaxe (esbuild). Não há D
 - `supabase/migrations/20261020c_bel_recepcao.sql` (+ `20261020d`) — RPCs do b2w-mcp, campos do card → lead, rastreio, não-lead, termômetro só no especialista.
 - `supabase/functions/b2w-mcp/` — servidor MCP da B2W (concessionária e identificação do contato).
 - `scripts/deskcomm/campos_funis.sql` e `scripts/deskcomm/bel_recepcao.sql` — campos dos funis; Bel v3, abertura comum e membro suporte.
+- `supabase/migrations/20261021a_base_agente_assinatura.sql` — simulação (b2w_mcp_simular_assinatura), cobertura da Fonte B e gatilhos de planos/tarifa.
+- `supabase/functions/deskcomm-base/bases/assinatura-faq.ts` — FAQ do Agente Assinatura.
+- `scripts/deskcomm/base_assinatura.sql` — publica a versão do Agente Assinatura com roteiro, fontes e a ferramenta de simulação.
 
 ## 8. Bases de conhecimento por produto
 
@@ -259,3 +262,13 @@ Spec: `docs/superpowers/specs/2026-10-20-bel-recepcao-design.md`.
 - **Suporte:** membro "Suporte ao cliente" no roteador, atendido pela Bel com passagem a humano até existir o Agente Suporte.
 - **Mudar a abertura:** o bloco `v_comum` é o mesmo em `scripts/deskcomm/bel_recepcao.sql` e `base_investidor.sql`; altere os dois e rode `bel_recepcao.sql` (idempotente).
 - **Dado pendente:** a tabela `"Concessionaria"` está incompleta (ex.: São Gonçalo do Amarante/RN não está; RN tem 143 de 167 municípios). Cidade fora da tabela cai em "lista de espera".
+
+### 8.3 Base do Agente Assinatura — no ar desde 20/10/2026
+
+Spec: `docs/superpowers/specs/2026-10-20-base-agente-assinatura-design.md`.
+
+- **Fontes:** "Assinatura — Perguntas e respostas" (faq, `bases/assinatura-faq.ts`, 18 pares) e "Assinatura: cobertura, desconto e indicação" (documento gerado por `ponte_deskcomm_assinatura_cobertura`: desconto do plano vigente, tarifa, fórmula, crédito de indicação). Regenerada por gatilho em `planos_assinatura_energia`, `planos_distribuidoras` e tarifa da `"Concessionaria"`, e pelo cron de hora em hora. A `deskcomm-base` sincroniza cada fonte com o agente da sua categoria.
+- **Ferramenta `b2w_simular_assinatura`** (servidor `b2w-mcp`): mesma conta do simulador do site, vaga (imediata / pré-operação / fila) e link de adesão com o indicador do lead.
+- **Vaga:** geração estimada da usina − franquias das UCs que a ocupam (todas menos canceladas, desconectadas e desligadas por TT). Usina sem `geracao_estimada_kwh` não conta; sem `previsao_entrega`, o agente não cita data.
+- **Mudar o FAQ:** editar `bases/assinatura-faq.ts` e publicar `deskcomm-base`. **Mudar o roteiro:** editar `base_assinatura.sql` e rodar (idempotente).
+- **Pendências:** termo de adesão diverge do roteiro (titularidade, Fio B, bandeira, vencimento dia 5) — revisar com o jurídico; UFV Bom Jesus com franquias acima da geração estimada; usinas em pré-operação sem previsão de entrega.

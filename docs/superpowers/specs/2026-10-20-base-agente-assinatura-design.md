@@ -1,6 +1,6 @@
 # Base de conhecimento do Agente Assinatura (Energia por Assinatura)
 
-Data: 20/10/2026 · Estado: desenho aprovado, aguardando revisão do spec
+Data: 20/10/2026 · Estado: implementado em 20/10/2026 (ver `playbook/DESKCOMM.md` §8.3)
 Contexto: `playbook/DESKCOMM.md` (§8.1 base do Investidor, §8.2 Bel/recepção). Segunda base por produto.
 
 ## 1. Objetivo
