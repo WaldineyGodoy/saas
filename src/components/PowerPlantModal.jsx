@@ -5563,7 +5563,9 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                             onClick={async () => {
                                                 setIsShortening(true);
                                                 try {
-                                                    const longUrl = `https://www.b2wenergia.com.br/usina?${generateSlug()}`;
+                                                    // A pagina da usina mora em b2winvest.com.br/paginas/usinasroi/ (repo b2winvest).
+                                                    // O endereco antigo b2wenergia.com.br/usina? so' redireciona para ca.
+                                                    const longUrl = `https://b2winvest.com.br/paginas/usinasroi/?${generateSlug()}`;
                                                     const keyword = `usina-${formData.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 15)}-${Math.random().toString(36).substring(2, 6)}`;
                                                     const title = `Página da Usina - ${formData.name}`;
                                                     
