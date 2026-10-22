@@ -4155,6 +4155,108 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                     value={formData.cronograma_obra}
                                     onChange={cronograma => setFormData(prev => ({ ...prev, cronograma_obra: cronograma }))}
                                 />
+
+                                {/* O link da página pública sai do cronograma desta aba (etapas da obra) */}
+                                <div style={{ gridColumn: '1 / -1', maxWidth: '640px' }}>
+                                <div style={{ background: '#f8fafc', padding: '2rem', borderRadius: '20px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
+                                        <div style={{ width: '40px', height: '40px', background: 'white', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#3b82f6', boxShadow: '0 2px 4px rgba(59, 130, 246, 0.1)', border: '1px solid #e2e8f0' }}>
+                                            <Globe size={20} />
+                                        </div>
+                                        <div>
+                                            <h4 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#1e293b', margin: 0 }}>Página Pública da Usina</h4>
+                                            <p style={{ fontSize: '0.8rem', color: '#64748b', margin: 0 }}>Link encurtado via YOURLS contendo métricas da usina</p>
+                                        </div>
+                                    </div>
+
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                        {formData.short_url ? (
+                                            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                                                <input
+                                                    type="text"
+                                                    readOnly
+                                                    value={formData.short_url}
+                                                    style={{ flex: 1, padding: '0.8rem 1rem', border: '1px solid #bbf7d0', borderRadius: '10px', fontSize: '0.9rem', outline: 'none', background: '#f0fdf4', color: '#166534', fontWeight: 600 }}
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        navigator.clipboard.writeText(formData.short_url);
+                                                        showAlert('Link encurtado copiado!', 'success');
+                                                    }}
+                                                    style={{
+                                                        padding: '0.8rem 1.25rem',
+                                                        background: '#16a34a',
+                                                        color: 'white',
+                                                        border: 'none',
+                                                        borderRadius: '10px',
+                                                        cursor: 'pointer',
+                                                        fontWeight: 700,
+                                                        fontSize: '0.85rem',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '0.5rem',
+                                                        transition: '0.2s'
+                                                    }}
+                                                >
+                                                    <Check size={16} /> Copiar
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <div style={{ color: '#64748b', fontSize: '0.85rem', fontStyle: 'italic', marginBottom: '0.5rem' }}>
+                                                Nenhum link encurtado gerado ainda para esta usina.
+                                            </div>
+                                        )}
+
+                                        <button
+                                            type="button"
+                                            disabled={isShortening}
+                                            onClick={async () => {
+                                                setIsShortening(true);
+                                                try {
+                                                    // A pagina da usina (v2) mora em b2winvest.com.br/paginas/usinasroiv2/ (repo b2winvest).
+                                                    // O endereco antigo b2wenergia.com.br/usina? so' redireciona para ca.
+                                                    const longUrl = `https://b2winvest.com.br/paginas/usinasroiv2/?${generateSlug()}`;
+                                                    const keyword = `usina-${formData.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 15)}-${Math.random().toString(36).substring(2, 6)}`;
+                                                    const title = `Página da Usina - ${formData.name}`;
+                                                    
+                                                    const res = await shortenLink(longUrl, keyword, title);
+                                                    if (res?.success && res?.shortUrl) {
+                                                        setFormData(prev => ({ ...prev, short_url: res.shortUrl }));
+                                                        showAlert('Link encurtado gerado com sucesso! Salve a usina para confirmar no banco.', 'success');
+                                                    } else {
+                                                        throw new Error('Falha ao encurtar o link.');
+                                                    }
+                                                } catch (err) {
+                                                    console.error(err);
+                                                    showAlert('Erro ao encurtar link: ' + err.message, 'error');
+                                                } finally {
+                                                    setIsShortening(false);
+                                                }
+                                            }}
+                                            style={{
+                                                padding: '0.8rem 1rem',
+                                                background: '#3b82f6',
+                                                color: 'white',
+                                                border: 'none',
+                                                borderRadius: '10px',
+                                                cursor: isShortening ? 'not-allowed' : 'pointer',
+                                                fontWeight: 700,
+                                                fontSize: '0.85rem',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                gap: '0.5rem',
+                                                opacity: isShortening ? 0.7 : 1,
+                                                transition: '0.2s'
+                                            }}
+                                        >
+                                            {isShortening ? <Loader2 size={16} className="animate-spin" /> : <Link size={16} />}
+                                            {formData.short_url ? 'Atualizar Link Encurtado' : 'Gerar Link Encurtado'}
+                                        </button>
+                                    </div>
+                                </div>
+                                </div>
                             </div>
                         </div>
                     )}
@@ -5507,106 +5609,6 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                                 </button>
                                             </div>
                                         </div>
-                                    </div>
-                                </div>
-
-                                {/* Página da Usina Card */}
-                                <div style={{ background: '#f8fafc', padding: '2rem', borderRadius: '20px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
-                                        <div style={{ width: '40px', height: '40px', background: 'white', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#3b82f6', boxShadow: '0 2px 4px rgba(59, 130, 246, 0.1)', border: '1px solid #e2e8f0' }}>
-                                            <Globe size={20} />
-                                        </div>
-                                        <div>
-                                            <h4 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#1e293b', margin: 0 }}>Página Pública da Usina</h4>
-                                            <p style={{ fontSize: '0.8rem', color: '#64748b', margin: 0 }}>Link encurtado via YOURLS contendo métricas da usina</p>
-                                        </div>
-                                    </div>
-
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                                        {formData.short_url ? (
-                                            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-                                                <input
-                                                    type="text"
-                                                    readOnly
-                                                    value={formData.short_url}
-                                                    style={{ flex: 1, padding: '0.8rem 1rem', border: '1px solid #bbf7d0', borderRadius: '10px', fontSize: '0.9rem', outline: 'none', background: '#f0fdf4', color: '#166534', fontWeight: 600 }}
-                                                />
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        navigator.clipboard.writeText(formData.short_url);
-                                                        showAlert('Link encurtado copiado!', 'success');
-                                                    }}
-                                                    style={{
-                                                        padding: '0.8rem 1.25rem',
-                                                        background: '#16a34a',
-                                                        color: 'white',
-                                                        border: 'none',
-                                                        borderRadius: '10px',
-                                                        cursor: 'pointer',
-                                                        fontWeight: 700,
-                                                        fontSize: '0.85rem',
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        gap: '0.5rem',
-                                                        transition: '0.2s'
-                                                    }}
-                                                >
-                                                    <Check size={16} /> Copiar
-                                                </button>
-                                            </div>
-                                        ) : (
-                                            <div style={{ color: '#64748b', fontSize: '0.85rem', fontStyle: 'italic', marginBottom: '0.5rem' }}>
-                                                Nenhum link encurtado gerado ainda para esta usina.
-                                            </div>
-                                        )}
-
-                                        <button
-                                            type="button"
-                                            disabled={isShortening}
-                                            onClick={async () => {
-                                                setIsShortening(true);
-                                                try {
-                                                    // A pagina da usina (v2) mora em b2winvest.com.br/paginas/usinasroiv2/ (repo b2winvest).
-                                                    // O endereco antigo b2wenergia.com.br/usina? so' redireciona para ca.
-                                                    const longUrl = `https://b2winvest.com.br/paginas/usinasroiv2/?${generateSlug()}`;
-                                                    const keyword = `usina-${formData.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 15)}-${Math.random().toString(36).substring(2, 6)}`;
-                                                    const title = `Página da Usina - ${formData.name}`;
-                                                    
-                                                    const res = await shortenLink(longUrl, keyword, title);
-                                                    if (res?.success && res?.shortUrl) {
-                                                        setFormData(prev => ({ ...prev, short_url: res.shortUrl }));
-                                                        showAlert('Link encurtado gerado com sucesso! Salve a usina para confirmar no banco.', 'success');
-                                                    } else {
-                                                        throw new Error('Falha ao encurtar o link.');
-                                                    }
-                                                } catch (err) {
-                                                    console.error(err);
-                                                    showAlert('Erro ao encurtar link: ' + err.message, 'error');
-                                                } finally {
-                                                    setIsShortening(false);
-                                                }
-                                            }}
-                                            style={{
-                                                padding: '0.8rem 1rem',
-                                                background: '#3b82f6',
-                                                color: 'white',
-                                                border: 'none',
-                                                borderRadius: '10px',
-                                                cursor: isShortening ? 'not-allowed' : 'pointer',
-                                                fontWeight: 700,
-                                                fontSize: '0.85rem',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                gap: '0.5rem',
-                                                opacity: isShortening ? 0.7 : 1,
-                                                transition: '0.2s'
-                                            }}
-                                        >
-                                            {isShortening ? <Loader2 size={16} className="animate-spin" /> : <Link size={16} />}
-                                            {formData.short_url ? 'Atualizar Link Encurtado' : 'Gerar Link Encurtado'}
-                                        </button>
                                     </div>
                                 </div>
                             </div>
