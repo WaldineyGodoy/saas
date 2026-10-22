@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { ucEncerrada } from '../lib/ucStatus';
 import { calcularCapacidade, ocupacaoDaGeracao } from '../lib/capacidade';
 import CronogramaObraUsina from './CronogramaObraUsina';
+import { etapasParaPagina } from '../lib/cronogramaObra';
 import { fetchAddressByCep, fetchOfferData, sendWhatsapp, shortenLink, salvarSenhaPortal, semSenha, createAutentiqueDocument, cancelAutentiqueDocument } from '../lib/api';
 import IrradianceChart from './IrradianceChart';
 import { useUI } from '../contexts/UIContext';
@@ -1086,7 +1087,10 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
             aero: geo?.aeroporto || undefined,
             tarifaLiq: tariffs.tarifaLiquida || 0,
             servicos: serviceValues,
-            geracao12: monthlyEstimates.map(e => ({ m: e.name, v: e.estimativa || e.geracao || 0 }))
+            geracao12: monthlyEstimates.map(e => ({ m: e.name, v: e.estimativa || e.geracao || 0 })),
+            // Situação das 4 etapas da obra, lida do cronograma da usina; sem cronograma, a
+            // página não afirma fase.
+            etapas: etapasParaPagina(formData.cronograma_obra)
         };
 
         try {
@@ -5563,9 +5567,9 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                             onClick={async () => {
                                                 setIsShortening(true);
                                                 try {
-                                                    // A pagina da usina mora em b2winvest.com.br/paginas/usinasroi/ (repo b2winvest).
+                                                    // A pagina da usina (v2) mora em b2winvest.com.br/paginas/usinasroiv2/ (repo b2winvest).
                                                     // O endereco antigo b2wenergia.com.br/usina? so' redireciona para ca.
-                                                    const longUrl = `https://b2winvest.com.br/paginas/usinasroi/?${generateSlug()}`;
+                                                    const longUrl = `https://b2winvest.com.br/paginas/usinasroiv2/?${generateSlug()}`;
                                                     const keyword = `usina-${formData.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 15)}-${Math.random().toString(36).substring(2, 6)}`;
                                                     const title = `Página da Usina - ${formData.name}`;
                                                     

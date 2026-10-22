@@ -219,6 +219,27 @@ export const resumoEtapa = (etapa, cronograma) => {
     return { itens, progresso, concluida, iniciada, selo };
 };
 
+/**
+ * Situação de cada macroetapa no formato do link da página pública da usina
+ * (b2winvest.com.br/paginas/usinasroiv2/): 'ok' concluída, 'i<N>' iniciada com N%,
+ * 'p<N>' começa em N dias. Cronograma sem nenhum item preenchido devolve undefined:
+ * a página então não afirma fase nenhuma, em vez de dizer "prevista em 0 dias".
+ */
+export const etapasParaPagina = (cronograma) => {
+    if (!cronograma || !Object.keys(cronograma.itens || {}).length) return undefined;
+    const r = {};
+    ETAPAS_OBRA.forEach(etapa => {
+        const { itens, progresso, concluida, iniciada } = resumoEtapa(etapa, cronograma);
+        if (concluida) r[etapa.id] = 'ok';
+        else if (iniciada) r[etapa.id] = `i${progresso}`;
+        else {
+            const dias = itens.map(({ item }) => diasAte(item.previsto_para)).filter(d => d !== null);
+            r[etapa.id] = `p${dias.length ? Math.max(0, Math.min(...dias)) : 0}`;
+        }
+    });
+    return r;
+};
+
 /** Fase atual = primeira macroetapa não concluída. */
 export const resumoCronograma = (cronograma) => {
     const etapas = ETAPAS_OBRA.map(e => ({ etapa: e, ...resumoEtapa(e, cronograma) }));
