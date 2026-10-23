@@ -78,3 +78,6 @@ export function situacaoDocumentos({ cpf_cnpj, ucs, docs }) {
         return { ...item, quantidade, enviado: quantidade > 0 };
     });
 }
+
+/** Chave de um documento obrigatório: o tipo, mais a UC quando é conta de energia. */
+export const chaveDocumento = (d) => `${d.tipo}:${d.consumer_unit_id || ''}`;
