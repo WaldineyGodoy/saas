@@ -216,3 +216,71 @@ describe('nova UC preenchida pela conta (ConsumerUnitModal)', () => {
     expect(r).not.toHaveProperty('concessionaria');
   });
 });
+
+describe('leitura atual: de onde sai o dia de leitura da UC nova', () => {
+  const leituraDe = (arquivo) => parseEnergyBillText(lerFixture(arquivo)).leituraAtual;
+
+  test('vem do rótulo LEITURA ATUAL, nos dois layouts da Cosern', () => {
+    expect(leituraDe('cosern-layout-novo-2026-09.txt')).toBe('2026-09-10');
+    expect(leituraDe('cosern-layout-antigo-2026-05.txt')).toBe('2026-05-05');
+  });
+
+  test('emissão impressa antes não vira data de leitura', () => {
+    // A Cosern cobra o ciclo pela leitura, não pela emissão: pegar a emissão
+    // errava o dia em semanas (emissão 28/09 contra leitura 10/09).
+    const texto = 'NOTA FISCAL N° 1 - DATA DE EMISSÃO: 28/09/2026 DATAS DE LEITURAS LEITURA ANTERIOR 11/08/2026 LEITURA ATUAL 10/09/2026 N° DE DIAS 30 PRÓXIMA LEITURA 08/10/2026';
+    const r = parseEnergyBillText(texto);
+    expect(r.leituraAtual).toBe('2026-09-10');
+    expect(r.dataLeitura).toBe('2026-09-10');
+  });
+
+  test('só a próxima leitura, ou só a emissão, não é leitura atual', () => {
+    expect(parseEnergyBillText('PRÓXIMA LEITURA 08/10/2026').leituraAtual).toBe('');
+    expect(parseEnergyBillText('DATA DE EMISSÃO: 28/09/2026').leituraAtual).toBe('');
+  });
+
+  test('a leitura por foto já entrega a leitura atual em dataLeitura', () => {
+    const r = completarLeitura({ numeroUcNovo: '1', dataLeitura: '2026-10-09', historico: [] });
+    expect(r.leituraAtual).toBe('2026-10-09');
+  });
+
+  test('vira o dia do mês em dia_leitura, e só ele', () => {
+    const campos = contaParaUc({ numeroUc: '201542003217', leituraAtual: '2026-09-10', vencimento: '2026-10-26' });
+    expect(campos.dia_leitura).toBe(10);
+    // O dia de vencimento do CRM é o do boleto da B2W (Financeiro, gerido pelo
+    // assinante), não o da concessionária: a conta não o define.
+    expect(campos).not.toHaveProperty('dia_vencimento');
+  });
+
+  test('sem leitura confiável, não chuta: o campo fica como estava', () => {
+    expect(contaParaUc({ numeroUc: '1' })).not.toHaveProperty('dia_leitura');
+    expect(contaParaUc({ numeroUc: '1', leituraAtual: '' })).not.toHaveProperty('dia_leitura');
+    expect(contaParaUc({ numeroUc: '1', leituraAtual: 'lixo' })).not.toHaveProperty('dia_leitura');
+  });
+
+  test('dia 31 e dia 1 passam; fora de 1 a 31 não', () => {
+    expect(contaParaUc({ numeroUc: '1', leituraAtual: '2026-08-31' }).dia_leitura).toBe(31);
+    expect(contaParaUc({ numeroUc: '1', leituraAtual: '2026-09-01' }).dia_leitura).toBe(1);
+    expect(contaParaUc({ numeroUc: '1', leituraAtual: '2026-09-00' })).not.toHaveProperty('dia_leitura');
+    expect(contaParaUc({ numeroUc: '1', leituraAtual: '2026-09-32' })).not.toHaveProperty('dia_leitura');
+  });
+});
+
+describe('caminho real do upload: conta -> pedido -> campos da UC nova', () => {
+  // PreencherUcPelaConta entrega ao modal contaParaPedido(leitura), e é essa
+  // lista fixa de campos que contaParaUc enxerga. Sem leituraAtual nela, o
+  // dia de leitura se perdia no meio do caminho e a UC nascia com o 1 padrão.
+  test.each([
+    ['cosern-layout-novo-2026-09.txt', 10],
+    ['cosern-layout-antigo-2026-05.txt', 5],
+  ])('%s -> dia_leitura %i', (arquivo, dia) => {
+    const pedido = contaParaPedido(parseEnergyBillText(lerFixture(arquivo)));
+    expect(pedido.leituraAtual).toBeTruthy();
+    expect(contaParaUc(pedido).dia_leitura).toBe(dia);
+  });
+
+  test('a leitura por foto segue o mesmo caminho', () => {
+    const pedido = contaParaPedido(completarLeitura({ numeroUcNovo: '1', dataLeitura: '2026-10-23', historico: [] }));
+    expect(contaParaUc(pedido).dia_leitura).toBe(23);
+  });
+});

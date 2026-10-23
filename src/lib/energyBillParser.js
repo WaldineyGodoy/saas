@@ -117,6 +117,8 @@ export const completarLeitura = (lido, ucsDoCadastro = null) => {
             completo: [end.logradouro, end.complemento, end.bairro, [end.cep, end.cidade, end.uf].filter(Boolean).join(' ')].filter(Boolean).join(', '),
         } : null,
         ligacao: ligacaoDoFornecimento(lido.tipoFornecimento || ''),
+        // O prompt de parse-invoice-image pede dataLeitura como a leitura atual.
+        leituraAtual: lido.leituraAtual || lido.dataLeitura || '',
         mediaKwh: comConsumo.length ? Math.round(comConsumo.reduce((s, h) => s + h.kwh, 0) / comConsumo.length) : 0,
         isUcMatch: alvos.length > 0 ? ucConfere(ids, alvos) : true,
     };
@@ -127,7 +129,7 @@ export const completarLeitura = (lido, ucsDoCadastro = null) => {
 const CAMPOS_PEDIDO = [
     'numeroUc', 'numeroUcNovo', 'codigoCliente', 'codigoInstalacao', 'titular', 'documentoTipo', 'documento',
     'endereco', 'classificacao', 'tipoFornecimento', 'ligacao', 'mediaKwh', 'historico', 'mesReferencia',
-    'consumoKwh', 'valorTotal', 'concessionaria',
+    'consumoKwh', 'valorTotal', 'concessionaria', 'leituraAtual',
 ];
 export const contaParaPedido = (leitura) => ({
     concessionaria: 'Neoenergia Cosern', // os dois leitores só conhecem a Cosern
@@ -149,11 +151,23 @@ const nomeComparavel = (nome) => String(nome || '')
 
 const LIGACOES = ['monofasico', 'bifasico', 'trifasico'];
 
+// 'AAAA-MM-DD' -> dia do mês (1 a 31), ou undefined. Sem passar por Date: fuso
+// horário já deslocou data pura para o dia anterior em outros pontos do CRM.
+const diaDoMesIso = (iso) => {
+    const m = /^\d{4}-\d{2}-(\d{2})$/.exec(String(iso || ''));
+    const dia = m ? Number(m[1]) : NaN;
+    return dia >= 1 && dia <= 31 ? dia : undefined;
+};
+
 // Conta lida -> campos do formulário de UC nova (ConsumerUnitModal). Só volta o
 // que a conta trouxe. O documento da conta vem mascarado e não é usado; o
 // titular só vira o assinante quando o nome confere com o dele.
 export const contaParaUc = (conta, { assinante = null, concessionarias = [] } = {}) => {
     const end = conta?.endereco || {};
+    // Dia do mês da leitura atual. O dia de vencimento fica de fora de
+    // propósito: no CRM ele é o do boleto da B2W (aba Financeiro, gerido pelo
+    // assinante), e o da conta é da concessionária.
+    const diaLeitura = diaDoMesIso(conta?.leituraAtual);
     const { rua, numero } = separarNumero(end.logradouro);
     const campos = {
         numero_uc: conta?.numeroUc,
@@ -161,6 +175,7 @@ export const contaParaUc = (conta, { assinante = null, concessionarias = [] } = 
         tipo_ligacao: LIGACOES.includes(conta?.ligacao) ? conta.ligacao : undefined,
         concessionaria: concessionarias.includes(conta?.concessionaria) ? conta.concessionaria : undefined,
         franquia: conta?.mediaKwh ? String(conta.mediaKwh) : undefined,
+        dia_leitura: diaLeitura,
         cep: end.cep, rua, numero,
         complemento: end.complemento, bairro: end.bairro, cidade: end.cidade, uf: end.uf,
     };
@@ -293,14 +308,33 @@ export const parseEnergyBillText = (fullText, ucsDoCadastro = null) => {
         extractedDueDate = `${yyyy}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}`;
     }
 
-    let extractedReadDate = '';
-    const readDateMatch = cleanText.match(/(?:Data\s+da\s+Leitura|Leitura\s+Atual|Apresentada\s+em|Emissão|Pr[oó]xima\s+Leitura)[:\s]*(\d{2}\/\d{2}\/\d{2,4})/i) ||
-                          cleanText.match(/Leit\.\s*Atual\s*(\d{2}\/\d{2}\/\d{2,4})/i) ||
-                          cleanText.match(/(?:Leitura\s*atual|Data\s*da\s*Leitura)[:\s]*(\d{2}\/\d{2})/i);
-    if (readDateMatch) {
-        const parts = readDateMatch[1].split('/');
-        const yyyy = parts.length === 3 ? (parts[2].length === 2 ? `20${parts[2]}` : parts[2]) : (new Date().getFullYear());
-        extractedReadDate = `${yyyy}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}`;
+    // Leitura ATUAL: a data em que a Cosern leu o medidor neste ciclo. É dela
+    // que sai o dia de leitura da UC (consumer_units.dia_leitura). Só vale o
+    // rótulo explícito: emissão, "apresentada em" e próxima leitura são outras
+    // datas, e a emissão chegava a errar o dia em semanas (28/09 contra 10/09).
+    const isoDaData = (dd, mm, aa) => {
+        const yyyy = aa ? (aa.length === 2 ? `20${aa}` : aa) : String(new Date().getFullYear());
+        return `${yyyy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`;
+    };
+    let extractedLeituraAtual = '';
+    const leituraAtualMatch =
+        cleanText.match(/LEITURA\s+ATUAL[:\s]*(\d{2})\/(\d{2})(?:\/(\d{2,4}))?/i) ||
+        cleanText.match(/Leit\.\s*Atual[:\s]*(\d{2})\/(\d{2})(?:\/(\d{2,4}))?/i) ||
+        cleanText.match(/Data\s+da\s+Leitura[:\s]*(\d{2})\/(\d{2})(?:\/(\d{2,4}))?/i);
+    if (leituraAtualMatch) {
+        extractedLeituraAtual = isoDaData(leituraAtualMatch[1], leituraAtualMatch[2], leituraAtualMatch[3]);
+    }
+
+    // dataLeitura segue servindo à fatura (data_leitura): rótulo estrito
+    // primeiro; sem ele, o reconhecimento solto de sempre, para não esvaziar
+    // contas de layout desconhecido.
+    let extractedReadDate = extractedLeituraAtual;
+    if (!extractedReadDate) {
+        const readDateMatch = cleanText.match(/(?:Apresentada\s+em|Emissão|Pr[oó]xima\s+Leitura)[:\s]*(\d{2}\/\d{2}\/\d{2,4})/i);
+        if (readDateMatch) {
+            const parts = readDateMatch[1].split('/');
+            extractedReadDate = isoDaData(parts[0], parts[1], parts[2]);
+        }
     }
 
     // Linha digitável (Barcode) e Pix
@@ -388,6 +422,7 @@ export const parseEnergyBillText = (fullText, ucsDoCadastro = null) => {
         mesReferencia: extractedMesRef,
         vencimento: extractedDueDate,
         dataLeitura: extractedReadDate,
+        leituraAtual: extractedLeituraAtual,
         valorTotal: parseValue(totalAmountMatch ? totalAmountMatch[1] : null) || 0,
         consumoKwh: parseInt(parsedConsumo) || 0,
         consumoCompensado: parseInt(parsedCompensado) || 0,
