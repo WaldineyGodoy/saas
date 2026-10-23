@@ -377,7 +377,18 @@ async function preencherWizard(page, tt, confirmar) {
     let endereco = null;
     for (let t = 0; t < 20 && !endereco; t++) { await espera(page, 1000); endereco = await lerCampo(page, 'Endere'); }
     if (!endereco) {
-        const aviso = (await textoDaTela(page)).slice(0, 400);
+        const tela = await textoDaTela(page);
+        // Visto em 23/10/2026 (UC 201542003217): a Cosern não aceita TT no ciclo de
+        // leitura. "Unidade está no dia de faturamento. Por favor, tente novamente
+        // após 5 dias corridos." Não é defeito: a TT espera a data e alguém usa
+        // "Tentar de novo" no painel.
+        const fat = tela.match(/dia de faturamento.{0,80}?(\d+)\s*dias? corridos/i);
+        if (fat) {
+            const volta = new Date(Date.now() + Number(fat[1]) * 86400000).toLocaleDateString('pt-BR');
+            await clicarTexto(page, 'Finalizar', { timeout: 5000 }).catch(() => {});
+            throw new ParadaTT(`Portal: UC ${numeroUC} está no dia de faturamento. Tentar de novo a partir de ${volta}.`);
+        }
+        const aviso = tela.slice(0, 400);
         throw new ParadaTT(`O portal não devolveu o endereço da UC ${numeroUC}. Tela: ${aviso}`);
     }
     r.endereco = conferirEndereco(endereco, tt.uc.address);
