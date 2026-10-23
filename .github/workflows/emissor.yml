@@ -50,6 +50,14 @@ on:
         description: 'Valor máximo de um boleto (R$)'
         required: false
         default: '50000'
+      assinante:
+        description: 'UUID de UM assinante: emite só o ciclo dele (opcional)'
+        required: false
+        default: ''
+      vencimento:
+        description: 'Vencimento AAAA-MM-DD do boleto (exige assinante; futuro, até 60 dias)'
+        required: false
+        default: ''
 
 jobs:
   emitir:
@@ -87,6 +95,12 @@ jobs:
           ARGS="--limite ${{ github.event.inputs.limite || '10' }} --teto ${{ github.event.inputs.teto || '50000' }}"
           if [ "${{ github.event.inputs.simular }}" = "false" ]; then
             ARGS="$ARGS --aplicar"
+          fi
+          if [ -n "${{ github.event.inputs.assinante }}" ]; then
+            ARGS="$ARGS --assinante ${{ github.event.inputs.assinante }}"
+          fi
+          if [ -n "${{ github.event.inputs.vencimento }}" ]; then
+            ARGS="$ARGS --vencimento ${{ github.event.inputs.vencimento }}"
           fi
           echo "node emissor.js $ARGS"
           node emissor.js $ARGS

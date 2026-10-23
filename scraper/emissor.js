@@ -67,8 +67,33 @@ const opcao = (nome) => {
     return i >= 0 ? argv[i + 1] : null;
 };
 const ASSINANTE_ALVO = opcao('--assinante');
+// Vencimento escolhido pelo dono para UM ciclo avulso (ex.: fatura atrasada que
+// precisa sair com data curta). Só vale junto de --assinante: sem o filtro,
+// a data mudaria o boleto de todos os assinantes da fila de uma vez.
+const VENCIMENTO_FORCADO = opcao('--vencimento');
 const LIMITE = Number(opcao('--limite')) || LIMITE_PADRAO;
 const TETO_VALOR = Number(opcao('--teto')) || TETO_VALOR_PADRAO;
+
+if (VENCIMENTO_FORCADO) {
+    if (!ASSINANTE_ALVO) {
+        console.error('--vencimento exige --assinante <uuid>: a data valeria para toda a fila.');
+        process.exit(1);
+    }
+    const dia = new Date(`${VENCIMENTO_FORCADO}T12:00:00Z`);
+    const hoje = new Date();
+    hoje.setUTCHours(12, 0, 0, 0);
+    const limite = new Date(hoje.getTime() + 60 * 86400000);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(VENCIMENTO_FORCADO) || Number.isNaN(dia.getTime())) {
+        console.error('--vencimento precisa estar no formato AAAA-MM-DD.');
+        process.exit(1);
+    }
+    // Data no passado faria a fatura nascer `atrasado` e disparar os três
+    // avisos de cobrança de uma vez (ver pipeline conta -> boleto).
+    if (dia <= hoje || dia > limite) {
+        console.error(`--vencimento ${VENCIMENTO_FORCADO} fora da janela: tem de ser futuro e até 60 dias.`);
+        process.exit(1);
+    }
+}
 
 // ------------------------------------------------------------------ formato
 const moeda = (v) =>
@@ -331,7 +356,8 @@ async function run(execucaoId) {
 
     for (const item of candidatos.slice(0, LIMITE)) {
         const rotulo = `${item.subscriber_name} · ${mesBR(item.ciclo)}${item.retroativo ? ' (RETROATIVO)' : ''}`;
-        const cabecalho = `${rotulo} · ${item.prontas} UC · ${moeda(item.total)} · venc ${dataBR(item.vencimento_sugerido)}`;
+        const vencimento = VENCIMENTO_FORCADO || item.vencimento_sugerido;
+        const cabecalho = `${rotulo} · ${item.prontas} UC · ${moeda(item.total)} · venc ${dataBR(vencimento)}${VENCIMENTO_FORCADO ? ' (definido pelo dono)' : ''}`;
 
         if (Number(item.total) > TETO_VALOR) {
             console.log(`  [barrado] ${cabecalho} — acima do teto de ${moeda(TETO_VALOR)}`);
@@ -354,7 +380,7 @@ async function run(execucaoId) {
             const res = await emitirCobranca(token, {
                 subscriber_id: item.subscriber_id,
                 invoice_ids: item.invoice_ids,
-                dueDate: item.vencimento_sugerido,
+                dueDate: vencimento,
             });
 
             console.log(`  [emitido] ${cabecalho} — ${moeda(soma)} · ${res.payment_id || res.id || 'ok'}`);

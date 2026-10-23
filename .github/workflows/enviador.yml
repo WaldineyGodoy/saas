@@ -81,6 +81,9 @@ jobs:
           fi
           if [ "${{ github.event.inputs.so_whatsapp }}" = "true" ]; then
             ARGS="$ARGS --so-whatsapp --fatura ${{ github.event.inputs.faturas }}"
+          elif [ -n "${{ github.event.inputs.faturas }}" ]; then
+            # Entrega completa (WhatsApp e e-mail) só das faturas listadas.
+            ARGS="$ARGS --fatura ${{ github.event.inputs.faturas }}"
           fi
           echo "node enviador.js $ARGS"
           node enviador.js $ARGS
