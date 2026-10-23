@@ -5,6 +5,7 @@ import { fetchAddressByCep, fetchOfferData } from '../lib/api';
 import { ehPapelInterno, ehPapelAdmin } from '../lib/papeis';
 import { anexarDocumentoAssinante } from '../lib/documentosAssinante';
 import { soDigitosUc, formatarNumeroUc } from '../lib/numeroUc';
+import './ConsumerUnitModal.css';
 import DocumentosAssinante from './subscriber/DocumentosAssinante';
 import { 
     ChevronDown, ChevronUp, History, X, User, Home, Zap, Link, Settings, Key, Eye, EyeOff, 
@@ -30,6 +31,18 @@ import PowerPlantModal from './PowerPlantModal';
 import InvoiceSummaryModal from './InvoiceSummaryModal';
 import TrocaTitularidadePanel from './TrocaTitularidadePanel';
 import { ENERGY_PAID_DIVERGENT, energyStatusMatchesFilter } from '../lib/energyBillStatus';
+
+// Cores do selo de status no cabeçalho. Só quatro estados têm cor própria; os
+// demais (inclusive os que a faixa "Alterar Status" oferece) usam o neutro.
+const STATUS_BADGE = {
+    ativo: { background: '#ecfdf5', color: '#059669', borderColor: '#d1fae5' },
+    em_ativacao: { background: '#eff6ff', color: '#2563eb', borderColor: '#dbeafe' },
+    vinculado: { background: '#e0e7ff', color: '#4f46e5', borderColor: '#c7d2fe' },
+    em_atraso: { background: '#fff1f2', color: '#e11d48', borderColor: '#ffe4e6' },
+};
+const STATUS_BADGE_PADRAO = { background: '#f1f5f9', color: '#475569', borderColor: '#e2e8f0' };
+
+const semAcento = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase();
 
 export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDelete, defaultSection = 'geral' }) {
     // Ao encerrar uma UC, o robo para de buscar conta dela -- mas a
@@ -1325,28 +1338,36 @@ Qualquer dúvida, é só responder esta mensagem.`;
 
     // Find subscriber name for header
     const subscriberName = subscribers.find(s => s.id === formData.subscriber_id)?.name || '';
+    // O cabeçalho mostrava assinante e titular em sequência, e quando são a
+    // mesma pessoa o nome saía duas vezes ("JONSUELO ... - JONSUELO ...").
+    const subtituloUc = [subscriberName, semAcento(subscriberName) === semAcento(formData.titular_conta) ? '' : formData.titular_conta]
+        .filter(Boolean).join(' · ');
+    const badgeStatus = STATUS_BADGE[formData.status] || STATUS_BADGE_PADRAO;
 
     return (
         <div style={{
             position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
             backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000
         }}>
-            <div style={{ background: 'white', padding: '0', borderRadius: '12px', width: '90%', maxWidth: '900px', maxHeight: '95vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <div className="uc-modal__panel" role="dialog" aria-modal="true" aria-labelledby="uc-modal-titulo">
                 {/* Modal Header */}
-                <div style={{
-                    padding: '1.25rem 2rem',
-                    borderBottom: '1px solid #eee',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    background: '#f8fafc'
-                }}>
-                    <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#1e293b' }}>
-                        {consumerUnit?.id ? (
-                            `${formData.numero_uc} - ${subscriberName} - ${formData.titular_conta}`
-                        ) : 'Nova Unidade Consumidora'}
-                    </h3>
-                    <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                <div className="uc-modal__header">
+                    <div className="uc-modal__heading">
+                        <h3 id="uc-modal-titulo" className="uc-modal__title">
+                            {consumerUnit?.id ? `UC ${formatarNumeroUc(formData.numero_uc)}` : 'Nova Unidade Consumidora'}
+                        </h3>
+                        {consumerUnit?.id && subtituloUc && (
+                            <p className="uc-modal__subtitle" title={`${formData.numero_uc} - ${subscriberName} - ${formData.titular_conta}`}>
+                                {subtituloUc}
+                            </p>
+                        )}
+                    </div>
+                    {consumerUnit?.id && (
+                        <span className="uc-modal__badge" style={badgeStatus}>
+                            {statusOptions.find(o => o.value === formData.status)?.label || formData.status}
+                        </span>
+                    )}
+                    <div className="uc-modal__actions">
                         {consumerUnit?.id && (
                             <button
                                 type="button"
@@ -1362,48 +1383,14 @@ Qualquer dúvida, é só responder esta mensagem.`;
                                 <History size={16} /> Histórico
                             </button>
                         )}
-                        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}>
-                            <X size={24} />
+                        <button type="button" onClick={onClose} className="uc-modal__close" aria-label="Fechar">
+                            <X size={22} />
                         </button>
                     </div>
                 </div>
-                <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
-                    <div style={{ 
-                        display: 'flex', 
-                        gap: '1.5rem', 
-                        padding: '0 2rem', 
-                        borderBottom: '1px solid #eee',
-                        background: '#f8fafc',
-                        alignItems: 'center'
-                    }}>
-                        {/* Status Badge */}
-                        {consumerUnit?.id && (
-                            <div style={{
-                                padding: '0.25rem 0.75rem',
-                                borderRadius: '20px',
-                                fontSize: '0.75rem',
-                                fontWeight: 700,
-                                textTransform: 'uppercase',
-                                letterSpacing: '0.025em',
-                                marginRight: '1rem',
-                                background: statusOptions.find(o => o.value === formData.status)?.value === 'ativo' ? '#ecfdf5' : 
-                                           statusOptions.find(o => o.value === formData.status)?.value === 'em_ativacao' ? '#eff6ff' :
-                                           statusOptions.find(o => o.value === formData.status)?.value === 'vinculado' ? '#e0e7ff' :
-                                           statusOptions.find(o => o.value === formData.status)?.value === 'em_atraso' ? '#fff1f2' : '#f1f5f9',
-                                color: statusOptions.find(o => o.value === formData.status)?.value === 'ativo' ? '#059669' : 
-                                       statusOptions.find(o => o.value === formData.status)?.value === 'em_ativacao' ? '#2563eb' :
-                                       statusOptions.find(o => o.value === formData.status)?.value === 'vinculado' ? '#4f46e5' :
-                                       statusOptions.find(o => o.value === formData.status)?.value === 'em_atraso' ? '#e11d48' : '#475569',
-                                border: `1px solid ${
-                                    statusOptions.find(o => o.value === formData.status)?.value === 'ativo' ? '#d1fae5' : 
-                                    statusOptions.find(o => o.value === formData.status)?.value === 'em_ativacao' ? '#dbeafe' :
-                                    statusOptions.find(o => o.value === formData.status)?.value === 'vinculado' ? '#c7d2fe' :
-                                    statusOptions.find(o => o.value === formData.status)?.value === 'em_atraso' ? '#ffe4e6' : '#e2e8f0'
-                                }`
-                            }}>
-                                {statusOptions.find(o => o.value === formData.status)?.label || formData.status}
-                            </div>
-                        )}
+                <div className="uc-modal__scroll">
+                    <div className="uc-modal__tabbar">
+                    <div className="uc-modal__tabs" role="tablist" aria-label="Seções da unidade consumidora">
                         {[
                             { id: 'geral', label: 'Geral', icon: User },
                             { id: 'tecnico', label: 'Técnico', icon: Zap },
@@ -1426,22 +1413,10 @@ Qualquer dúvida, é só responder esta mensagem.`;
                                 <button
                                     key={tab.id}
                                     type="button"
+                                    role="tab"
+                                    aria-selected={isActive}
+                                    className="uc-modal__tab"
                                     onClick={() => setActiveTab(tab.id)}
-                                    style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '0.5rem',
-                                        padding: '1rem 0.5rem',
-                                        border: 'none',
-                                        background: 'none',
-                                        cursor: 'pointer',
-                                        fontSize: '0.9rem',
-                                        fontWeight: 600,
-                                        color: isActive ? 'var(--color-blue)' : '#64748b',
-                                        borderBottom: `2px solid ${isActive ? 'var(--color-blue)' : 'transparent'}`,
-                                        transition: 'all 0.2s',
-                                        marginBottom: '-1px'
-                                    }}
                                 >
                                     <Icon size={18} />
                                     {tab.label}
@@ -1449,21 +1424,11 @@ Qualquer dúvida, é só responder esta mensagem.`;
                             );
                         })}
                     </div>
+                    </div>
 
                     {/* Quick Status Selector Block */}
-                    <div style={{
-                        padding: '1rem 2rem',
-                        background: '#f8fafc',
-                        borderBottom: '1px solid #e2e8f0',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '0.75rem',
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                Alterar Status da UC
-                            </span>
-                        </div>
+                    <div className="uc-modal__status">
+                        <span className="uc-modal__status-label">Alterar Status da UC</span>
                         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                             {statusOptions.map(opt => {
                                 const isSelected = formData.status === opt.value;
@@ -1587,13 +1552,13 @@ Qualquer dúvida, é só responder esta mensagem.`;
                         </div>
                     </div>
 
-                    <div style={{ padding: '2rem', flex: 1 }}>
-                        <form onSubmit={handleSubmit}>
+                    <div className="uc-modal__body">
+                        <form className="uc-modal__form" onSubmit={handleSubmit}>
                             {/* Tab Content: Geral */}
                             {activeTab === 'geral' && (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                                     {!consumerUnit?.id && <PreencherUcPelaConta onLeitura={aplicarContaNaUc} />}
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', alignItems: 'start' }}>
                                         <div style={{ background: '#f8fafc', padding: '1.25rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
                                             <h4 style={{ margin: '0 0 1rem 0', fontSize: '0.9rem', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                                 <Zap size={18} color="var(--color-blue)" /> Identificação da UC
@@ -3329,15 +3294,7 @@ Qualquer dúvida, é só responder esta mensagem.`;
                             )}
 
                             {/* Actions Footer */}
-                            <div style={{ 
-                                display: 'flex', 
-                                justifyContent: 'flex-end', 
-                                gap: '0.8rem', 
-                                marginTop: '3rem', 
-                                paddingTop: '1.5rem', 
-                                borderTop: '1px solid #eee',
-                                alignItems: 'center'
-                            }}>
+                            <div className="uc-modal__footer">
                                 {consumerUnit?.id && onDelete && (
                                     <button 
                                         type="button" 
