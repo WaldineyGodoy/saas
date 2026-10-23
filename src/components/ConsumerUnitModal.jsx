@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { salvarSenhaPortal, semSenha, buscarTarifaReferencia, createAutentiqueDocument, cancelAutentiqueDocument, shortenLink } from '../lib/api';
 import { fetchAddressByCep, fetchOfferData } from '../lib/api';
 import { ehPapelInterno, ehPapelAdmin } from '../lib/papeis';
+import { anexarDocumentoAssinante } from '../lib/documentosAssinante';
 import { soDigitosUc, formatarNumeroUc } from '../lib/numeroUc';
 import DocumentosAssinante from './subscriber/DocumentosAssinante';
 import { 
@@ -45,6 +46,8 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
     const [suppliers, setSuppliers] = useState([]);
     const [usinas, setUsinas] = useState([]);
     const [loading, setLoading] = useState(false);
+    // Arquivo da conta lida no "Preencher pela conta": fica anexado ao assinante ao salvar a UC nova.
+    const [contaArquivo, setContaArquivo] = useState(null);
     const [searchingCep, setSearchingCep] = useState(false);
     const [showHistory, setShowHistory] = useState(false);
     const [showCredentialsModal, setShowCredentialsModal] = useState(false);
@@ -840,7 +843,8 @@ Qualquer dúvida, é só responder esta mensagem.`;
     };
 
     // UC nova: a conta lida preenche o formulário; a equipe confere e salva.
-    const aplicarContaNaUc = async (conta) => {
+    const aplicarContaNaUc = async (conta, arquivo = null) => {
+        setContaArquivo(arquivo);
         const assinante = subscribers.find(s => s.id === formData.subscriber_id) || null;
         const campos = contaParaUc(conta, { assinante, concessionarias: concessionariaOptions.map(o => o.value) });
         if (campos.cep) campos.cep = maskCEP(campos.cep);
@@ -1084,6 +1088,29 @@ Qualquer dúvida, é só responder esta mensagem.`;
                     // O RPC mudou a UC (status, usina_destino_id): devolve a linha atual.
                     const { data: atual } = await supabase.from('consumer_units').select('*').eq('id', result.data.id).maybeSingle();
                     if (atual) result.data = atual;
+                }
+            }
+
+            // A conta lida no upload fica anexada ao assinante, como "conta de
+            // energia" desta UC. O que o upload lê no navegador era descartado, e
+            // a conta é o que prova dia de leitura, titular e ligação depois. A
+            // UC já está salva: falha aqui avisa, e não desfaz o cadastro.
+            if (!consumerUnit?.id && contaArquivo) {
+                if (!result.data.subscriber_id) {
+                    showAlert('UC salva. A conta lida não foi anexada: só UC de assinante guarda a conta de energia.', 'warning');
+                } else if (!ehPapelAdmin(profile?.role)) {
+                    showAlert('UC salva. A conta lida não foi anexada: só administradores anexam documentos.', 'warning');
+                } else {
+                    try {
+                        await anexarDocumentoAssinante(supabase, {
+                            subscriberId: result.data.subscriber_id,
+                            tipo: 'conta_energia',
+                            consumerUnitId: result.data.id,
+                            file: contaArquivo,
+                        });
+                    } catch (e) {
+                        showAlert(`UC salva, mas a conta lida não foi anexada: ${e.message}. Anexe pela aba Documentos do assinante.`, 'warning');
+                    }
                 }
             }
 

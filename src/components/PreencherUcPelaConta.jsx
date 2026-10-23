@@ -6,8 +6,9 @@ import { useUI } from '../contexts/UIContext';
 
 /**
  * Atalho da equipe ao cadastrar UC nova para assinante existente: lê a conta
- * (PDF ou foto) e devolve os dados para o modal preencher o formulário. Não
- * grava nada nem cria lead -- quem salva é o próprio modal, depois de conferir.
+ * (PDF ou foto) e devolve os dados e o arquivo para o modal preencher o
+ * formulário. Não grava nada nem cria lead -- quem salva (e anexa a conta ao
+ * assinante) é o próprio modal, depois de conferir.
  */
 export default function PreencherUcPelaConta({ onLeitura }) {
     const { showAlert } = useUI();
@@ -27,7 +28,8 @@ export default function PreencherUcPelaConta({ onLeitura }) {
         try {
             const leitura = ehPdf ? await parseEnergyBill(arquivo) : await parseEnergyBillImage(arquivo);
             if (!leitura.numeroUc) throw new Error('Não encontrei o número da UC nesta conta.');
-            await onLeitura(contaParaPedido(leitura));
+            // O arquivo vai junto: o modal o anexa ao assinante quando salvar a UC.
+            await onLeitura(contaParaPedido(leitura), arquivo);
         } catch (err) {
             console.error('Leitura da conta na nova UC:', err);
             showAlert(err.message || 'Falha ao ler a conta.', 'error');

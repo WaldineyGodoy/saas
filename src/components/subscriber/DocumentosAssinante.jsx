@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { caminhoDocumento, chaveDocumento, situacaoDocumentos, validarArquivo } from '../../lib/onboarding';
+import { chaveDocumento, situacaoDocumentos } from '../../lib/onboarding';
+import { anexarDocumentoAssinante } from '../../lib/documentosAssinante';
 import PainelDocumentos from './PainelDocumentos';
 
 /**
@@ -66,29 +67,14 @@ export default function DocumentosAssinante({ subscriberId, cpfCnpj, ucs = [], p
         const k = chaveDocumento(item);
         setErrosEnvio(prev => ({ ...prev, [k]: null }));
 
-        const invalido = validarArquivo(file);
-        if (invalido) {
-            setErrosEnvio(prev => ({ ...prev, [k]: invalido }));
-            return;
-        }
-
         setEnviando(k);
         try {
-            const path = caminhoDocumento(subscriberId, item.tipo, crypto.randomUUID(), file.type);
-            const { error: erroUpload } = await supabase.storage
-                .from('documentos-assinante')
-                .upload(path, file, { contentType: file.type, upsert: false });
-            if (erroUpload) throw erroUpload;
-
-            const { error: erroLinha } = await supabase.from('subscriber_documents').insert({
-                subscriber_id: subscriberId,
-                consumer_unit_id: item.consumer_unit_id,
+            await anexarDocumentoAssinante(supabase, {
+                subscriberId,
                 tipo: item.tipo,
-                storage_path: path,
-                mime: file.type,
-                tamanho: file.size,
+                consumerUnitId: item.consumer_unit_id,
+                file,
             });
-            if (erroLinha) throw erroLinha;
 
             await carregar();
         } catch (e) {
