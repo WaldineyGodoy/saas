@@ -1,0 +1,268 @@
+/*
+ * Modal da Unidade Consumidora.
+ *
+ * O conteúdo continua em estilos inline (são centenas de campos); aqui ficam
+ * o que o inline não alcança — hover, foco de teclado, rolagem — e as regras de
+ * estrutura do contêiner, para que o menu de abas e o rodapé não dependam de
+ * cada aba acertar a largura sozinha.
+ */
+
+/* ---- Contêiner ------------------------------------------------------ */
+
+.uc-modal__panel {
+    display: flex;
+    flex-direction: column;
+    width: min(96vw, 1280px);
+    /* Altura mínima fixa em tela alta: o modal não encolhe e cresce a cada aba
+       que se abre, o que fazia o botão Salvar mudar de lugar. */
+    min-height: min(86vh, 820px);
+    max-height: 94vh;
+    overflow: hidden;
+    background: #fff;
+    border-radius: 14px;
+    box-shadow: 0 24px 60px -16px rgba(15, 23, 42, 0.38);
+}
+
+.uc-modal__scroll {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
+}
+
+.uc-modal__scroll::-webkit-scrollbar { width: 10px; height: 10px; }
+.uc-modal__scroll::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border: 3px solid #fff;
+    border-radius: 999px;
+}
+
+/* Item de grade que não pode encolher abaixo do conteúdo estoura a coluna e
+   cria rolagem horizontal. Vale para todas as abas, que montam seus blocos em
+   `display: grid` inline. */
+.uc-modal__panel [style*="grid-template-columns"] > * {
+    min-width: 0;
+}
+
+/* ---- Cabeçalho ------------------------------------------------------ */
+
+.uc-modal__header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.1rem 2rem;
+    background: #fff;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.uc-modal__heading {
+    flex: 1;
+    min-width: 0;
+}
+
+.uc-modal__title {
+    margin: 0;
+    white-space: nowrap;
+    font-size: 1.25rem;
+    font-weight: 700;
+    line-height: 1.25;
+    letter-spacing: -0.01em;
+    color: #0f172a;
+}
+
+.uc-modal__subtitle {
+    margin: 0.2rem 0 0;
+    font-size: 0.9rem;
+    line-height: 1.3;
+    color: #64748b;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.uc-modal__badge {
+    flex-shrink: 0;
+    padding: 0.3rem 0.8rem;
+    border: 1px solid;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.uc-modal__actions {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.uc-modal__close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: #64748b;
+    cursor: pointer;
+    transition: background-color 0.15s, color 0.15s;
+}
+
+.uc-modal__close:hover { background: #f1f5f9; color: #0f172a; }
+
+/* ---- Abas ----------------------------------------------------------- */
+
+/* A moldura fica fixa no topo da rolagem: quem desce por uma aba longa
+   continua vendo onde está e troca de aba sem voltar ao início. A borda de
+   baixo é dela, e não da lista, para o esmaecido da direita não apagar a linha. */
+.uc-modal__tabbar {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    flex-shrink: 0;
+    background: #fff;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+/* Nunca quebra linha: em tela estreita rola na horizontal em vez de espremer
+   ou cortar o rótulo. O esmaecido da borda direita avisa que há mais abas; com
+   todas à vista ele cai em área vazia e não aparece. O recuo da direita deixa
+   a última aba livre dele ao fim da rolagem. */
+.uc-modal__tabs {
+    display: flex;
+    gap: 0.25rem;
+    padding: 0 28px 0 1.5rem;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+}
+
+.uc-modal__tabs::-webkit-scrollbar { display: none; }
+
+.uc-modal__tab {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.95rem 1rem;
+    border: none;
+    border-bottom: 2px solid transparent;
+    background: none;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #64748b;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s, background-color 0.15s;
+}
+
+.uc-modal__tab:hover { background: #f8fafc; color: #0f172a; }
+
+.uc-modal__tab:focus-visible {
+    outline: 2px solid var(--color-blue);
+    outline-offset: -3px;
+    border-radius: 8px;
+}
+
+.uc-modal__tab[aria-selected="true"] {
+    color: var(--color-blue);
+    border-bottom-color: var(--color-blue);
+}
+
+/* ---- Faixa de status ------------------------------------------------ */
+
+.uc-modal__status {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem 1rem;
+    padding: 0.85rem 2rem;
+    background: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.uc-modal__status-label {
+    flex-shrink: 0;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #64748b;
+}
+
+/* ---- Conteúdo e rodapé ---------------------------------------------- */
+
+.uc-modal__body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    padding: 1.75rem 2rem 0;
+}
+
+.uc-modal__form {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 1.75rem;
+}
+
+/* Fica à vista ao rolar uma aba longa; `margin-top: auto` o empurra para o
+   fundo quando a aba é curta. A margem negativa devolve a largura total do
+   painel, que o padding do corpo tirava. */
+.uc-modal__footer {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.8rem;
+    margin: auto -2rem 0;
+    padding: 1rem 2rem;
+    background: #fff;
+    border-top: 1px solid #e2e8f0;
+    box-shadow: 0 -10px 18px -14px rgba(15, 23, 42, 0.25);
+}
+
+/* ---- Telas estreitas ------------------------------------------------ */
+
+/* Os blocos das abas montam suas colunas em `grid` inline; abaixo de 900px duas
+   colunas deixam o número da UC e os campos truncados. Seletores por valor
+   exato (com o `;` final) para não pegar as grades de 3 colunas. */
+@media (max-width: 900px) {
+    .uc-modal__panel [style*="grid-template-columns: 1fr 1fr;"] {
+        grid-template-columns: minmax(0, 1fr) !important;
+    }
+    .uc-modal__panel [style*="grid-template-columns: repeat(5, 1fr);"] {
+        grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    }
+}
+
+@media (max-width: 560px) {
+    .uc-modal__panel [style*="grid-template-columns: repeat(5, 1fr);"],
+    .uc-modal__panel [style*="grid-template-columns: repeat(3, 1fr);"] {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+}
+
+@media (max-width: 720px) {
+    .uc-modal__panel { width: 100vw; max-height: 100vh; min-height: 100vh; border-radius: 0; }
+    /* Título em linha própria; selo e ações descem para a linha de baixo. */
+    .uc-modal__header { flex-wrap: wrap; gap: 0.6rem 0.75rem; padding: 1rem 1.25rem; }
+    .uc-modal__heading { order: 1; flex: 1 1 100%; }
+    .uc-modal__badge { order: 2; }
+    .uc-modal__actions { order: 3; margin-left: auto; }
+    .uc-modal__tabs { padding: 0 28px 0 0.75rem; }
+    .uc-modal__status { padding: 0.85rem 1.25rem; }
+    .uc-modal__body { padding: 1.25rem 1.25rem 0; }
+    .uc-modal__footer { margin: auto -1.25rem 0; padding: 0.9rem 1.25rem; }
+}
