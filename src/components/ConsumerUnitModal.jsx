@@ -2,7 +2,9 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { salvarSenhaPortal, semSenha, buscarTarifaReferencia, createAutentiqueDocument, cancelAutentiqueDocument, shortenLink } from '../lib/api';
 import { fetchAddressByCep, fetchOfferData } from '../lib/api';
-import { ehPapelInterno } from '../lib/papeis';
+import { ehPapelInterno, ehPapelAdmin } from '../lib/papeis';
+import { soDigitosUc, formatarNumeroUc } from '../lib/numeroUc';
+import DocumentosAssinante from './subscriber/DocumentosAssinante';
 import { 
     ChevronDown, ChevronUp, History, X, User, Home, Zap, Link, Settings, Key, Eye, EyeOff, 
     FileSearch, PlusCircle, Upload, MessageSquare, Smartphone, Mail, Paperclip, Send, 
@@ -842,6 +844,7 @@ Qualquer dúvida, é só responder esta mensagem.`;
         const assinante = subscribers.find(s => s.id === formData.subscriber_id) || null;
         const campos = contaParaUc(conta, { assinante, concessionarias: concessionariaOptions.map(o => o.value) });
         if (campos.cep) campos.cep = maskCEP(campos.cep);
+        if (campos.numero_uc) campos.numero_uc = soDigitosUc(campos.numero_uc);
         setFormData(prev => ({ ...prev, ...campos }));
         if (campos.titular_fatura_id) setTitularSearchTerm('');
 
@@ -956,7 +959,7 @@ Qualquer dúvida, é só responder esta mensagem.`;
                 supplier_id: formData.supplier_id || null,
                 usina_id: formData.usina_id || null,
                 status: formData.status,
-                numero_uc: formData.numero_uc,
+                numero_uc: soDigitosUc(formData.numero_uc),
                 titular_conta: formData.titular_conta,
                 titular_fatura_id: formData.titular_fatura_id || null,
                   titular_fornecedor_id: formData.titular_fornecedor_id || null,
@@ -1575,8 +1578,10 @@ Qualquer dúvida, é só responder esta mensagem.`;
                                                         <input
                                                             required
                                                             readOnly={isUcNumberLocked}
-                                                            value={formData.numero_uc}
-                                                            onChange={e => setFormData({ ...formData, numero_uc: e.target.value })}
+                                                            value={formatarNumeroUc(formData.numero_uc)}
+                                                            // Mostra pontuado, guarda só dígitos (lib/numeroUc).
+                                                            onChange={e => setFormData({ ...formData, numero_uc: soDigitosUc(e.target.value) })}
+                                                            inputMode="numeric"
                                                             placeholder="Ex: 7204400277"
                                                             style={{ 
                                                                 width: '100%', 
@@ -1986,6 +1991,34 @@ Qualquer dúvida, é só responder esta mensagem.`;
                                                     )}
                                                 </div>
                                             )}
+                                            {/* Identidade do titular da UG (dono, 23/10/2026). A Solicitação
+                                                de Lista de Compensação (Motivo 6) anexa o RG/CNH de quem é titular
+                                                da conta da UG; é aqui que a equipe e a automação o encontram. Mesmo
+                                                armazenamento dos documentos do assinante (subscriber_documents +
+                                                bucket documentos-assinante), ligado ao titular da fatura da UG. */}
+                                            {formData.tipo_unidade === 'geradora' && consumerUnit?.id && (() => {
+                                                const titularId = formData.titular_fatura_id || formData.subscriber_id;
+                                                const titular = subscribers.find(s => s.id === titularId);
+                                                return (
+                                                    <div style={{ marginTop: '0.6rem', padding: '0.7rem', background: 'white', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+                                                        <div style={{ fontSize: '0.8rem', color: '#475569', fontWeight: 600, marginBottom: '0.5rem' }}>
+                                                            Identidade do titular da UG (RG/CNH){titular ? ` — ${titular.name}` : ''}
+                                                        </div>
+                                                        {titularId ? (
+                                                            <DocumentosAssinante
+                                                                subscriberId={titularId}
+                                                                cpfCnpj={titular?.cpf_cnpj}
+                                                                ucs={[]}
+                                                                podeEnviar={ehPapelAdmin(profile?.role)}
+                                                            />
+                                                        ) : (
+                                                            <p style={{ fontSize: '0.8rem', color: '#b91c1c', margin: 0 }}>
+                                                                Defina o titular da fatura da UG para anexar a identidade.
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })()}
                                         </div>
 </div>
 </div>
