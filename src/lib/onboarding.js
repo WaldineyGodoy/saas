@@ -49,3 +49,32 @@ export async function lerErroFuncao(error) {
     }
     return { status, corpo, mensagem: corpo?.error || error?.message || 'Falha inesperada.' };
 }
+
+const EXTENSOES = { 'application/pdf': 'pdf', 'image/jpeg': 'jpg', 'image/png': 'png' };
+
+/** Extensão a partir do mime, e não do nome do arquivo: o nome é digitado
+ *  por quem envia, o mime é o que o Storage confere contra o bucket. Mesmo
+ *  mapa de `supabase/functions/_shared/onboarding-regras.ts`. */
+export const extensaoDoMime = (mime) => EXTENSOES[mime];
+
+/** `<assinante>/<tipo>/<id>.<ext>` — o mesmo caminho que o envio público
+ *  grava, para o CRM e o assistente não produzirem dois formatos. */
+export const caminhoDocumento = (subscriberId, tipo, id, mime) =>
+    `${subscriberId}/${tipo}/${id}.${extensaoDoMime(mime)}`;
+
+/**
+ * O que a tela do CRM mostra para cada documento obrigatório: já chegou ou
+ * não, e quantos arquivos existem (reenvio soma, não substitui — o histórico
+ * de quem trocou o documento fica no Storage).
+ *
+ * A conta de energia só conta para a UC dela: a de uma UC não cobre a outra,
+ * e é essa confusão que deixava o assinante "completo" com uma UC sem conta.
+ */
+export function situacaoDocumentos({ cpf_cnpj, ucs, docs }) {
+    return documentosObrigatorios({ cpf_cnpj, ucs: ucs || [] }).map((item) => {
+        const quantidade = (docs || []).filter(
+            (d) => d.tipo === item.tipo && (d.consumer_unit_id || null) === item.consumer_unit_id
+        ).length;
+        return { ...item, quantidade, enviado: quantidade > 0 };
+    });
+}

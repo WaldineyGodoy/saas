@@ -8,7 +8,7 @@ import { fetchAddressByCep, fetchCpfCnpjData, createAsaasCharge, manageAsaasCust
 import { getSecurePdfUrl } from '../lib/pdfHelper';
 import { maskCpfCnpj, maskPhone, validateDocument, validatePhone } from '../lib/validators';
 import { ehDiaUtil, proximoDiaUtil, proximaOcorrenciaDoDia } from '../lib/diasUteis';
-import { ehPapelInterno } from '../lib/papeis';
+import { ehPapelInterno, ehPapelAdmin } from '../lib/papeis';
 import { CreditCard, Plus, Trash2, History, User, Home, Zap, X, Eye, EyeOff, Key, DollarSign, Calendar, FileText, CheckCircle, Clock, AlertCircle, Ban, TicketCheck, TicketMinus, Download, Loader2, ArrowLeft, Info, RefreshCw, Send, MessageSquare, Paperclip, MessageCircle, Copy, Pencil, Printer, Share2 } from 'lucide-react';
 import ConsumerUnitModal from './ConsumerUnitModal';
 import ContratoAdesao from './ContratoAdesao';
@@ -20,7 +20,15 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import './InvoicesModal.css';
 
-export default function SubscriberModal({ subscriber, onClose, onSave, onDelete }) {
+export default function SubscriberModal({ subscriber: subscriberProp, onClose, onSave, onDelete }) {
+    // Assinante criado dentro deste modal. Quem abre o modal para criar passa
+    // `subscriber` nulo (ou sem `id`, na conversao de lead); sem este estado, o
+    // modal nao saberia que agora existe um assinante e teria de fechar para o
+    // pai reabrir -- e e depois de salvar que o time anexa os documentos.
+    // Tem prioridade sobre a prop porque ela nao muda: o pai nao e avisado de
+    // qual e o assinante aberto.
+    const [recemCriado, setRecemCriado] = useState(null);
+    const subscriber = recemCriado || subscriberProp;
     const { showAlert, showConfirm } = useUI();
     const { branding } = useBranding();
     const { profile } = useAuth();
@@ -1855,6 +1863,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             if (asaasId) dataToSave.asaas_customer_id = asaasId;
             if (dataToSave.originator_id === '') dataToSave.originator_id = null;
 
+            const eraCriacao = !subscriber?.id;
             let result;
             if (subscriber?.id) {
                 result = await supabase
@@ -1922,7 +1931,21 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             }
 
             onSave(result.data);
-            onClose();
+
+            if (eraCriacao) {
+                // Criacao nao fecha o modal: o proximo passo e anexar os
+                // documentos, que so fazem sentido com o assinante gravado.
+                // A linha devolvida pelo INSERT e anterior a gravacao da senha
+                // do portal, entao o marcador de "senha guardada" vai a mao --
+                // senao a tela diria que nao ha senha logo apos salva-la.
+                setRecemCriado({
+                    ...result.data,
+                    portal_password_secret_id: result.data.portal_password_secret_id || (senhaPortal ? 'guardada' : null),
+                });
+                setActiveTab('documentos');
+            } else {
+                onClose();
+            }
         } catch (error) {
             showAlert('Erro ao salvar assinante: ' + error.message, 'error');
         } finally {
@@ -3442,7 +3465,12 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                         Documentos do Assinante
                                     </h4>
                                     {subscriber?.id ? (
-                                        <DocumentosAssinante subscriberId={subscriber.id} />
+                                        <DocumentosAssinante
+                                            subscriberId={subscriber.id}
+                                            cpfCnpj={formData.cpf_cnpj}
+                                            ucs={consumerUnits}
+                                            podeEnviar={ehPapelAdmin(profile?.role)}
+                                        />
                                     ) : (
                                         <p style={{ color: '#64748b', fontSize: '0.9rem', margin: 0 }}>
                                             Salve os dados cadastrais do assinante primeiro para visualizar ou anexar documentos.

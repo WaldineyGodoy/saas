@@ -13,3 +13,14 @@
 export const PAPEIS_INTERNOS = ['super_admin', 'admin', 'manager', 'coordinator'];
 
 export const ehPapelInterno = (papel) => PAPEIS_INTERNOS.includes(papel);
+
+/**
+ * Quem escreve em `subscriber_documents` e no bucket `documentos-assinante`.
+ *
+ * É a lista de `check_user_is_admin()` no banco — uma a menos que a interna:
+ * `coordinator` lê, mas não envia documento. Manter sincronizado: se a tela
+ * oferecer o botão a quem o banco recusa, o clique volta com erro de RLS.
+ */
+export const PAPEIS_ADMIN = ['super_admin', 'admin', 'manager'];
+
+export const ehPapelAdmin = (papel) => PAPEIS_ADMIN.includes(papel);
