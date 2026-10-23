@@ -1624,6 +1624,24 @@ Qualquer dúvida, é só responder esta mensagem.`;
                                                         style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none' }}
                                                     />
                                                 </div>
+                                                <div style={{ gridColumn: '1 / -1' }}>
+                                                    <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Plano de Serviço *</label>
+                                                    <select
+                                                        value={formData.plano_assinatura_id}
+                                                        onChange={e => setFormData({ ...formData, plano_assinatura_id: e.target.value })}
+                                                        style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none' }}
+                                                    >
+                                                        <option value="">Selecione o plano de assinatura (obrigatório para a UC em operação)</option>
+                                                        {/* Só versão ativa; o plano atual da UC aparece mesmo se for versão antiga. */}
+                                                        {planos
+                                                            .filter(p => p.status === 'ativo' || p.id === formData.plano_assinatura_id)
+                                                            .map(p => (
+                                                                <option key={p.id} value={p.id}>
+                                                                    {p.nome}{p.status === 'somente_contratos' ? ' (versão antiga — somente contratos)' : ''}
+                                                                </option>
+                                                            ))}
+                                                    </select>
+                                                </div>
                                             </div>
                                         </div>
 
@@ -2656,26 +2674,6 @@ Qualquer dúvida, é só responder esta mensagem.`;
                                                     >
                                                         {vencimentoOptions.map(d => <option key={d} value={d}>{d}</option>)}
                                                     </select>
-                                                </div>
-                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem' }}>
-                                                    <div>
-                                                        <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Plano de Serviço *</label>
-                                                        <select
-                                                            value={formData.plano_assinatura_id}
-                                                            onChange={e => setFormData({ ...formData, plano_assinatura_id: e.target.value })}
-                                                            style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none' }}
-                                                        >
-                                                            <option value="">Selecione o plano de assinatura (obrigatório para a UC em operação)</option>
-                                                            {/* Só versão ativa; o plano atual da UC aparece mesmo se for versão antiga. */}
-                                                            {planos
-                                                                .filter(p => p.status === 'ativo' || p.id === formData.plano_assinatura_id)
-                                                                .map(p => (
-                                                                    <option key={p.id} value={p.id}>
-                                                                        {p.nome}{p.status === 'somente_contratos' ? ' (versão antiga — somente contratos)' : ''}
-                                                                    </option>
-                                                                ))}
-                                                        </select>
-                                                    </div>
                                                 </div>
                                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                                                     <div>
