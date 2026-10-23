@@ -266,6 +266,9 @@ Spec: `docs/superpowers/specs/2026-10-20-bel-recepcao-design.md`.
 - **Mudar a abertura:** o bloco `v_comum` é o mesmo em `scripts/deskcomm/bel_recepcao.sql` e `base_investidor.sql`; altere os dois e rode `bel_recepcao.sql` (idempotente).
 - **Dado pendente:** a tabela `"Concessionaria"` está incompleta (ex.: São Gonçalo do Amarante/RN não está; RN tem 143 de 167 municípios). Cidade fora da tabela cai em "lista de espera".
 
+- **Já tem energia solar (23/10/2026):** regra no bloco comum dos 8 agentes — quem já tem energia solar instalada não pode aderir (restrição técnica interna); o agente agradece o retorno e encerra, sem explicar o produto nem passar a humano. Aplicada por `scripts/deskcomm/regra_ja_tem_solar.sql` (cirúrgico sobre a versão publicada).
+- **Atenção:** os prompts publicados têm seções de persona (Bel, Bia, Leo, Davi…) que os scripts `base_*.sql`, `bel_recepcao.sql` e `seed_funis_agentes.sql` não têm. Rodar um desses scripts de novo sobrescreve a persona. Para ajustar regra em produção, prefira alteração cirúrgica como a de `regra_ja_tem_solar.sql`.
+
 ### 8.3 Base do Agente Assinatura — no ar desde 20/10/2026
 
 Spec: `docs/superpowers/specs/2026-10-20-base-agente-assinatura-design.md`.
