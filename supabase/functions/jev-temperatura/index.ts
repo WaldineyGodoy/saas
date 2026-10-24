@@ -84,12 +84,12 @@ const PERGUNTA_PROXIMO_PASSO = {
 
 /** Descricoes das categorias para o choice (as chaves sao os slugs da ponte). */
 const DESCRICAO_CATEGORIA: Record<string, string> = {
-    energia_assinatura: 'Quer desconto na conta de luz sem instalar nada (energia solar por assinatura, geracao compartilhada)',
+    energia_assinatura: 'Quer desconto na conta de luz sem instalar nada (energia solar por assinatura, geracao compartilhada), pessoa fisica ou empresa (CNPJ)',
     usina_investimento: 'Quer investir em usina solar para ter renda (comprar usina, participar de UFV)',
     eletropostos: 'Quer carregar carro eletrico, ter um eletroposto, ou ser parceiro de recarga',
     cotas: 'Quer comprar cotas de uma usina / fracao de geracao',
     arrendamento: 'Tem terreno ou area e quer arrendar para usina solar',
-    comercializadora: 'Empresa grande, mercado livre de energia, gestao ou comercializacao de energia',
+    comercializadora: 'Dono de usina ou de projeto de geracao que quer fornecer ou vender energia para a B2W (nao e quem quer desconto na conta de luz: isso e assinatura)',
     vagas: 'Quer alugar ou oferecer vaga de estacionamento (com ou sem recarga)',
 }
 
