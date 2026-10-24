@@ -164,17 +164,22 @@ Idempotente: pula se a versão já tem a regra e as duas fontes.
   que a Bel não cita "20%" nem "15%" em resposta a "quanto é o desconto?".
 - Teste real com anúncio: quando chegar o próximo lead do Connect. Registrado como pendente, não como feito.
 
-## 9. Dados que dependem do dono (a base só os usa depois de confirmados)
+## 9. Dados informados pelo dono (24/10/2026)
+
+| Dado | Resposta | Como a base usa |
+|---|---|---|
+| Telefone, e-mail, Instagram, Facebook, LinkedIn | Publicados no site | Canais oficiais |
+| CNPJ | "Informe que está no contrato" | A Bel não cita número de CNPJ; diz que ele consta no contrato |
+| Endereço | Olavo Lacerda Montenegro, 467, Parque das Nações, Parnamirim/RN (o dono escreveu "Larcerda"; grafia da avenida corrigida) | Endereço da sede. Sem CEP informado |
+| Horário do atendimento humano | 9h às 17h (fuso da organização: America/Recife, igual a Brasília). Dias da semana não informados | A Bel diz o horário sem afirmar dias; fora dele, registra e a equipe retorna |
+| "Como sei que é real?" | Oferecer **videochamada com o time comercial** | A Bel oferece a videochamada e passa para humano agendar (motivo "videochamada"); ela não agenda sozinha |
+| Nome dos anúncios | "Criamos depois" | Entram com nome provisório (§4.1) |
+
+Ainda sem resposta, e por isso fora do texto da base (a Bel responde "vou confirmar com a equipe"):
 
 | Dado | Situação |
 |---|---|
-| Telefone, e-mail, Instagram, Facebook, LinkedIn | Publicados no site |
-| Razão social e CNPJ da B2W e da Associação | Não constam no site nem no cadastro |
-| Endereço e cidade-sede | Não constam |
-| Horário do atendimento humano (fuso da organização: America/Recife) | Não consta |
-| Como o cliente confirma que é real, além do site | A definir com o dono |
-| Nome, público e promessa de cada anúncio, inclusive o Connect | A preencher na tabela `anuncios` |
+| Razão social | Não informada |
+| Dias de atendimento | Não informados |
 | Regras do Plano Connect (15%) | Projeto da base da Assinatura |
 | Cobertura real em estados | Divergência site × plano vigente; resolver antes de qualquer afirmação |
-
-Item sem confirmação não entra no texto da base: a pergunta correspondente responde "vou confirmar com a equipe".
