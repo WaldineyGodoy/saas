@@ -1,6 +1,6 @@
 # Base de conhecimento da Bel (Recepção) e rastreio do anúncio de origem
 
-Data: 24/10/2026 · Estado: desenho aprovado em 24/10/2026, ainda não implementado
+Data: 24/10/2026 · Estado: implementado em 24/10/2026 (ver `playbook/DESKCOMM.md` §8.5)
 Contexto: `playbook/DESKCOMM.md` (§8.1 Investidor, §8.2 Bel, §8.3 Assinatura, §8.4 Cotas). Quinta base por agente.
 Spec do comportamento da Bel: `2026-10-20-bel-recepcao-design.md` (a conduta já está no roteiro; esta base guarda **fatos**).
 
@@ -22,7 +22,7 @@ Fora do escopo (cada um com o próprio brainstorming):
   texto fala da conta Cosern) e "Faturamento alto pede eficiência energética" (1 contato; "até 20% para CNPJ").
   O terceiro anúncio, Plano Connect 15%, entrou no ar depois.
 - **A Bel só vê `source = meta_ads`.** `crm_get_contact` devolve `source`, `tags` e datas, mas não `source_metadata`,
-  onde ficam `ad_id`, `ad_title`, `ad_body`, `ad_platform`, `ad_source_url`.
+  onde ficam `ad_id`, `ad_title`, `ad_body`, `ad_source_url` e `ad_raw`. `ad_platform` vale sempre `meta_ads`; a plataforma real (Instagram ou Facebook) está em `ad_raw.sourceApp`, que às vezes vem vazio, e então se deduz pela URL do anúncio (`instagram.com` ou `fb.me`).
 - **O dado do anúncio chega depois da criação do contato**, numa atualização de `source_metadata` (nos 10 contatos,
   `created_at` ≠ `updated_at`). Um gatilho só de INSERT não pegaria.
 - **O anúncio de CNPJ atrai muita pessoa física.** A Bel não pode presumir CNPJ.
@@ -64,7 +64,7 @@ Tabela `ponte_deskcomm.anuncios`:
 | `publico` | `pf`, `pj`, `ambos` ou `nao_definido` |
 | `categoria` | FK para `categorias(slug)`; padrão `energia_assinatura` |
 | `promessa` | frase curta do que o anúncio diz, escrita pelo dono |
-| `ativo`, `visto_primeiro_em`, `visto_ultimo_em` | controle |
+| `ativo`, `visto_primeiro_em` | controle. O último contato sai do relatório (§4.4): gravar `visto_ultimo_em` a cada contato dispararia a regeração do documento |
 
 Escrita só pela service role, como as demais tabelas da ponte.
 
@@ -81,11 +81,7 @@ mesmo contato (quem clica em outro anúncio depois) é acrescentada; a mais rece
 
 ### 4.3 Lead
 
-A função que cria o lead a partir do card (`fn_card_para_lead`) passa a copiar o anúncio do contato para
-`leads.qualificacao.deskcomm.anuncio = {ad_id, slug, titulo, plataforma, em}`, preservando o que já existe em
-`qualificacao.deskcomm` (origem, indicado_por, lista_espera). A ordem dos eventos varia (o contato pode ganhar o
-anúncio antes ou depois do lead), por isso o §4.2 item 3 e esta cópia existem juntos. Mexer na função é **estender**
-a definição vigente em produção, não substituí-la: ela mudou desde a primeira migration.
+O anúncio vai para `leads.qualificacao.deskcomm.anuncio = {ad_id, slug, titulo, plataforma, em}`, preservando o que já existe em `qualificacao.deskcomm` (origem, indicado_por, lista_espera). **Desvio do desenho inicial:** em vez de estender `fn_card_para_lead` (3,5 mil caracteres, com gatilhos de outras sessões em volta), a cópia roda por um gatilho pequeno em `ponte_deskcomm.vinculos` (`AFTER INSERT`) e pelo gatilho do §4.2 item 3. Cobre as duas ordens (anúncio antes ou depois do lead) sem alterar nenhuma função existente. Verificado em transação desfeita, inclusive recriando o vínculo de um lead que já tinha o anúncio.
 
 ### 4.4 Relatório
 
@@ -96,6 +92,10 @@ Acesso só por SQL com a service role; é o que o dono usa para avaliar o Connec
 
 Os 10 contatos já existentes passam pelo mesmo caminho (um `UPDATE` sem mudança de dados dispara o gatilho de
 atualização), verificado antes em transação desfeita.
+
+### 4.6 Percentual de anúncio fora da base
+
+A trava de promessas do Deskcomm aceita como provado qualquer número que apareça numa fonte. O título do primeiro anúncio ("…até 20% menor") entrou no documento e fez a Bel poder citar "20%". O `montarEntradas` troca qualquer percentual do nome, do título e da promessa por `[percentual do anúncio]` (teste em `tests/deskcomm-base.test.ts`). Conferido na versão ativa dos trechos indexados: zero percentuais nas duas fontes.
 
 ## 5. Peça B — a base
 
@@ -145,7 +145,7 @@ Idempotente: pula se a versão já tem a regra e as duas fontes.
 
 | # | Peça | Arquivo |
 |---|---|---|
-| 1 | Tabela, gatilho, extensão de `fn_card_para_lead`, relatório | `supabase/migrations/20261024a_anuncios_ponte.sql` |
+| 1 | Tabela, gatilhos (contato, vínculo, renomeação, regeração), RPC de leitura, relatório | `supabase/migrations/20261024a_anuncios_ponte.sql` |
 | 2 | Perguntas e respostas | `supabase/functions/deskcomm-base/bases/recepcao-faq.ts` |
 | 3 | Documento gerado, categoria `triagem`, duas fontes novas | `deskcomm-base/montar.ts`, `deskcomm-base/index.ts` |
 | 4 | Gatilho que regera o documento quando `anuncios` muda | mesma migration |

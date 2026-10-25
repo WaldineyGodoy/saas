@@ -287,3 +287,13 @@ Spec: `docs/superpowers/specs/2026-10-20-base-agente-cotas-design.md`.
 - **Regras:** 10 cotas por usina; preço da cota = preço da usina ÷ 10 + 10% (estruturação da associação e gestão do repasse); projeção de 1,8% a 2% ao mês, a depender do mês de geração; somente à vista; associação dos cotistas já formada, título de propriedade da cota; revenda com a ajuda da B2W.
 - **Ofertar uma usina em cotas:** na aba Contratos da usina, marcar "À venda", "Modelo de venda" = Cotas e manter "Cotas vendidas (de 10)" atualizado. O documento se atualiza pelo gatilho de usinas.
 - **Pendências (projetos seguintes):** cadastro de cotistas por usina (substitui o contador manual) e divisão do repasse por cota no motor de split (hoje a associação divide fora do sistema).
+
+### 8.5 Bel (Recepção): base de conhecimento e anúncio de origem (24/10/2026)
+
+Spec `docs/superpowers/specs/2026-10-24-base-bel-recepcao-design.md`, plano `docs/superpowers/plans/2026-10-24-base-bel-recepcao.md`.
+
+- **Rastreio do anúncio.** O contato que vem da Meta ganha a etiqueta `anuncio:<slug>`, e o anúncio é registrado em `ponte_deskcomm.anuncios` (nome provisório `anuncio-<8 últimos dígitos>`; o dono troca o slug, o nome, o público e a promessa, e contatos e leads acompanham). O lead da B2W recebe o anúncio em `qualificacao.deskcomm.anuncio`. Relatório: `select * from ponte_deskcomm.v_leads_por_anuncio;`.
+- **Base da Bel.** Duas fontes: "Recepção — Perguntas e respostas" (18 itens, `bases/recepcao-faq.ts`) e "Recepção: entradas" (documento gerado da tabela de anúncios, regerado quando ela muda). Só fatos: sem percentual, preço nem lista de estados. Percentual de título de anúncio é mascarado.
+- **Bel v7.** Regra de anúncio no roteiro: abre pelo que o anúncio ofereceu, pergunta pessoa física ou empresa, nunca repete percentual do anúncio como garantia, oferece videochamada com o time comercial e passa para humano com o motivo `videochamada`.
+- **Dados do dono:** CNPJ "consta no contrato"; endereço Olavo Lacerda Montenegro, 467, Parque das Nações, Parnamirim/RN; equipe das 9h às 17h (Brasília), dias não informados.
+- **Pendências:** nome, público e promessa de cada anúncio (inclusive o Plano Connect 15%); regras do Connect na base da Assinatura; razão social; dias de atendimento; cobertura real em estados (o site lista 8, o sistema tem plano só para a Cosern). `base_assinatura.sql` e `base_investidor.sql` ainda citam a Gestora como destino de repasse. Teste real com anúncio: quando chegar o próximo lead.
