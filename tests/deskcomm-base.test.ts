@@ -1,11 +1,12 @@
 import { describe, it, expect } from 'vitest'
 import {
-    montarUsinasAVenda, montarCoberturaAssinatura, montarUsinasCotas, lerFaq, hashTexto,
-    SEM_USINAS, SEM_COBERTURA, SEM_COTAS, type UsinaAVenda, type CoberturaAssinatura, type UsinaCotas,
+    montarUsinasAVenda, montarCoberturaAssinatura, montarUsinasCotas, montarEntradas, lerFaq, hashTexto,
+    SEM_USINAS, SEM_COBERTURA, SEM_COTAS, SEM_ANUNCIOS, type UsinaAVenda, type CoberturaAssinatura, type UsinaCotas, type AnuncioEntrada,
 } from '../supabase/functions/deskcomm-base/montar'
 import { FAQ_INVESTIDOR } from '../supabase/functions/deskcomm-base/bases/investidor-faq'
 import { FAQ_ASSINATURA } from '../supabase/functions/deskcomm-base/bases/assinatura-faq'
 import { FAQ_COTAS } from '../supabase/functions/deskcomm-base/bases/cotas-faq'
+import { FAQ_RECEPCAO } from '../supabase/functions/deskcomm-base/bases/recepcao-faq'
 
 const santaMaria: UsinaAVenda = {
     nome: 'UFV Santa Maria', cidade: 'Santa Maria', uf: 'RN', status: 'pre_operacao',
@@ -197,5 +198,112 @@ describe('FAQ de Cotas', () => {
     it('o FAQ do Investidor não cita mais R$ 35.000', () => {
         expect(FAQ_INVESTIDOR).not.toContain('35.000')
         expect(FAQ_INVESTIDOR).toContain('dividido por 10, mais 10%')
+    })
+})
+
+describe('FAQ da Recepção', () => {
+    it('tem as 18 perguntas aprovadas, com os fatos do dono e sem número comercial', () => {
+        const pares = lerFaq(FAQ_RECEPCAO)
+        expect(pares).toHaveLength(18)
+        const tudo = FAQ_RECEPCAO.toLowerCase()
+
+        // fatos informados pelo dono em 24/10/2026
+        expect(tudo).toContain('olavo lacerda montenegro, 467')
+        expect(tudo).toContain('parnamirim')
+        expect(tudo).toContain('das 9h às 17h')
+        expect(tudo).toContain('videochamada')
+        expect(tudo).toContain('o cnpj consta no contrato')
+        expect(tudo).toContain('(31) 99536-7744')
+        expect(tudo).toContain('contato@b2wenergia.com.br')
+        expect(tudo).toContain('donos de usina')
+
+        // nenhum percentual, preço ou lista de estados do site
+        expect(tudo).not.toMatch(/\d\s?%/)
+        expect(tudo).not.toContain('r$')
+        for (const estado of ['mato grosso', 'paraná', 'goiás', 'são paulo', 'rio de janeiro']) {
+            expect(tudo, estado).not.toContain(estado)
+        }
+
+        // a Gestora não é mercado livre, e nada de promessa
+        expect(tudo).not.toContain('mercado livre')
+        for (const proibido of ['garantid', 'risco zero', 'fidelidade de', 'multa']) {
+            expect(tudo, proibido).not.toContain(proibido)
+        }
+    })
+
+    it('a primeira resposta é a mesma "Quem é a B2W Energia" do FAQ do Investidor', () => {
+        const rec = lerFaq(FAQ_RECEPCAO)[0]
+        const inv = lerFaq(FAQ_INVESTIDOR).find((p) => p.question.startsWith('Quem é a B2W Energia'))
+        expect(inv).toBeDefined()
+        expect(rec.question).toBe(inv!.question)
+        expect(rec.answer).toBe(inv!.answer)
+    })
+})
+
+const anuncioPf: AnuncioEntrada = {
+    slug: 'conta-pf-20', nome: 'Conta de luz PF', titulo: 'Sua conta de luz até 20% menor',
+    plataformas: ['instagram', 'facebook'], publico: 'ambos', categoria_nome: 'Energia por Assinatura',
+    promessa: 'Desconto na conta de luz, sem obra',
+}
+
+describe('montarEntradas', () => {
+    it('monta o bloco de cada anúncio com etiqueta, plataformas, público, produto, título e promessa', () => {
+        const md = montarEntradas([anuncioPf])
+        expect(md).toContain('# Recepção: entradas')
+        expect(md).toContain('### anuncio:conta-pf-20 — Conta de luz PF')
+        expect(md).toContain('Plataformas: instagram, facebook · Público: pessoa física e empresa · Produto: Energia por Assinatura')
+        expect(md).toContain('Título do anúncio: Sua conta de luz até [percentual do anúncio] menor')
+        expect(md).toContain('Promessa do anúncio: Desconto na conta de luz, sem obra')
+    })
+
+    it('público não definido manda perguntar; campos vazios saem como "a confirmar"', () => {
+        const md = montarEntradas([{ ...anuncioPf, publico: 'nao_definido', promessa: null, titulo: null, plataformas: [] }])
+        expect(md).toContain('Público: não definido (pergunte se é pessoa física ou empresa)')
+        expect(md).toContain('Promessa do anúncio: a confirmar com o consultor')
+        expect(md).toContain('Título do anúncio: a confirmar com o consultor')
+        expect(md).toContain('Plataformas: a confirmar')
+    })
+
+    it('sem anúncio devolve o aviso e mantém as seções fixas', () => {
+        const md = montarEntradas([])
+        expect(md).toContain(SEM_ANUNCIOS)
+        for (const secao of ['## Site (botões e simulador)', '## Indicação e origem', '## App do assinante', '## Cliente já cadastrado', '## Mensagem genérica de anúncio']) {
+            expect(md, secao).toContain(secao)
+        }
+    })
+
+    it('regras de abertura: pergunta pessoa física ou empresa e nunca repete percentual do anúncio como garantia', () => {
+        const md = montarEntradas([anuncioPf])
+        expect(md).toContain('nunca presuma, mesmo no anúncio de CNPJ')
+        expect(md).toContain('nunca repita um percentual do anúncio como valor garantido')
+        expect(md).toContain('vale a última')
+    })
+
+    it('traz as mensagens prontas do site e o motivo de humano do app', () => {
+        const md = montarEntradas([])
+        expect(md).toContain('Olá! Vim pelo site da B2W Energia e quero assinar e começar a economizar.')
+        expect(md).toContain('Olá! Tenho uma dúvida sobre a energia solar por assinatura da B2W Energia.')
+        expect(md).toContain('Olá! Simulei no site da B2W Energia:')
+        expect(md).toContain('motivo "cadastro no app"')
+        expect(md).toContain('(cód. IND-xxxxxxxx)')
+    })
+
+    it('mascara percentual no nome, no título e na promessa (a trava de promessas aceitaria o número como provado)', () => {
+        const md = montarEntradas([{
+            ...anuncioPf, nome: 'Conta até 20% menor', titulo: 'Plano Connect de 15%', promessa: 'Desconto de 12,5 % na conta',
+        }])
+        expect(md).not.toMatch(/\d\s?%/)
+        expect(md).toContain('### anuncio:conta-pf-20 — Conta até [percentual do anúncio] menor')
+        expect(md).toContain('Título do anúncio: Plano Connect de [percentual do anúncio]')
+        expect(md).toContain('Promessa do anúncio: Desconto de [percentual do anúncio] na conta')
+    })
+
+    it('ordena como veio e não carrega campo fora do contrato', () => {
+        const comLixo = { ...anuncioPf, ad_id: '120250561928760337', cnpj: '12.345.678/0001-90', corpo: 'texto longo' } as AnuncioEntrada
+        const md = montarEntradas([comLixo, { ...anuncioPf, slug: 'cnpj-20', nome: 'Faturamento alto' }])
+        expect(md).not.toContain('120250561928760337')
+        expect(md).not.toContain('12.345.678')
+        expect(md).not.toContain('texto longo')
+        expect(md.indexOf('anuncio:conta-pf-20')).toBeLessThan(md.indexOf('anuncio:cnpj-20'))
     })
 })
