@@ -53,6 +53,9 @@ WhatsApp ──► Deskcomm
 
 ### 2.1 Categorias: tag B2W ↔ funil ↔ agente
 
+> **Correção de 24/10/2026 — linha Gestora / Comercializadora.** A primeira versão deste desenho descrevia a linha como "empresa que quer mercado livre ou gestão de energia", o que estava errado. Ela atende **fornecedores**, donos de usina que querem fornecer energia à B2W. Quem quer desconto na conta de luz, **pessoa física ou empresa (CNPJ)**, é sempre **Energia por Assinatura**. Foram corrigidos o roteiro da Helena (v6), a linha da Bel (v6), as intenções do roteador e a função `jev-temperatura`. A intenção de Assinatura passou a incluir exemplos de empresa.
+
+
 As tags já existem no CRM (`src/lib/tagHelpers.js`). Cada categoria vira um **funil de produto** no Deskcomm, com **um agente**.
 
 | Categoria (slug da ponte) | Tag no CRM B2W | Funil no Deskcomm | Agente |
@@ -129,7 +132,7 @@ Todos seguem a mesma regra: **números (desconto, preço, retorno, potência) s�
 | **Eletroposto** | Recarga e parceria de eletropostos (marca VOLT) | é motorista ou dono de local? endereço, tipo de estabelecimento, fluxo de veículos | Reunião / Proposta |
 | **Cotas** | Venda de cotas de usina | quantidade ou valor, objetivo (abater conta ou renda) | Simulação → Contrato |
 | **Arrendamento** | Captar áreas para usina | localização (cidade/coordenada), tamanho (ha), distância da rede, documentação do imóvel | Reunião agendada |
-| **Mercado Livre** | Gestão e comercialização para empresas | CNPJ, demanda contratada, consumo mensal, distribuidora, se já está no mercado livre | Reunião agendada |
+| **Mercado Livre** (Helena) | **Fornecedores:** donos de usina que querem fornecer energia à B2W (não atende assinante) | responsável e CNPJ, local e distribuidora, fonte e potência, situação da usina e da conexão, energia a fornecer | Reunião agendada |
 | **Vagas** | Locação de vagas de estacionamento | quer alugar ou oferecer? local, quantidade, com ou sem recarga | Proposta |
 
 ### 4.1 Intenções do roteador (descrição + exemplos)
@@ -143,7 +146,7 @@ Cada intenção aponta para o agente e para o funil/etapa "Novo contato" do prod
 | Eletropostos | Recarga de carro elétrico / parceria | "onde carrego meu carro elétrico?", "quero colocar um carregador no meu posto", "parceria de eletroposto" |
 | Cotas | Comprar fração de usina | "quero comprar cotas", "dá pra ter uma parte de uma usina?" |
 | Áreas de Arrendamento | Arrendar terreno | "tenho um terreno e quero arrendar", "vocês alugam área para usina?" |
-| Gestora / Comercializadora | Mercado livre, gestão de energia | "sou empresa e quero ir pro mercado livre", "gestão de energia para indústria" |
+| Gestora / Comercializadora | Dono de usina que quer fornecer energia à B2W | "tenho uma usina e quero vender energia", "vocês compram energia de usinas?" |
 | Locação de Vagas | Alugar vaga | "quero alugar uma vaga", "tenho vagas para locar" |
 
 Fallback do roteador: **Bel**, que segura o card na Recepção até a intenção ficar clara.

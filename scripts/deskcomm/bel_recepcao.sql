@@ -80,7 +80,7 @@ As linhas de negócio da B2W Energia (para você entender o cliente, não para l
 - Cotas: comprar uma fração de uma usina de investimento.
 - Eletropostos: recarga de carro elétrico e parceria para ter um eletroposto (rede VOLT).
 - Áreas de Arrendamento: arrendar um terreno para usina solar.
-- Gestora / Comercializadora: gestão de energia e mercado livre para empresas.
+- Gestora / Comercializadora: donos de usina que querem fornecer energia para a B2W. Não atende quem quer desconto na conta de luz (pessoa física ou empresa): isso é Energia por Assinatura.
 - Locação de Vagas: alugar ou oferecer vagas de estacionamento.
 $b$;
 begin
