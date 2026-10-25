@@ -28,7 +28,7 @@ export const FAQ_GESTORA = `## Pergunta: Como funciona a parceria com a B2W para
 ## Resposta: É a parcela da tarifa de uso do sistema de distribuição que a distribuidora cobra sobre a energia compensada de geração distribuída. Ela é descontada no cálculo do repasse e muda conforme as regras do setor elétrico. O valor aplicável à sua usina é confirmado pelo especialista.
 
 ## Pergunta: Quando o dono recebe o repasse?
-## Resposta: O repasse é mensal, em dia fixo definido no plano. O dia do repasse e o dia de corte estão no documento "Gestora: planos vigentes".
+## Resposta: O repasse é mensal, em dia fixo definido no plano. O dia de corte é a data de fechamento da apuração das faturas pagas pelo assinante que entram no repasse daquele mês. O dia do repasse e o dia de corte estão no documento "Gestora: planos vigentes".
 
 ## Pergunta: Há custo de setup, carência ou prazo para começar a receber?
 ## Resposta: Sim, é importante saber antes de seguir. Há custo de setup, uma carência antes de os repasses começarem e um prazo até o primeiro repasse. Os valores vigentes estão no documento "Gestora: planos vigentes"; o que ainda não estiver definido ali, o especialista confirma. Eu nunca estimo esses valores.

@@ -16,7 +16,7 @@ A Helena (v6) atende donos de usina que querem fornecer energia à B2W, mas **n�
 | Potência | Sem limite. |
 | Projeto no papel | A Helena pergunta se o dono quer falar com o **Leo (Usinas de Investimento)**, que tem uma proposta especial para construir. |
 | Repasse | Sobre a energia **compensada**, não a injetada. São grandezas distintas, não complementares. Valor por kWh = tarifa da concessionária − desconto do assinante − Fio B − taxa de gestão. Pago todo dia 10. |
-| Números | Vêm do plano de usina do CRM (`planos_usina`, status `ativo`): `percentual_recorrente` = taxa de gestão, `desconto_pct` = desconto do assinante, `dia_repasse`, `dia_corte`. Hoje: 12%, 15%, dia 10, corte dia 5. |
+| Números | Vêm do plano de usina do CRM (`planos_usina`, status `ativo`): `percentual_recorrente` = taxa de gestão, `desconto_pct` = desconto do assinante, `dia_repasse`, `dia_corte` (data de fechamento da apuração das faturas pagas pelo assinante que entram no repasse do dia 10). Hoje: 12%, 15%, dia 10, corte dia 5. |
 | Quando citar | Só se o fornecedor perguntar, com a ressalva de que o especialista confirma. Dia de repasse e de corte podem ser citados. |
 | Setup, carência, prazo | Assunto obrigatório antes de passar ao especialista. Os dados **ainda não existem**: campos novos no plano, preenchidos depois pelo dono. |
 | Passagem | Com os dados básicos da usina (responsável, empresa/CNPJ, cidade/UF, distribuidora, potência, situação, contato). |
@@ -59,7 +59,6 @@ Alteração cirúrgica sobre a versão publicada (a persona fica):
 ## 7. Pendências com o dono
 
 - Preencher no plano: setup (% e base), carência, prazo até o primeiro repasse.
-- Confirmar o significado de `dia_corte` (hoje só citado, sem explicação).
 - **O Leo precisa ter a proposta de construção na base dele.** A base do Investidor (saas#38) não trata de construir a usina para o dono; o Leo hoje não saberia detalhar a "proposta especial".
 - Não estão definidas a política para outras fontes que não solar além de encerrar, nem documentos exigidos.
 - O plano `Plano Usina - Recorrencia Corretor` (ativo) tem plano de recompensas; o dono escolheu que ele seja o citado.

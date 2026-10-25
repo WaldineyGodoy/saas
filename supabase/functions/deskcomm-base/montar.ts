@@ -280,7 +280,7 @@ function blocoPlanoGestora(p: PlanoGestora): string {
         `- Taxa de gestão: ${percentual(p.taxa_gestao_pct)}`,
         `- Desconto do assinante: ${percentual(p.desconto_assinante_pct)}`,
         `- Repasse ao dono: todo dia ${p.dia_repasse}`,
-        `- Dia de corte: dia ${p.dia_corte}`,
+        `- Dia de corte: dia ${p.dia_corte} (fechamento da apuração das faturas pagas pelo assinante que entram no repasse do dia ${p.dia_repasse})`,
         `- Custo de setup: ${setup}`,
         `- Carência: ${p.carencia_dias != null ? dias(p.carencia_dias) : `ainda não definida; ${ESPECIALISTA_CONFIRMA}`}`,
         `- Prazo até o primeiro repasse: ${p.prazo_primeiro_repasse_dias != null ? dias(p.prazo_primeiro_repasse_dias) : `ainda não definido; ${ESPECIALISTA_CONFIRMA}`}`,

@@ -366,7 +366,7 @@ describe('montarGestoraPlanos', () => {
         expect(md).toContain('Taxa de gestão: 12%')
         expect(md).toContain('Desconto do assinante: 15%')
         expect(md).toContain('Repasse ao dono: todo dia 10')
-        expect(md).toContain('Dia de corte: dia 5')
+        expect(md).toContain('Dia de corte: dia 5 (fechamento da apuração das faturas pagas pelo assinante que entram no repasse do dia 10)')
     })
 
     it('campos novos vazios saem como a confirmar e não inventam número', () => {
