@@ -9,13 +9,14 @@ import { FAQ_ASSINATURA } from './bases/assinatura-faq.ts'
 import { FAQ_COTAS } from './bases/cotas-faq.ts'
 import { FAQ_RECEPCAO } from './bases/recepcao-faq.ts'
 import { FAQ_GESTORA } from './bases/gestora-faq.ts'
+import { FAQ_CONSTRUCAO } from './bases/construcao-faq.ts'
 
 /**
  * Bases de conhecimento dos agentes Investidor, Assinatura e Cotas no DeskcommCRM
  * (specs docs/superpowers/specs/2026-10-19-base-agente-investidor-design.md §5.3,
  * 2026-10-20-base-agente-assinatura-design.md §6 e 2026-10-20-base-agente-cotas-design.md §5.2).
  *
- * Mantem dez fontes do Deskcomm, cada uma ligada ao agente da sua categoria:
+ * Mantem onze fontes do Deskcomm, cada uma ligada ao agente da sua categoria:
  *   - "Investidor — Perguntas e respostas" (faq): texto de bases/investidor-faq.ts.
  *   - "Usinas à venda" (documento): gerado das usinas com a_venda = true.
  *   - "Assinatura — Perguntas e respostas" (faq): texto de bases/assinatura-faq.ts.
@@ -31,6 +32,8 @@ import { FAQ_GESTORA } from './bases/gestora-faq.ts'
  *   - "Gestora — Perguntas e respostas" (faq): texto de bases/gestora-faq.ts (Helena).
  *   - "Gestora: planos vigentes" (documento): gerado de planos_usina ativos por
  *     ponte_deskcomm_gestora_planos (spec 2026-10-25-base-helena-gestora-design.md §5).
+ *   - "Construção — Perguntas e respostas" (faq): texto de bases/construcao-faq.ts (Leo; spec
+ *     2026-10-25-base-leo-construcao-design.md §4).
  * Mudar um FAQ = editar o arquivo e publicar esta funcao de novo.
  *
  * Por que grava direto nas tabelas do Deskcomm: cadastrar material la exige
@@ -64,7 +67,7 @@ type Supa = ReturnType<typeof createClient>
 
 interface Conteudo {
     chave: 'investidor_faq' | 'usinas_a_venda' | 'assinatura_faq' | 'assinatura_cobertura' | 'cotas_faq' | 'usinas_cotas'
-        | 'recepcao_faq' | 'recepcao_entradas' | 'gestora_faq' | 'gestora_planos'
+        | 'recepcao_faq' | 'recepcao_entradas' | 'gestora_faq' | 'gestora_planos' | 'construcao_faq'
     categoria: 'usina_investimento' | 'energia_assinatura' | 'cotas' | 'triagem' | 'comercializadora'
     tipo: 'faq' | 'documento'
     nome: string
@@ -95,7 +98,8 @@ async function montarConteudos(supabase: Supa): Promise<Conteudo[]> {
     const paresCot = lerFaq(FAQ_COTAS)
     const paresRec = lerFaq(FAQ_RECEPCAO)
     const paresGes = lerFaq(FAQ_GESTORA)
-    if (paresInv.length === 0 || paresAss.length === 0 || paresCot.length === 0 || paresRec.length === 0 || paresGes.length === 0) throw new Error('faq_vazio')
+    const paresCon = lerFaq(FAQ_CONSTRUCAO)
+    if (paresInv.length === 0 || paresAss.length === 0 || paresCot.length === 0 || paresRec.length === 0 || paresGes.length === 0 || paresCon.length === 0) throw new Error('faq_vazio')
 
     const { data: usinas, error } = await supabase.rpc('ponte_deskcomm_usinas_a_venda')
     if (error) throw new Error(`usinas_ilegiveis: ${error.message}`)
@@ -119,6 +123,7 @@ async function montarConteudos(supabase: Supa): Promise<Conteudo[]> {
         { chave: 'recepcao_entradas', categoria: 'triagem', tipo: 'documento', nome: 'Recepção: entradas', texto: montarEntradas((entradas ?? []) as AnuncioEntrada[]) },
         { chave: 'gestora_faq', categoria: 'comercializadora', tipo: 'faq', nome: 'Gestora — Perguntas e respostas', texto: JSON.stringify(paresGes), pares: paresGes },
         { chave: 'gestora_planos', categoria: 'comercializadora', tipo: 'documento', nome: 'Gestora: planos vigentes', texto: montarGestoraPlanos((planosGes ?? []) as PlanoGestora[]) },
+        { chave: 'construcao_faq', categoria: 'usina_investimento', tipo: 'faq', nome: 'Construção — Perguntas e respostas', texto: JSON.stringify(paresCon), pares: paresCon },
     ]
 }
 
