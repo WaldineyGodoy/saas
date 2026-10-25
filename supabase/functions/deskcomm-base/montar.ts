@@ -169,6 +169,82 @@ export function montarUsinasCotas(usinas: UsinaCotas[]): string {
     return '# Usinas com cotas\n\n' + ordenadas.map(blocoCotas).join('\n\n') + '\n'
 }
 
+export interface AnuncioEntrada {
+    slug: string
+    nome: string
+    titulo: string | null
+    plataformas: string[]
+    publico: string
+    categoria_nome: string
+    promessa: string | null
+}
+
+export const SEM_ANUNCIOS =
+    'Nenhum anúncio identificado até agora. Contato de anúncio sem etiqueta: veja "Contato da Meta sem etiqueta de anúncio".\n'
+
+const PUBLICO: Record<string, string> = {
+    pf: 'pessoa física',
+    pj: 'empresa (CNPJ)',
+    ambos: 'pessoa física e empresa',
+}
+const PUBLICO_INDEFINIDO = 'não definido (pergunte se é pessoa física ou empresa)'
+
+function blocoAnuncio(a: AnuncioEntrada): string {
+    const plataformas = a.plataformas.length > 0 ? a.plataformas.join(', ') : 'a confirmar'
+    return [
+        `### anuncio:${a.slug} — ${a.nome}`,
+        `Plataformas: ${plataformas} · Público: ${PUBLICO[a.publico] ?? PUBLICO_INDEFINIDO} · Produto: ${a.categoria_nome}`,
+        `Título do anúncio: ${a.titulo?.trim() || A_CONFIRMAR}`,
+        `Promessa do anúncio: ${a.promessa?.trim() || A_CONFIRMAR}`,
+    ].join('\n')
+}
+
+const ABERTURA_ANUNCIO =
+    'Com a etiqueta, abra falando do que o anúncio ofereceu e não pergunte o que a pessoa procura. ' +
+    'Confirme se é pessoa física ou empresa: nunca presuma, mesmo no anúncio de CNPJ. ' +
+    'A promessa do anúncio não é garantia: nunca repita um percentual do anúncio como valor garantido; ' +
+    'o percentual do cliente sai da simulação. Se o contato tiver mais de uma etiqueta de anúncio, vale a última.'
+
+const ENTRADAS_FIXAS = `## Contato da Meta sem etiqueta de anúncio
+Contato com origem meta_ads e sem etiqueta anuncio:… é interesse em desconto na conta de luz (Energia por Assinatura). Pergunte se é pessoa física ou empresa.
+
+## Mensagem genérica de anúncio
+"Olá! Posso ter mais informações sobre isso?" vem do botão do anúncio e não diz o produto. Use a etiqueta do anúncio; sem etiqueta, siga a regra acima.
+
+## Site (botões e simulador)
+Mensagens prontas dos botões do site b2wenergia.com.br. Todas são de Energia por Assinatura:
+- "Olá! Vim pelo site da B2W Energia e quero assinar e começar a economizar." — quer assinar.
+- "Olá! Quero assinar a energia solar da B2W Energia e começar a economizar." — quer assinar.
+- "Olá! Tenho uma dúvida sobre a energia solar por assinatura da B2W Energia." — tem dúvida.
+- "Olá! Vim pelo site da B2W Energia." — botão flutuante, sem intenção clara; o mais provável é Energia por Assinatura.
+Mensagem do simulador: "Olá! Simulei no site da B2W Energia: <distribuidora>, <consumo> kWh/mês, economia estimada de R$ <valor> por mês. Quero assinar." Ela já traz distribuidora e consumo: grave o consumo (consumo_kwh) e não pergunte de novo. A economia é estimativa do simulador; a confirmação sai da simulação do atendimento.
+
+## Indicação e origem
+O texto pronto do site pode terminar com um código. (cód. IND-xxxxxxxx) é indicação de um assinante ou originador; (cód. IG), (cód. GG) e (cód. FB) são Instagram, Google e Facebook. Se a origem ou o indicador já estiver gravado, não pergunte de novo.
+
+## App do assinante
+Quem diz que não conseguiu se cadastrar pelo link do app: passe para humano (crm_request_human_handoff) com o motivo "cadastro no app".
+
+## Cliente já cadastrado
+Se b2w_identificar_contato disser cliente_ativo, abra como cliente, sem dizer qual produto ele tem. Fatura, boleto, contrato, repasse ou app: humano, motivo "suporte".
+`
+
+/** Documento "Recepção: entradas". Anúncios na ordem recebida; o resto é texto fixo. */
+export function montarEntradas(anuncios: AnuncioEntrada[]): string {
+    const secaoAnuncios = anuncios.length === 0 ? SEM_ANUNCIOS : anuncios.map(blocoAnuncio).join('\n\n') + '\n'
+    return [
+        '# Recepção: entradas',
+        '',
+        'Como cada porta de entrada chega à Recepção e como a Bel abre a conversa.',
+        '',
+        '## Anúncios da Meta (etiqueta anuncio:… no contato)',
+        ABERTURA_ANUNCIO,
+        '',
+        secaoAnuncios,
+        ENTRADAS_FIXAS,
+    ].join('\n')
+}
+
 /**
  * Le o FAQ no formato que a tela do Deskcomm aceita:
  *   ## Pergunta: ...
