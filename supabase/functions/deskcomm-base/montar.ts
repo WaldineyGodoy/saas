@@ -189,13 +189,20 @@ const PUBLICO: Record<string, string> = {
 }
 const PUBLICO_INDEFINIDO = 'não definido (pergunte se é pessoa física ou empresa)'
 
+/**
+ * Percentual de anuncio nao entra na base: a trava de promessas do Deskcomm aceita como
+ * provado qualquer numero que apareca numa fonte, e "ate 20%" no titulo faria a Bel
+ * repeti-lo como valor garantido. O percentual do cliente sai da simulacao.
+ */
+const semPercentual = (t: string) => t.replace(/\d+(?:[.,]\d+)?\s?%/g, '[percentual do anúncio]')
+
 function blocoAnuncio(a: AnuncioEntrada): string {
     const plataformas = a.plataformas.length > 0 ? a.plataformas.join(', ') : 'a confirmar'
     return [
-        `### anuncio:${a.slug} — ${a.nome}`,
+        `### anuncio:${a.slug} — ${semPercentual(a.nome)}`,
         `Plataformas: ${plataformas} · Público: ${PUBLICO[a.publico] ?? PUBLICO_INDEFINIDO} · Produto: ${a.categoria_nome}`,
-        `Título do anúncio: ${a.titulo?.trim() || A_CONFIRMAR}`,
-        `Promessa do anúncio: ${a.promessa?.trim() || A_CONFIRMAR}`,
+        `Título do anúncio: ${semPercentual(a.titulo?.trim() || A_CONFIRMAR)}`,
+        `Promessa do anúncio: ${semPercentual(a.promessa?.trim() || A_CONFIRMAR)}`,
     ].join('\n')
 }
 

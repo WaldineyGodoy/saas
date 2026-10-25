@@ -252,7 +252,7 @@ describe('montarEntradas', () => {
         expect(md).toContain('# Recepção: entradas')
         expect(md).toContain('### anuncio:conta-pf-20 — Conta de luz PF')
         expect(md).toContain('Plataformas: instagram, facebook · Público: pessoa física e empresa · Produto: Energia por Assinatura')
-        expect(md).toContain('Título do anúncio: Sua conta de luz até 20% menor')
+        expect(md).toContain('Título do anúncio: Sua conta de luz até [percentual do anúncio] menor')
         expect(md).toContain('Promessa do anúncio: Desconto na conta de luz, sem obra')
     })
 
@@ -286,6 +286,16 @@ describe('montarEntradas', () => {
         expect(md).toContain('Olá! Simulei no site da B2W Energia:')
         expect(md).toContain('motivo "cadastro no app"')
         expect(md).toContain('(cód. IND-xxxxxxxx)')
+    })
+
+    it('mascara percentual no nome, no título e na promessa (a trava de promessas aceitaria o número como provado)', () => {
+        const md = montarEntradas([{
+            ...anuncioPf, nome: 'Conta até 20% menor', titulo: 'Plano Connect de 15%', promessa: 'Desconto de 12,5 % na conta',
+        }])
+        expect(md).not.toMatch(/\d\s?%/)
+        expect(md).toContain('### anuncio:conta-pf-20 — Conta até [percentual do anúncio] menor')
+        expect(md).toContain('Título do anúncio: Plano Connect de [percentual do anúncio]')
+        expect(md).toContain('Promessa do anúncio: Desconto de [percentual do anúncio] na conta')
     })
 
     it('ordena como veio e não carrega campo fora do contrato', () => {
