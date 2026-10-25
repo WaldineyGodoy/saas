@@ -312,3 +312,13 @@ Spec `docs/superpowers/specs/2026-10-25-base-helena-gestora-design.md`, plano `d
 - **Helena v7** (`scripts/deskcomm/base_helena.sql`, cirúrgico: persona preservada). Só cita taxa e desconto se o fornecedor perguntar. Passa ao especialista com os dados básicos. Intenções do roteador: a da Helena fala de usina solar em operação/construção; a do Leo inclui projeto de usina ainda no papel.
 - **Não afirma:** taxa de recuperação, retenção na rescisão, multas, valor do Fio B, documentos, prazo de implantação, exclusividade.
 - **Pendências:** preencher setup, carência e prazo no plano; **o Leo precisa ter a proposta de construção na base dele**; teste real com um fornecedor.
+
+### 8.7 Leo (Usinas de Investimento): construção sob medida (25/10/2026)
+
+Spec `docs/superpowers/specs/2026-10-25-base-leo-construcao-design.md`. Complementa a base do Investidor (§8.1), que só trata da **compra**.
+
+- **Para quem.** Dono de projeto de usina solar no papel que a Helena (§8.6) encaminha, e quem quer construir a própria usina. O Leo apresenta as duas opções: construir com a B2W, que cuida de tudo (projeto, homologação, obra e conexão) e a usina continua sendo do dono, ou comprar uma usina da B2W já em construção ("Usinas à venda").
+- **Vantagens que destaca:** experiência comprovada; a usina já nasce com assinantes e gestão da B2W; acompanhamento da obra pelo app do investidor e custos iniciais (seguro e manutenção inclusos no primeiro ano, contador da abertura por conta da B2W). As garantias ficam na base do Investidor.
+- **Custo da obra:** nenhum valor. O orçamento depende do projeto e é do consultor. O requisito é ter recursos para a obra (à vista, parcelado ou financiamento); terreno e projeto, o consultor avalia caso a caso.
+- **Fonte nova:** "Construção — Perguntas e respostas" (9 itens, `bases/construcao-faq.ts`); os únicos números são cópia literal da base do Investidor. **Leo v7** (`scripts/deskcomm/base_leo_construcao.sql`, cirúrgico): regra antes do bloco "Desvios", passa ao consultor com o motivo `construção sob medida`.
+- **Pendências:** valor de referência de obra (se o dono quiser que o Leo cite algum), documentos exigidos, teste real da passagem Helena → Leo.

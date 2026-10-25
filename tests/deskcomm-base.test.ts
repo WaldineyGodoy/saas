@@ -8,6 +8,7 @@ import { FAQ_ASSINATURA } from '../supabase/functions/deskcomm-base/bases/assina
 import { FAQ_COTAS } from '../supabase/functions/deskcomm-base/bases/cotas-faq'
 import { FAQ_RECEPCAO } from '../supabase/functions/deskcomm-base/bases/recepcao-faq'
 import { FAQ_GESTORA } from '../supabase/functions/deskcomm-base/bases/gestora-faq'
+import { FAQ_CONSTRUCAO } from '../supabase/functions/deskcomm-base/bases/construcao-faq'
 
 const santaMaria: UsinaAVenda = {
     nome: 'UFV Santa Maria', cidade: 'Santa Maria', uf: 'RN', status: 'pre_operacao',
@@ -406,5 +407,52 @@ describe('montarGestoraPlanos', () => {
         const md = montarGestoraPlanos([comLixo])
         expect(md).not.toMatch(/recupera|retenç|multa/i)
         expect(md).not.toContain('8%')
+    })
+})
+
+describe('FAQ de Construção sob medida (Leo)', () => {
+    const pares = lerFaq(FAQ_CONSTRUCAO)
+
+    it('tem perguntas no formato da tela', () => {
+        expect(pares.length).toBeGreaterThanOrEqual(9)
+    })
+
+    it('só repete números que já estão na base do Investidor e nunca cita valor de obra', () => {
+        const permitidos = new Set(['2', '8', '10', '90', '1', '000'])
+        const numeros = FAQ_CONSTRUCAO.replace(/B2W/g, '').match(/\d+/g) ?? []
+        for (const n of numeros) expect(permitidos.has(n), n).toBe(true)
+        expect(FAQ_CONSTRUCAO).not.toMatch(/R\$|kWp|por cento|retorno de/i)
+    })
+
+    it('a B2W cuida de tudo e a usina continua sendo do dono', () => {
+        const r = pares.find((p) => /pode construir/i.test(p.question))!.answer
+        expect(r).toContain('projeto, homologação, obra e conexão')
+        expect(r).toContain('continua sendo sua')
+    })
+
+    it('destaca experiência, assinantes e gestão desde o início, acompanhamento e custos iniciais', () => {
+        const r = pares.find((p) => /vantagens/i.test(p.question))!.answer
+        expect(r).toContain('8 anos')
+        expect(r).toContain('já nasce com assinantes')
+        expect(r).toContain('app do investidor')
+        expect(r).toContain('seguro e manutenção')
+        expect(r).toContain('contador')
+    })
+
+    it('apresenta as duas opções: construir a sua ou comprar uma da B2W em construção', () => {
+        const r = pares.find((p) => /construir a minha ou comprar/i.test(p.question))!.answer
+        expect(r).toContain('Usinas à venda')
+        expect(r).toContain('em construção')
+    })
+
+    it('custo da obra é orçamento do consultor e o requisito é ter recursos para a obra', () => {
+        expect(pares.find((p) => /quanto custa/i.test(p.question))!.answer).toContain('orçamento depende do projeto')
+        const req = pares.find((p) => /preciso ter/i.test(p.question))!.answer
+        expect(req).toContain('recursos para a obra')
+        expect(req).toContain('caso a caso')
+    })
+
+    it('não promete retorno, nem usa palavras proibidas ao Leo', () => {
+        expect(FAQ_CONSTRUCAO).not.toMatch(/garantido|risco zero|blindado|100% seguro|rescis|multa|matrícula/i)
     })
 })
