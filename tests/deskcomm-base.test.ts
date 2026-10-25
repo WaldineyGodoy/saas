@@ -1,12 +1,13 @@
 import { describe, it, expect } from 'vitest'
 import {
-    montarUsinasAVenda, montarCoberturaAssinatura, montarUsinasCotas, montarEntradas, lerFaq, hashTexto,
-    SEM_USINAS, SEM_COBERTURA, SEM_COTAS, SEM_ANUNCIOS, type UsinaAVenda, type CoberturaAssinatura, type UsinaCotas, type AnuncioEntrada,
+    montarUsinasAVenda, montarCoberturaAssinatura, montarUsinasCotas, montarEntradas, montarGestoraPlanos, lerFaq, hashTexto,
+    SEM_USINAS, SEM_COBERTURA, SEM_COTAS, SEM_ANUNCIOS, SEM_PLANOS_GESTORA, type PlanoGestora, type UsinaAVenda, type CoberturaAssinatura, type UsinaCotas, type AnuncioEntrada,
 } from '../supabase/functions/deskcomm-base/montar'
 import { FAQ_INVESTIDOR } from '../supabase/functions/deskcomm-base/bases/investidor-faq'
 import { FAQ_ASSINATURA } from '../supabase/functions/deskcomm-base/bases/assinatura-faq'
 import { FAQ_COTAS } from '../supabase/functions/deskcomm-base/bases/cotas-faq'
 import { FAQ_RECEPCAO } from '../supabase/functions/deskcomm-base/bases/recepcao-faq'
+import { FAQ_GESTORA } from '../supabase/functions/deskcomm-base/bases/gestora-faq'
 
 const santaMaria: UsinaAVenda = {
     nome: 'UFV Santa Maria', cidade: 'Santa Maria', uf: 'RN', status: 'pre_operacao',
@@ -305,5 +306,105 @@ describe('montarEntradas', () => {
         expect(md).not.toContain('12.345.678')
         expect(md).not.toContain('texto longo')
         expect(md.indexOf('anuncio:conta-pf-20')).toBeLessThan(md.indexOf('anuncio:cnpj-20'))
+    })
+})
+
+describe('FAQ da Gestora (Helena)', () => {
+    const pares = lerFaq(FAQ_GESTORA)
+
+    it('tem perguntas no formato da tela e nenhum número (percentual, valor ou dia vêm do documento do plano)', () => {
+        expect(pares.length).toBeGreaterThanOrEqual(12)
+        expect(FAQ_GESTORA.replace(/B2W/g, '')).not.toMatch(/\d/)
+    })
+
+    it('explica compensada e injetada como grandezas distintas, sem dizer que se complementam', () => {
+        const r = pares.find((p) => /sobre qual energia/i.test(p.question))!.answer
+        expect(r).toContain('compensada')
+        expect(r).toContain('injetada')
+        expect(r).toContain('grandezas diferentes')
+        expect(r).not.toMatch(/complement|o restante|o que sobra/i)
+    })
+
+    it('traz a fórmula do repasse e o limite a solar operando ou em construção', () => {
+        const todo = pares.map((p) => p.answer).join(' ')
+        expect(todo).toContain('a tarifa da concessionária, menos o desconto dado ao assinante, menos o Fio B, menos a taxa de gestão')
+        expect(todo).toContain('Usinas solares, de qualquer potência')
+        expect(todo).toContain('operando ou em construção com prazo de entrega')
+    })
+
+    it('projeto no papel oferece o Leo, de Usinas de Investimento', () => {
+        const r = pares.find((p) => /no papel/i.test(p.question))!.answer
+        expect(r).toContain('Usinas de Investimento')
+        expect(r).toContain('Leo')
+        expect(r).toContain('proposta especial para construir')
+    })
+
+    it('setup, carência e prazo são tratados como assunto obrigatório e nunca estimados', () => {
+        const r = pares.find((p) => /setup/i.test(p.question))!.answer
+        expect(r).toContain('custo de setup')
+        expect(r).toContain('carência')
+        expect(r).toContain('primeiro repasse')
+        expect(r).toContain('nunca estimo')
+    })
+
+    it('não afirma o que é do especialista: nada de multa, retenção, recuperação ou exclusividade', () => {
+        expect(FAQ_GESTORA).not.toMatch(/multa|retenção|recuperação|exclusividade|mercado livre/i)
+    })
+})
+
+const planoAtivo: PlanoGestora = {
+    nome: 'Plano Usina - Recorrencia Corretor', taxa_gestao_pct: 12, desconto_assinante_pct: 15,
+    dia_corte: 5, dia_repasse: 10, setup_pct: null, setup_base: null,
+    carencia_dias: null, prazo_primeiro_repasse_dias: null,
+}
+
+describe('montarGestoraPlanos', () => {
+    it('monta o plano vigente com taxa de gestão, desconto, dia de repasse e dia de corte', () => {
+        const md = montarGestoraPlanos([planoAtivo])
+        expect(md).toContain('# Gestora: planos vigentes')
+        expect(md).toContain('## Plano Usina - Recorrencia Corretor')
+        expect(md).toContain('Taxa de gestão: 12%')
+        expect(md).toContain('Desconto do assinante: 15%')
+        expect(md).toContain('Repasse ao dono: todo dia 10')
+        expect(md).toContain('Dia de corte: dia 5 (fechamento da apuração das faturas pagas pelo assinante que entram no repasse do dia 10)')
+    })
+
+    it('campos novos vazios saem como a confirmar e não inventam número', () => {
+        const md = montarGestoraPlanos([planoAtivo])
+        expect(md).toContain('Custo de setup: existe, mas o valor ainda não está definido; o especialista confirma')
+        expect(md).toContain('Carência: ainda não definida; o especialista confirma')
+        expect(md).toContain('Prazo até o primeiro repasse: ainda não definido; o especialista confirma')
+    })
+
+    it('com os campos novos preenchidos, cita setup (com a base), carência e prazo', () => {
+        const md = montarGestoraPlanos([{
+            ...planoAtivo, setup_pct: 3.5, setup_base: 'o valor do projeto', carencia_dias: 60, prazo_primeiro_repasse_dias: 90,
+        }])
+        expect(md).toContain('Custo de setup: 3,5% sobre o valor do projeto')
+        expect(md).toContain('Carência: 60 dias')
+        expect(md).toContain('Prazo até o primeiro repasse: 90 dias')
+    })
+
+    it('setup em percentual sem a base de cálculo não é citado como número', () => {
+        const md = montarGestoraPlanos([{ ...planoAtivo, setup_pct: 3, setup_base: null }])
+        expect(md).not.toContain('3%')
+        expect(md).toContain('Custo de setup: existe, mas o valor ainda não está definido')
+    })
+
+    it('regra de uso: só cita taxa e desconto se perguntarem, com a ressalva do especialista', () => {
+        const md = montarGestoraPlanos([planoAtivo])
+        expect(md).toContain('só cite a taxa de gestão e o desconto se o fornecedor perguntar')
+        expect(md).toContain('o especialista confirma')
+    })
+
+    it('sem plano ativo devolve o aviso', () => {
+        expect(montarGestoraPlanos([])).toContain(SEM_PLANOS_GESTORA)
+    })
+
+    it('não carrega campo fora do contrato (taxa de recuperação, retenção, multas)', () => {
+        const comLixo = { ...planoAtivo, taxa_recuperacao_pct: 8, retencao_rescisao_pct: 10, multa_atraso_mes_pct: 2 } as PlanoGestora
+        const md = montarGestoraPlanos([comLixo])
+        expect(md).not.toMatch(/recupera|retenç|multa/i)
+        expect(md).not.toContain('8%')
     })
 })

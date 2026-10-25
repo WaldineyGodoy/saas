@@ -300,3 +300,15 @@ Spec `docs/superpowers/specs/2026-10-24-base-bel-recepcao-design.md`, plano `doc
 - **Bel v7.** Regra de anúncio no roteiro: abre pelo que o anúncio ofereceu, pergunta pessoa física ou empresa, nunca repete percentual do anúncio como garantia, oferece videochamada com o time comercial e passa para humano com o motivo `videochamada`.
 - **Dados do dono:** CNPJ "consta no contrato"; endereço Olavo Lacerda Montenegro, 467, Parque das Nações, Parnamirim/RN; equipe das 9h às 17h (Brasília), dias não informados.
 - **Pendências:** nome, público e promessa de cada anúncio (inclusive o Plano Connect 15%); regras do Connect na base da Assinatura; razão social; dias de atendimento; cobertura real em estados (o site lista 8, o sistema tem plano só para a Cosern). `base_assinatura.sql` e `base_investidor.sql` ainda citam a Gestora como destino de repasse. Teste real com anúncio: quando chegar o próximo lead.
+
+### 8.6 Helena (Gestora / Comercializadora): base de conhecimento (25/10/2026)
+
+Spec `docs/superpowers/specs/2026-10-25-base-helena-gestora-design.md`, plano `docs/superpowers/plans/2026-10-25-base-helena-gestora.md`. Antes dela, a Helena não tinha base nenhuma.
+
+- **Modelo.** A B2W gerencia a usina em nome do dono (operação, rateio, cobrança dos assinantes) e repassa o resultado. Não compra nem aluga a energia. Só usina solar, de qualquer potência, operando ou em construção com prazo de entrega. Projeto no papel: a Helena oferece o **Leo** (Usinas de Investimento), com a proposta especial de construção.
+- **Repasse.** Sobre a energia **compensada** (não a injetada; são grandezas distintas). Valor por kWh = tarifa da concessionária − desconto do assinante − Fio B − taxa de gestão. Pago todo dia 10.
+- **Duas fontes.** "Gestora — Perguntas e respostas" (14 itens, `bases/gestora-faq.ts`, nenhum número) e "Gestora: planos vigentes" (documento gerado de `planos_usina` com status `ativo`: taxa de gestão = `percentual_recorrente`, desconto do assinante = `desconto_pct`, `dia_repasse`, `dia_corte`, e os campos novos). `dia_corte` = fechamento da apuração das faturas pagas pelo assinante que entram no repasse do dia 10. Mudou o plano no CRM, o documento se regera (`trg_ponte_planos_usina_base`).
+- **Campos novos no plano:** `setup_pct` + `setup_base`, `carencia_dias`, `prazo_primeiro_repasse_dias`. Vazios até o dono definir; a Helena diz "o especialista confirma" e nunca estima. O setup só vira número com `setup_pct` e `setup_base` preenchidos. Essas colunas não estão na trava `fn_planos_usina_trava`.
+- **Helena v7** (`scripts/deskcomm/base_helena.sql`, cirúrgico: persona preservada). Só cita taxa e desconto se o fornecedor perguntar. Passa ao especialista com os dados básicos. Intenções do roteador: a da Helena fala de usina solar em operação/construção; a do Leo inclui projeto de usina ainda no papel.
+- **Não afirma:** taxa de recuperação, retenção na rescisão, multas, valor do Fio B, documentos, prazo de implantação, exclusividade.
+- **Pendências:** preencher setup, carência e prazo no plano; **o Leo precisa ter a proposta de construção na base dele**; teste real com um fornecedor.

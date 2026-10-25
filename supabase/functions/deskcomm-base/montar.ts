@@ -252,6 +252,52 @@ export function montarEntradas(anuncios: AnuncioEntrada[]): string {
     ].join('\n')
 }
 
+export interface PlanoGestora {
+    nome: string
+    taxa_gestao_pct: number
+    desconto_assinante_pct: number
+    dia_corte: number
+    dia_repasse: number
+    setup_pct: number | null
+    setup_base: string | null
+    carencia_dias: number | null
+    prazo_primeiro_repasse_dias: number | null
+}
+
+export const SEM_PLANOS_GESTORA =
+    'Nenhum plano de usina vigente no momento: taxa de gestão, desconto, setup, carência e prazo são confirmados pelo especialista.\n'
+
+const ESPECIALISTA_CONFIRMA = 'o especialista confirma'
+const percentual = (v: number) => `${Number(v).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%`
+const dias = (v: number) => `${v} ${v === 1 ? 'dia' : 'dias'}`
+
+function blocoPlanoGestora(p: PlanoGestora): string {
+    const setup = p.setup_pct != null && p.setup_base
+        ? `${percentual(p.setup_pct)} sobre ${p.setup_base}`
+        : `existe, mas o valor ainda não está definido; ${ESPECIALISTA_CONFIRMA}`
+    return [
+        `## ${p.nome}`,
+        `- Taxa de gestão: ${percentual(p.taxa_gestao_pct)}`,
+        `- Desconto do assinante: ${percentual(p.desconto_assinante_pct)}`,
+        `- Repasse ao dono: todo dia ${p.dia_repasse}`,
+        `- Dia de corte: dia ${p.dia_corte} (fechamento da apuração das faturas pagas pelo assinante que entram no repasse do dia ${p.dia_repasse})`,
+        `- Custo de setup: ${setup}`,
+        `- Carência: ${p.carencia_dias != null ? dias(p.carencia_dias) : `ainda não definida; ${ESPECIALISTA_CONFIRMA}`}`,
+        `- Prazo até o primeiro repasse: ${p.prazo_primeiro_repasse_dias != null ? dias(p.prazo_primeiro_repasse_dias) : `ainda não definido; ${ESPECIALISTA_CONFIRMA}`}`,
+    ].join('\n')
+}
+
+/** Documento "Gestora: planos vigentes". So os campos do contrato desta funcao entram. */
+export function montarGestoraPlanos(planos: PlanoGestora[]): string {
+    return [
+        '# Gestora: planos vigentes',
+        '',
+        'Valores do plano vigente para o dono de usina. Explique a fórmula do repasse e só cite a taxa de gestão e o desconto se o fornecedor perguntar, sempre dizendo que o especialista confirma o plano e o valor da usina dele. Custo de setup, carência e prazo até o primeiro repasse devem ser mencionados antes de passar ao especialista; o que estiver "ainda não definido" nunca é estimado.',
+        '',
+        planos.length === 0 ? SEM_PLANOS_GESTORA : planos.map(blocoPlanoGestora).join('\n\n') + '\n',
+    ].join('\n')
+}
+
 /**
  * Le o FAQ no formato que a tela do Deskcomm aceita:
  *   ## Pergunta: ...
