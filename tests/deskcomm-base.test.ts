@@ -6,6 +6,7 @@ import {
 import { FAQ_INVESTIDOR } from '../supabase/functions/deskcomm-base/bases/investidor-faq'
 import { FAQ_ASSINATURA } from '../supabase/functions/deskcomm-base/bases/assinatura-faq'
 import { FAQ_COTAS } from '../supabase/functions/deskcomm-base/bases/cotas-faq'
+import { FAQ_RECEPCAO } from '../supabase/functions/deskcomm-base/bases/recepcao-faq'
 
 const santaMaria: UsinaAVenda = {
     nome: 'UFV Santa Maria', cidade: 'Santa Maria', uf: 'RN', status: 'pre_operacao',
@@ -197,5 +198,44 @@ describe('FAQ de Cotas', () => {
     it('o FAQ do Investidor não cita mais R$ 35.000', () => {
         expect(FAQ_INVESTIDOR).not.toContain('35.000')
         expect(FAQ_INVESTIDOR).toContain('dividido por 10, mais 10%')
+    })
+})
+
+describe('FAQ da Recepção', () => {
+    it('tem as 18 perguntas aprovadas, com os fatos do dono e sem número comercial', () => {
+        const pares = lerFaq(FAQ_RECEPCAO)
+        expect(pares).toHaveLength(18)
+        const tudo = FAQ_RECEPCAO.toLowerCase()
+
+        // fatos informados pelo dono em 24/10/2026
+        expect(tudo).toContain('olavo lacerda montenegro, 467')
+        expect(tudo).toContain('parnamirim')
+        expect(tudo).toContain('das 9h às 17h')
+        expect(tudo).toContain('videochamada')
+        expect(tudo).toContain('o cnpj consta no contrato')
+        expect(tudo).toContain('(31) 99536-7744')
+        expect(tudo).toContain('contato@b2wenergia.com.br')
+        expect(tudo).toContain('donos de usina')
+
+        // nenhum percentual, preço ou lista de estados do site
+        expect(tudo).not.toMatch(/\d\s?%/)
+        expect(tudo).not.toContain('r$')
+        for (const estado of ['mato grosso', 'paraná', 'goiás', 'são paulo', 'rio de janeiro']) {
+            expect(tudo, estado).not.toContain(estado)
+        }
+
+        // a Gestora não é mercado livre, e nada de promessa
+        expect(tudo).not.toContain('mercado livre')
+        for (const proibido of ['garantid', 'risco zero', 'fidelidade de', 'multa']) {
+            expect(tudo, proibido).not.toContain(proibido)
+        }
+    })
+
+    it('a primeira resposta é a mesma "Quem é a B2W Energia" do FAQ do Investidor', () => {
+        const rec = lerFaq(FAQ_RECEPCAO)[0]
+        const inv = lerFaq(FAQ_INVESTIDOR).find((p) => p.question.startsWith('Quem é a B2W Energia'))
+        expect(inv).toBeDefined()
+        expect(rec.question).toBe(inv!.question)
+        expect(rec.answer).toBe(inv!.answer)
     })
 })
