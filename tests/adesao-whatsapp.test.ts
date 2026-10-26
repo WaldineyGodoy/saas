@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
     soDigitos, cpfValido, emailValido, documentoCompativel, separarNumero, errosDaConta,
-    errosDeValidacao, parametrosAssinante, statusDaAdesao,
+    errosDeValidacao, parametrosAssinante, statusDaAdesao, simNao,
 } from '../supabase/functions/adesao-whatsapp/regras'
 import { completarLeitura } from '../supabase/functions/_shared/leitura-conta'
 
@@ -55,6 +55,11 @@ describe('erros', () => {
         expect(errosDeValidacao({ adesao_cpf: '52998224725' }, conta, true)).toContain('cpf_ja_cadastrado')
         expect(errosDeValidacao({ adesao_email: 'x' }, conta, false)).toContain('email_invalido')
         expect(errosDeValidacao({ adesao_titular_ok: false }, conta, false)).toContain('titular_divergente')
+    })
+    it('sim/não do card: a Bia grava texto ou booleano', () => {
+        for (const v of [true, 'true', 'sim', 'Sim', 's', 'yes']) expect(simNao(v)).toBe(true)
+        for (const v of [false, 'false', 'não', 'nao', 'NÃO', 'n', 'no']) expect(simNao(v)).toBe(false)
+        for (const v of [undefined, null, '', 'talvez']) expect(simNao(v)).toBeUndefined()
     })
     it('status', () => {
         expect(statusDaAdesao(['cpf_invalido'], false)).toBe('coletando')

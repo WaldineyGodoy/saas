@@ -3,7 +3,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2.45.0'
 import { lerConta, type ContaCompleta } from '../_shared/leitura-conta.ts'
 import { caminhoDocumento, validarArquivo } from '../_shared/onboarding-regras.ts'
 import {
-    errosDaConta, errosDeValidacao, parametrosAssinante, statusDaAdesao, cpfValido, emailValido, soDigitos,
+    errosDaConta, errosDeValidacao, parametrosAssinante, statusDaAdesao, cpfValido, emailValido, soDigitos, simNao,
 } from './regras.ts'
 
 /**
@@ -94,8 +94,7 @@ serve(async (req) => {
                 const { data } = await db.rpc('ponte_deskcomm_cpf_existe', { p_cpf: cpf })
                 existe = data === true
             }
-            const titularOk = campos.adesao_titular_ok === undefined ? undefined : campos.adesao_titular_ok === true || campos.adesao_titular_ok === 'true'
-            erros.validacao = errosDeValidacao({ ...campos, adesao_titular_ok: titularOk }, adesao.conta_lida as ContaCompleta | null, existe)
+            erros.validacao = errosDeValidacao({ ...campos, adesao_titular_ok: simNao(campos.adesao_titular_ok) }, adesao.conta_lida as ContaCompleta | null, existe)
             const status = statusDaAdesao(todos(), !!adesao.signature_link)
             await salvar({ erros_validacao: erros.validacao, status })
             return status

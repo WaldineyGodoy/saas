@@ -16,6 +16,15 @@ export const PENDENCIAS = new Set([
     'titular_divergente', 'titular_cnpj', 'cpf_diferente_conta', 'cpf_ja_cadastrado', 'falha_criacao',
 ])
 
+/** Campo sim/não do card: a Bia pode gravar booleano ou texto ("sim", "não"). */
+export function simNao(v: unknown): boolean | undefined {
+    if (typeof v === 'boolean') return v
+    const t = String(v ?? '').trim().toLowerCase().replace('ã', 'a')
+    if (['true', 'sim', 's', 'yes'].includes(t)) return true
+    if (['false', 'nao', 'n', 'no'].includes(t)) return false
+    return undefined
+}
+
 export const soDigitos = (s: string | null | undefined) => (s ?? '').replace(/\D/g, '')
 
 export function cpfValido(cpf: string): boolean {
