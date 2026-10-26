@@ -12,6 +12,9 @@ import { montarPdfAdesao } from '../_shared/pdf-adesao.ts'
  *
  * POST { token, pdf_base64, paginas_termo }   (pagina publica: PDF do navegador)
  * POST { token, gerar_no_servidor: true }      (app: PDF montado aqui, mesmo texto)
+ * POST { token, gerar_no_servidor: true, sem_whatsapp: true }
+ *                                               (adesao pelo WhatsApp: a Bia entrega o link
+ *                                                na conversa; aqui so o e-mail)
  *   200 { success, signature_link, contrato_url, contrato_url_curta, reenviado, avisos }
  *   400 paginas_termo/pdf invalidos | 401 token | 409 { error, faltantes } | 502 { error: 'contrato_indisponivel' }
  *
@@ -87,11 +90,14 @@ serve(async (req) => {
     const enviarAoAssinante = async (
         sub: Record<string, any>,
         link: string,
-        uc0: Record<string, any> | undefined
+        uc0: Record<string, any> | undefined,
+        semWhatsapp: boolean
     ) => {
         const envio = { whatsapp: false, email: false };
 
-        if (sub.phone) {
+        if (semWhatsapp) {
+            // Adesao pelo WhatsApp: a Bia entrega o link na propria conversa.
+        } else if (sub.phone) {
             try {
                 const { data, error } = await supabaseAdmin.functions.invoke('send-whatsapp', {
                     body: { phone: soDigitos(sub.phone), text: textoWhatsappContrato(sub.name, link) }
@@ -135,7 +141,7 @@ serve(async (req) => {
 
     try {
         const body = await req.json().catch(() => ({}));
-        const { token, gerar_no_servidor } = body ?? {};
+        const { token, gerar_no_servidor, sem_whatsapp } = body ?? {};
         let { pdf_base64, paginas_termo } = body ?? {};
 
         // 1. Token -> assinante
@@ -220,7 +226,7 @@ serve(async (req) => {
                     `Termos do contrato - ${sub.name}`, 'a pagina de termos') ?? contratoUrl;
             }
 
-            const envio = await enviarAoAssinante(sub, termosCurta, uc0);
+            const envio = await enviarAoAssinante(sub, termosCurta, uc0, sem_whatsapp === true);
 
             await supabaseAdmin.from('crm_history').insert({
                 entity_type: 'subscriber',
@@ -461,7 +467,7 @@ serve(async (req) => {
             `Termos do contrato - ${sub.name}`, 'a pagina de termos') ?? contratoUrl;
 
         // 9. WhatsApp + e-mail com o mesmo link curto
-        const envio = await enviarAoAssinante(sub, termosCurta, uc0);
+        const envio = await enviarAoAssinante(sub, termosCurta, uc0, sem_whatsapp === true);
 
         // 10. Originador
         let originadorAvisado = false;

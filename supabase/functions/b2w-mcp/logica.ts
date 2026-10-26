@@ -1,8 +1,9 @@
 /**
  * Servidor MCP da B2W para os agentes do DeskcommCRM
  * (spec docs/superpowers/specs/2026-10-20-bel-recepcao-design.md §8).
- * Ferramentas: b2w_concessionaria, b2w_identificar_contato e
- * b2w_simular_assinatura (spec 2026-10-20-base-agente-assinatura-design.md §5).
+ * Ferramentas: b2w_concessionaria, b2w_identificar_contato,
+ * b2w_simular_assinatura (spec 2026-10-20-base-agente-assinatura-design.md §5)
+ * e b2w_status_adesao (spec 2026-10-26-adesao-whatsapp-design.md §5.3).
  *
  * Sem dependencia de Deno nem de Supabase: roda na Edge Function e no vitest.
  * O acesso ao banco entra por `Dependencias` (RPCs restritas a service_role).
@@ -44,11 +45,22 @@ export interface Simulacao {
     link_adesao: string
 }
 
+export interface StatusAdesao {
+    etapa: string | null
+    status?: string
+    conta?: { titular: string | null; endereco: string | null; numero_cliente: string | null; consumo_kwh: number | null } | null
+    cpf_mascarado?: string | null
+    erros?: string[]
+    link_assinatura?: string | null
+    assinado?: boolean
+}
+
 export interface Dependencias {
     concessionaria(cidadeNormalizada: string, uf: string): Promise<Concessionaria>
     identificar(telefone: string): Promise<Identificacao>
     simular(cidade: string, uf: string, consumoKwh: number | null, valorReais: number | null,
             telefone: string | null): Promise<Simulacao>
+    statusAdesao(telefone: string): Promise<StatusAdesao>
 }
 
 export interface Contexto {
@@ -141,6 +153,17 @@ export const FERRAMENTAS = [
         },
         annotations: { readOnlyHint: true, openWorldHint: false },
     },
+    {
+        name: 'b2w_status_adesao',
+        title: 'Status da adesão pelo WhatsApp',
+        description:
+            'Mostra como está a adesão deste contato: etapa, o que foi lido da conta, CPF mascarado, erros a corrigir ' +
+            '(conta_ilegivel, cpf_invalido, email_invalido, documento_invalido) ou pendências para a equipe ' +
+            '(titular_divergente, titular_cnpj, cpf_diferente_conta, cpf_ja_cadastrado, falha_criacao), o link de assinatura ' +
+            'quando o contrato estiver pronto e se já foi assinado. Não recebe argumentos: usa o telefone da conversa.',
+        inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+        annotations: { readOnlyHint: true, openWorldHint: false },
+    },
 ] as const
 
 const PROTOCOLO_PADRAO = '2025-06-18'
@@ -182,6 +205,11 @@ async function chamarFerramenta(nome: string, args: any, ctx: Contexto, deps: De
             return resultadoDeFerramenta({ erro: 'Informe o consumo em kWh ou o valor da conta em reais.' }, true)
         }
         return resultadoDeFerramenta(await deps.simular(cidade, uf, kwh, reais, normalizarTelefone(ctx.telefone)))
+    }
+    if (nome === 'b2w_status_adesao') {
+        const telefone = normalizarTelefone(ctx.telefone)
+        if (!telefone) return resultadoDeFerramenta({ etapa: null })
+        return resultadoDeFerramenta(await deps.statusAdesao(telefone))
     }
     return null
 }

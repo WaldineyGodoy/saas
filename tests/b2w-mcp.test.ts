@@ -15,6 +15,8 @@ const deps = (over: Partial<Dependencias> = {}): Dependencias => ({
         atinge_minimo: true, vaga: 'imediata' as const, previsao_operacao: null,
         link_adesao: 'https://b2wenergia.com.br/',
     })),
+    statusAdesao: vi.fn(async () => ({ etapa: 'aguardando_cpf', status: 'coletando', conta: null, cpf_mascarado: null,
+        erros: [], link_assinatura: null, assinado: false })),
     ...over,
 })
 const chamar = (name: string, args: unknown, d = deps(), telefone: string | null = null) =>
@@ -50,9 +52,9 @@ describe('protocolo MCP', () => {
     it('notificação não tem resposta', async () => {
         expect(await responder({ jsonrpc: '2.0', method: 'notifications/initialized' }, { telefone: null }, deps())).toBeNull()
     })
-    it('tools/list anuncia as três ferramentas como somente leitura', async () => {
+    it('tools/list anuncia as quatro ferramentas como somente leitura', async () => {
         const r: any = await responder({ jsonrpc: '2.0', id: 2, method: 'tools/list' }, { telefone: null }, deps())
-        expect(r.result.tools.map((t: any) => t.name)).toEqual(['b2w_concessionaria', 'b2w_identificar_contato', 'b2w_simular_assinatura'])
+        expect(r.result.tools.map((t: any) => t.name)).toEqual(['b2w_concessionaria', 'b2w_identificar_contato', 'b2w_simular_assinatura', 'b2w_status_adesao'])
         for (const t of FERRAMENTAS) expect(t.annotations.readOnlyHint).toBe(true)
     })
     it('método desconhecido e pedido inválido', async () => {
@@ -121,6 +123,21 @@ describe('b2w_simular_assinatura', () => {
         const d = deps({ simular: vi.fn(async () => { throw new Error('db') }) })
         const r: any = await chamar('b2w_simular_assinatura', { cidade: 'Natal', uf: 'RN', consumo_kwh: 300 }, d)
         expect(r.result.isError).toBe(true)
+    })
+})
+
+describe('b2w_status_adesao', () => {
+    it('usa só o telefone do cabeçalho, ignora argumento', async () => {
+        const d = deps()
+        const r: any = await chamar('b2w_status_adesao', { telefone: '5511000000000' }, d, '(84) 99999-0009')
+        expect(d.statusAdesao).toHaveBeenCalledWith('5584999990009')
+        expect(r.result.structuredContent.etapa).toBe('aguardando_cpf')
+    })
+    it('sem telefone responde etapa vazia sem consultar', async () => {
+        const d = deps()
+        const r: any = await chamar('b2w_status_adesao', {}, d, null)
+        expect(d.statusAdesao).not.toHaveBeenCalled()
+        expect(r.result.structuredContent.etapa).toBeNull()
     })
 })
 
