@@ -35,6 +35,7 @@ export interface CoberturaAssinatura {
     desconto_pct: number | null
     tarifa: number | null
     credito_indicacao_100kwh: number | null
+    pct_indicacao: number | null
 }
 
 export const SEM_COBERTURA =
@@ -115,8 +116,10 @@ function blocoCobertura(c: CoberturaAssinatura) {
         'Custo mínimo da distribuidora: 30 kWh (mono), 50 kWh (bi), 100 kWh (tri)',
         'Consumo mínimo para assinar: 150 kWh/mês',
     ]
-    if (c.credito_indicacao_100kwh && Number(c.credito_indicacao_100kwh) > 0) {
-        linhas.push(`Crédito de indicação: cerca de ${reais(Number(c.credito_indicacao_100kwh))} a cada 100 kWh compensados pelo indicado`)
+    // "2%" precisa estar aqui: a trava de promessas do Deskcomm so libera o
+    // percentual que a Bia cita se ele estiver na base.
+    if (Number(c.credito_indicacao_100kwh) > 0 && Number(c.pct_indicacao) > 0) {
+        linhas.push(`Cashback de indicação: ${numero(Number(c.pct_indicacao))}% sobre a energia compensada de cada indicado (cerca de ${reais(Number(c.credito_indicacao_100kwh))} a cada 100 kWh), abatido na fatura de quem indicou`)
     }
     linhas.push('Vencimento do boleto: dia 5')
     return linhas.join('\n')

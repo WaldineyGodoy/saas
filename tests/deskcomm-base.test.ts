@@ -100,7 +100,7 @@ describe('hashTexto', () => {
 })
 
 const cosern: CoberturaAssinatura = {
-    concessionaria: 'Neoenergia Cosern', ufs: 'RN', desconto_pct: 15, tarifa: 1.0347, credito_indicacao_100kwh: 1.33,
+    concessionaria: 'Neoenergia Cosern', ufs: 'RN', desconto_pct: 15, tarifa: 1.0347, credito_indicacao_100kwh: 1.33, pct_indicacao: 2,
 }
 
 describe('montarCoberturaAssinatura', () => {
@@ -113,7 +113,7 @@ describe('montarCoberturaAssinatura', () => {
         expect(md).toContain('Exemplo: 300 kWh/mês → economia estimada de R$ 46,56/mês (R$ 558,74/ano)')
         expect(md).toContain('Custo mínimo da distribuidora: 30 kWh (mono), 50 kWh (bi), 100 kWh (tri)')
         expect(md).toContain('Consumo mínimo para assinar: 150 kWh/mês')
-        expect(md).toContain('Crédito de indicação: cerca de R$ 1,33 a cada 100 kWh compensados pelo indicado')
+        expect(md).toContain('Cashback de indicação: 2% sobre a energia compensada de cada indicado (cerca de R$ 1,33 a cada 100 kWh), abatido na fatura de quem indicou')
         expect(md).toContain('Vencimento do boleto: dia 5')
     })
     it('sem distribuidora devolve o aviso', () => {
@@ -129,7 +129,8 @@ describe('montarCoberturaAssinatura', () => {
         expect(md).not.toContain('12.345.678')
     })
     it('sem crédito de indicação omite a linha', () => {
-        expect(montarCoberturaAssinatura([{ ...cosern, credito_indicacao_100kwh: 0 }])).not.toContain('Crédito de indicação')
+        expect(montarCoberturaAssinatura([{ ...cosern, credito_indicacao_100kwh: 0 }])).not.toContain('Cashback de indicação')
+        expect(montarCoberturaAssinatura([{ ...cosern, pct_indicacao: null }])).not.toContain('Cashback de indicação')
     })
 })
 

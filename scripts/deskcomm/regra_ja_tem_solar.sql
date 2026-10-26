@@ -3,7 +3,7 @@
 -- Decisão do dono: quem já tem energia solar instalada no imóvel não pode
 -- aderir à Energia por Assinatura (restrição técnica interna). O agente só
 -- agradece o retorno e encerra — sem explicar o produto, sem oferecer outro
--- e sem passar para humano. Caso real: Lucia Vale, 23/10/2026, a Bel insistiu
+-- e sem passar para humano. Caso real de 23/10/2026: a Bel insistiu
 -- em explicar a assinatura.
 --
 -- Cirúrgico sobre a VERSÃO PUBLICADA de cada agente (os prompts de produção
