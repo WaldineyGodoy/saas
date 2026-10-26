@@ -439,7 +439,7 @@ git commit -m "feat(adesao): regras puras da adesão pelo WhatsApp"
 -- Rodar depois da migration 20261027a. Desfaz tudo no RAISE final.
 DO $t$
 DECLARE
-  v_org uuid; v_pipe uuid; v_contato uuid; v_card uuid; v_lead uuid; v_orig uuid; r jsonb; v_msg uuid; v_conv uuid;
+  v_org uuid; v_pipe uuid; v_contato uuid; v_card uuid; v_lead uuid; v_orig uuid; r jsonb; v_msg uuid; v_conv uuid; v_sessao uuid;
 BEGIN
   SELECT c.pipeline_id, cp.organization_id INTO v_pipe, v_org
     FROM ponte_deskcomm.categorias c JOIN crm_pipelines cp ON cp.id = c.pipeline_id WHERE c.slug = 'energia_assinatura';
@@ -465,12 +465,11 @@ BEGIN
 
   -- 2. Etapa aguardando_conta + mídia recebida -> slot da conta.
   UPDATE crm_leads SET custom_fields = custom_fields || '{"adesao_etapa":"aguardando_conta"}' WHERE id = v_card;
-  SELECT id INTO v_conv FROM conversations WHERE contact_id = v_contato LIMIT 1;
-  IF v_conv IS NULL THEN
-    INSERT INTO conversations (organization_id, contact_id, channel, status) VALUES (v_org, v_contato, 'whatsapp', 'open') RETURNING id INTO v_conv;
-  END IF;
-  INSERT INTO messages (organization_id, conversation_id, direction, type, media_storage_path, media_mime, media_size_bytes)
-  VALUES (v_org, v_conv, 'inbound', 'image', v_org || '/teste/conta.jpg', 'image/jpeg', 1000) RETURNING id INTO v_msg;
+  SELECT channel_session_id INTO v_sessao FROM conversations WHERE organization_id = v_org AND channel = 'whatsapp' ORDER BY created_at DESC LIMIT 1;
+  INSERT INTO conversations (organization_id, contact_id, channel_session_id, channel, status)
+  VALUES (v_org, v_contato, v_sessao, 'whatsapp', 'open') RETURNING id INTO v_conv;
+  INSERT INTO messages (organization_id, conversation_id, channel_session_id, contact_id, direction, type, media_storage_path, media_mime, media_size_bytes)
+  VALUES (v_org, v_conv, v_sessao, v_contato, 'inbound', 'image', v_org || '/teste/conta.jpg', 'image/jpeg', 1000) RETURNING id INTO v_msg;
   IF (SELECT conta_message_id FROM ponte_deskcomm.adesoes WHERE card_id = v_card) IS DISTINCT FROM v_msg THEN
     RAISE EXCEPTION 'FALHOU midia conta'; END IF;
 
