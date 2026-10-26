@@ -51,7 +51,7 @@ export const FAQ_ASSINATURA = `## Pergunta: Como funciona a energia por assinatu
 ## Resposta: Pelo link: CEP e consumo, documento com foto e a conta de energia de cada unidade; se for empresa, também o contrato social. A assinatura é eletrônica e o link vale 30 dias. Dá para aderir com várias unidades.
 
 ## Pergunta: Como funciona a indicação?
-## Resposta: Depois de assinar você ganha link e QR code próprios. Cada indicado que assina gera um crédito mensal abatido na sua fatura (valor em "Assinatura: cobertura, desconto e indicação"), enquanto vocês dois estiverem ativos e em dia. O crédito abate primeiro a fatura mais próxima; o que sobrar no ciclo é descartado.
+## Resposta: Depois de assinar você ganha link e QR code próprios. Cada indicado que assina gera um cashback mensal abatido na sua fatura (percentual e valor em "Assinatura: cobertura, desconto e indicação"), enquanto vocês dois estiverem ativos e em dia. O crédito abate primeiro a fatura mais próxima; o que sobrar no ciclo é descartado.
 
 ## Pergunta: É um investimento?
 ## Resposta: Não. O benefício é o desconto na conta. Para quem quer renda, a B2W tem as Usinas de Investimento.
