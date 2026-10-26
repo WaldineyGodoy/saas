@@ -1,6 +1,6 @@
 # Adesão à Energia por Assinatura pelo WhatsApp
 
-Data: 26/10/2026 · Estado: desenho aprovado, aguardando revisão do spec
+Data: 26/10/2026 · Estado: implementado em 26/10/2026 (ver `playbook/DESKCOMM.md` §8.4)
 Contexto: `playbook/DESKCOMM.md` (§8.2 Bel/recepção, §8.3 base da Assinatura). Agente: Bia · Energia por Assinatura.
 
 ## 1. Objetivo

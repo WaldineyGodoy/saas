@@ -322,3 +322,16 @@ Spec `docs/superpowers/specs/2026-10-25-base-leo-construcao-design.md`. Compleme
 - **Custo da obra:** nenhum valor. O orçamento depende do projeto e é do consultor. O requisito é ter recursos para a obra (à vista, parcelado ou financiamento); terreno e projeto, o consultor avalia caso a caso.
 - **Fonte nova:** "Construção — Perguntas e respostas" (9 itens, `bases/construcao-faq.ts`); os únicos números são cópia literal da base do Investidor. **Leo v7** (`scripts/deskcomm/base_leo_construcao.sql`, cirúrgico): regra antes do bloco "Desvios", passa ao consultor com o motivo `construção sob medida`.
 - **Pendências:** valor de referência de obra (se o dono quiser que o Leo cite algum), documentos exigidos, teste real da passagem Helena → Leo.
+
+### 8.4 Adesão pelo WhatsApp — no ar desde 26/10/2026
+
+Spec: `docs/superpowers/specs/2026-10-26-adesao-whatsapp-design.md` · Plano: `docs/superpowers/plans/2026-10-26-adesao-whatsapp.md`.
+
+- **Fluxo:** a Bia grava `adesao_etapa` e os dados no card; `trg_ponte_adesao_midia` leva foto/PDF da conta e do documento, e `trg_ponte_adesao_card` leva CPF/e-mail/telefone/titular e o `confirmado`, para a Edge Function `adesao-whatsapp`. Estado em `ponte_deskcomm.adesoes`; a Bia lê por `b2w_status_adesao` (CPF mascarado, só o telefone do cabeçalho).
+- **Criação:** `fn_criar_assinante_publico` (com originador e indicador do lead) + documentos copiados de `whatsapp-media` para `documentos-assinante` + contrato pelo `onboarding-finalizar` com `sem_whatsapp` (só e-mail; a Bia entrega o link). A ação `criar` revalida CPF/e-mail/titular antes de decidir e é idempotente.
+- **Link do contrato:** a Bia agenda um retorno de 2 minutos depois do `confirmado` para entregar o link (o contrato fica pronto segundos depois). Fora da janela de envio, o link chega pelo e-mail e a Bia manda quando o cliente responder.
+- **Originador no card:** `trg_ponte_card_originador` preenche `custom_fields.originador` com o nome do originador do lead da B2W.
+- **Pendência de adesão:** etapa do funil da Assinatura (exige humano, avisa na central) para titular divergente, CNPJ, várias UCs, CPF já cadastrado e falha ao criar.
+- **Leitor de conta:** `_shared/leitura-conta.ts`, usado por `parse-invoice-image` e `adesao-whatsapp`.
+- **Checklist pós-atualização do Deskcomm:** mídia ainda em `messages.media_storage_path`, bucket `whatsapp-media`.
+- **Pendência:** regra de retenção para limpar `adesao_cpf` e afins do card depois da adesão fechada.
