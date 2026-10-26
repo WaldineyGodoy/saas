@@ -86,7 +86,8 @@ serve(async (req) => {
             return json(200, { ok: true, erros: erros.documento })
         }
 
-        if (acao === 'validar') {
+        // Valida CPF, e-mail e titular a partir do card como está agora.
+        const revalidar = async () => {
             const cpf = soDigitos(campos.adesao_cpf)
             let existe = false
             if (cpfValido(cpf)) {
@@ -97,11 +98,19 @@ serve(async (req) => {
             erros.validacao = errosDeValidacao({ ...campos, adesao_titular_ok: titularOk }, adesao.conta_lida as ContaCompleta | null, existe)
             const status = statusDaAdesao(todos(), !!adesao.signature_link)
             await salvar({ erros_validacao: erros.validacao, status })
+            return status
+        }
+
+        if (acao === 'validar') {
+            const status = await revalidar()
             return json(200, { ok: true, status, erros: erros.validacao })
         }
 
         if (acao === 'criar') {
             const conta = adesao.conta_lida as ContaCompleta | null
+            // Revalida aqui: a validação disparada pela mesma gravação pode não ter
+            // terminado, e o card pode ter mudado o CPF e a etapa de uma vez só.
+            await revalidar()
             const faltam = [
                 !conta && 'conta', !d.documento_midia?.path && 'documento',
                 !cpfValido(campos.adesao_cpf ?? '') && 'cpf', !emailValido(campos.adesao_email ?? '') && 'email',
