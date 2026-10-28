@@ -51,7 +51,13 @@ export const FAQ_ASSINATURA = `## Pergunta: Como funciona a energia por assinatu
 ## Resposta: Pelo link: CEP e consumo, documento com foto e a conta de energia de cada unidade; se for empresa, também o contrato social. A assinatura é eletrônica e o link vale 30 dias. Dá para aderir com várias unidades.
 
 ## Pergunta: Como funciona a indicação?
-## Resposta: Depois de assinar você ganha link e QR code próprios. Cada indicado que assina gera um cashback mensal abatido na sua fatura (percentual e valor em "Assinatura: cobertura, desconto e indicação"), enquanto vocês dois estiverem ativos e em dia. O crédito abate primeiro a fatura mais próxima; o que sobrar no ciclo é descartado.
+## Resposta: Depois de assinar você ganha link e QR code próprios. Cada indicado que assina gera um cashback mensal abatido na sua fatura (percentual e valor em "Assinatura: cobertura, desconto e indicação"), enquanto vocês dois estiverem ativos e em dia. O crédito abate primeiro a fatura mais próxima; o que sobrar no ciclo é descartado. A campanha vale para indicados atendidos pela mesma distribuidora (concessionária) que a sua.
+
+## Pergunta: Posso indicar alguém de outro estado ou de outra distribuidora?
+## Resposta: A campanha de indicação vale para adesões dentro da mesma distribuidora (concessionária) que atende a sua conta. Quem é atendido por outra distribuidora, por exemplo em outro estado, não gera cashback pelo seu link.
+
+## Pergunta: Onde ficam as usinas? De qual usina vem a minha energia?
+## Resposta: Temos algumas usinas próprias e também administramos usinas de investidores, espalhadas por diversos municípios do estado. Não dá para dizer de qual usina virá a sua energia: isso depende da taxa de ocupação das usinas, verificada no momento da adesão.
 
 ## Pergunta: É um investimento?
 ## Resposta: Não. O benefício é o desconto na conta. Para quem quer renda, a B2W tem as Usinas de Investimento.
