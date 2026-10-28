@@ -245,6 +245,11 @@
     .uc-modal__panel [style*="grid-template-columns: repeat(5, 1fr);"] {
         grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
     }
+    /* Endereço (CEP | Rua | Número | Complemento): a coluna fixa de 150px sobra
+       para as outras três e passava da borda; vira dois por linha. */
+    .uc-modal__panel [style*="grid-template-columns: 150px 2fr 1fr 1.5fr;"] {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
 }
 
 @media (max-width: 560px) {

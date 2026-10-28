@@ -2818,7 +2818,7 @@ Qualquer dúvida, é só responder esta mensagem.`;
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#475569', fontWeight: 700, fontSize: '0.9rem' }}>
                                             <Filter size={18} color="var(--color-blue)" /> Filtros Sincronizados
                                         </div>
-                                        <div style={{ display: 'flex', gap: '1.25rem', alignItems: 'center' }}>
+                                        <div style={{ display: 'flex', gap: '1.25rem', alignItems: 'center', flexWrap: 'wrap' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                                 <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>Ano Referência:</span>
                                                 <select
