@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import {
-    responder, normalizarTexto, normalizarUf, normalizarTelefone, lerNumero, tokenConfere, FERRAMENTAS,
+    responder, normalizarTexto, normalizarUf, normalizarTelefone, lerNumero, tokenConfere, ufDoTelefone, FERRAMENTAS,
     type Dependencias,
 } from '../supabase/functions/b2w-mcp/logica'
 
@@ -82,6 +82,44 @@ describe('b2w_concessionaria', () => {
         const d = deps({ concessionaria: vi.fn(async () => { throw new Error('db') }) })
         const r: any = await chamar('b2w_concessionaria', { cidade: 'Natal', uf: 'RN' }, d)
         expect(r.result.isError).toBe(true)
+    })
+    it('sem UF consulta só pela cidade', async () => {
+        const d = deps({ concessionaria: vi.fn(async () => ({
+            encontrada: true, cidade: 'Pau dos Ferros', uf: 'RN', concessionaria: 'Neoenergia Cosern',
+            atende_assinatura: true, uf_deduzida: true,
+        })) })
+        const r: any = await chamar('b2w_concessionaria', { cidade: 'Pau dos ferros' }, d, '5584999990000')
+        expect(d.concessionaria).toHaveBeenCalledWith('pau dos ferros', null)
+        expect(r.result.structuredContent.uf_deduzida).toBe(true)
+        expect(r.result.structuredContent.uf_provavel).toBeUndefined()
+    })
+    it('UF vazia conta como sem UF', async () => {
+        const d = deps()
+        await chamar('b2w_concessionaria', { cidade: 'Natal', uf: '  ' }, d)
+        expect(d.concessionaria).toHaveBeenCalledWith('natal', null)
+    })
+    it('cidade ambígua ganha a UF do DDD quando ela é uma das opções', async () => {
+        const ambigua = { encontrada: false, cidade: 'parnamirim', uf: null, concessionaria: null,
+            atende_assinatura: false, ambigua: true, opcoes_uf: ['PE', 'RN'] }
+        const d = deps({ concessionaria: vi.fn(async () => ambigua) })
+        const r: any = await chamar('b2w_concessionaria', { cidade: 'Parnamirim' }, d, '(84) 99999-0000')
+        expect(r.result.structuredContent).toMatchObject({ ambigua: true, uf_provavel: 'RN', estado_provavel: 'Rio Grande do Norte' })
+        const r2: any = await chamar('b2w_concessionaria', { cidade: 'Parnamirim' }, d, '(11) 99999-0000')
+        expect(r2.result.structuredContent.uf_provavel).toBeUndefined()
+    })
+    it('sem cidade é erro', async () => {
+        const r: any = await chamar('b2w_concessionaria', { uf: 'RN' })
+        expect(r.result.isError).toBe(true)
+    })
+})
+
+describe('ufDoTelefone', () => {
+    it('DDD do telefone brasileiro', () => {
+        expect(ufDoTelefone('5584981924058')).toBe('RN')
+        expect(ufDoTelefone('(83) 98888-7777')).toBe('PB')
+        expect(ufDoTelefone('11 99999-0000')).toBe('SP')
+        expect(ufDoTelefone('14155550000123')).toBeNull()
+        expect(ufDoTelefone(null)).toBeNull()
     })
 })
 
