@@ -34,7 +34,7 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
     const deps = {
-        async concessionaria(cidade: string, uf: string): Promise<Concessionaria> {
+        async concessionaria(cidade: string, uf: string | null): Promise<Concessionaria> {
             const { data, error } = await supabase.rpc('b2w_mcp_concessionaria', { p_cidade: cidade, p_uf: uf })
             if (error) throw error
             return data as Concessionaria
