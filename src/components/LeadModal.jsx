@@ -52,6 +52,49 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
         { value: 'negocio_perdido', label: 'Negócio Perdido' }
     ];
 
+    const getLeadStatusMeta = (status) => {
+        switch (status) {
+            case 'sem_interacao':
+                return { label: 'Sem Interação', color: '#475569', bg: '#f1f5f9', border: '#cbd5e1', dot: '#64748b' };
+            case 'indicado':
+                return { label: 'Indicado', color: '#b45309', bg: '#fffbeb', border: '#fde68a', dot: '#f59e0b' };
+            case 'simulacao':
+                return { label: 'Simulação', color: '#0369a1', bg: '#f0f9ff', border: '#bae6fd', dot: '#0ea5e9' };
+            case 'negociacao':
+                return { label: 'Negociação', color: '#1d4ed8', bg: '#eff6ff', border: '#bfdbfe', dot: '#3b82f6' };
+            case 'reuniao_agendada':
+                return { label: 'Reunião Agendada', color: '#6d28d9', bg: '#f5f3ff', border: '#ddd6fe', dot: '#8b5cf6' };
+            case 'contrato_enviado':
+                return { label: 'Contrato Enviado', color: '#4338ca', bg: '#e0e7ff', border: '#c7d2fe', dot: '#6366f1' };
+            case 'ativacao':
+                return { label: 'Ativação', color: '#0f766e', bg: '#f0fdfa', border: '#99f6e4', dot: '#14b8a6' };
+            case 'ativo':
+                return { label: 'Ativo', color: '#047857', bg: '#ecfdf5', border: '#a7f3d0', dot: '#10b981' };
+            case 'pago':
+                return { label: 'Pago', color: '#15803d', bg: '#dcfce7', border: '#86efac', dot: '#22c55e' };
+            case 'negocio_perdido':
+                return { label: 'Negócio Perdido', color: '#be123c', bg: '#fff1f2', border: '#fecdd3', dot: '#f43f5e' };
+            default:
+                return { label: status || 'Sem status', color: '#475569', bg: '#f1f5f9', border: '#e2e8f0', dot: '#94a3b8' };
+        }
+    };
+
+    const handleStatusChange = async (newStatus) => {
+        const meta = getLeadStatusMeta(newStatus);
+        setFormData(prev => ({ ...prev, status: newStatus }));
+        if (lead?.id) {
+            try {
+                const { error } = await supabase.from('leads').update({ status: newStatus }).eq('id', lead.id);
+                if (error) throw error;
+                showAlert(`Status alterado para "${meta.label}" com sucesso!`, 'success');
+                if (onSave) onSave({ ...lead, ...formData, status: newStatus });
+            } catch (err) {
+                console.error('Erro ao atualizar status do lead:', err);
+                showAlert('Erro ao atualizar status: ' + err.message, 'error');
+            }
+        }
+    };
+
     const [formData, setFormData] = useState({
         name: '',
         status: 'simulacao',
@@ -522,63 +565,119 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
         }
     };
 
+    const leadStatusMeta = getLeadStatusMeta(formData.status);
+
     return (
         <div style={{
             position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000
+            backgroundColor: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(4px)',
+            display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000
         }}>
-            <div style={{ background: 'white', padding: '0', borderRadius: '12px', width: '90%', maxWidth: '900px', maxHeight: '95vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-                {/* Modal Header */}
+            <div style={{
+                background: 'white',
+                borderRadius: '16px',
+                width: '95%',
+                maxWidth: '1180px',
+                maxHeight: '92vh',
+                overflow: 'hidden',
+                display: 'flex',
+                flexDirection: 'column',
+                boxShadow: '0 25px 50px -12px rgba(15, 23, 42, 0.25)',
+                border: '1px solid #e2e8f0'
+            }}>
+                {/* 1. Modal Header (Pinned) */}
                 <div style={{
-                    padding: '1.25rem 2rem',
-                    borderBottom: '1px solid #eee',
+                    padding: '1.15rem 1.75rem',
+                    borderBottom: '1px solid #e2e8f0',
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
-                    background: '#f8fafc'
+                    background: '#ffffff',
+                    flexShrink: 0
                 }}>
-                    <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#1e293b' }}>
-                        {lead ? `Lead - ${formData.name}` : 'Novo Lead'}
-                    </h3>
-                    <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.875rem', flexWrap: 'wrap', minWidth: 0, flex: 1, marginRight: '1rem' }}>
+                        <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {lead ? `Lead: ${formData.name || 'Sem nome'}` : 'Novo Lead'}
+                        </h3>
+                        {formData.phone && (
+                            <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 500 }}>
+                                • {maskPhone(formData.phone)}
+                            </span>
+                        )}
+                        <span style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.375rem',
+                            padding: '0.25rem 0.75rem',
+                            borderRadius: '9999px',
+                            fontSize: '0.75rem',
+                            fontWeight: 600,
+                            background: leadStatusMeta.bg,
+                            color: leadStatusMeta.color,
+                            border: `1px solid ${leadStatusMeta.border}`,
+                            letterSpacing: '0.01em',
+                            flexShrink: 0
+                        }}>
+                            <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: leadStatusMeta.dot }} />
+                            {leadStatusMeta.label}
+                        </span>
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexShrink: 0 }}>
                         {lead && (
                             <button
                                 type="button"
                                 onClick={() => setShowHistory(true)}
                                 style={{
                                     display: 'flex', alignItems: 'center', gap: '0.4rem',
-                                    background: '#fff', color: 'var(--color-blue)',
-                                    border: '1px solid var(--color-blue)',
-                                    padding: '0.4rem 0.8rem', borderRadius: '6px',
-                                    cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600
+                                    background: '#ffffff', color: 'var(--color-blue)',
+                                    border: '1px solid #cbd5e1',
+                                    padding: '0.45rem 0.85rem', borderRadius: '8px',
+                                    cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600,
+                                    transition: 'all 0.15s ease'
                                 }}
+                                onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f8fafc'}
+                                onMouseLeave={e => e.currentTarget.style.backgroundColor = '#ffffff'}
                             >
                                 <History size={16} /> Histórico
                             </button>
                         )}
-                        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}>
-                            <X size={24} />
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            style={{
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                width: '36px', height: '36px',
+                                background: 'none', border: 'none', borderRadius: '8px',
+                                cursor: 'pointer', color: '#64748b',
+                                transition: 'all 0.15s ease'
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#f1f5f9'; e.currentTarget.style.color = '#0f172a'; }}
+                            onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#64748b'; }}
+                        >
+                            <X size={20} />
                         </button>
                     </div>
                 </div>
 
-                {/* Tabs Menu */}
+                {/* 2. Top Tabs Navigation Bar (Pinned) */}
                 <div style={{
                     display: 'flex',
-                    background: 'white',
-                    padding: '0 2rem',
+                    gap: '0.25rem',
+                    padding: '0 1.5rem',
                     borderBottom: '1px solid #e2e8f0',
-                    gap: '2rem'
+                    background: '#ffffff',
+                    overflowX: 'auto',
+                    scrollbarWidth: 'none',
+                    flexShrink: 0
                 }}>
-                    {
-                    [
-                        { id: 'dados', label: 'Dados Cadastrais', icon: User, color: '#003366', bg: '#f0f9ff' },
-                        { id: 'endereco', label: 'Endereço', icon: Home, color: '#10b981', bg: '#ecfdf5' },
-                        { id: 'conta', label: 'Conta de Energia', icon: FileText, color: '#0ea5e9', bg: '#f0f9ff' },
-                        ...(formData.tags?.includes('Energia por Assinatura') ? [{ id: 'energia', label: 'Dados de Energia', icon: Zap, color: '#f59e0b', bg: '#fff7ed' }] : []),
-                        ...(lead?.id ? [{ id: 'visitas', label: 'Visitas e Indicações', icon: Users, color: '#0f766e', bg: '#f0fdfa' }] : []),
-                        { id: 'agendamentos', label: 'Agendamentos', icon: Calendar, color: '#8b5cf6', bg: '#f5f3ff' },
-                        { id: 'comunicacao', label: 'Comunicados', icon: MessageCircle, color: '#25D366', bg: '#f0fdf4' }
+                    {[
+                        { id: 'dados', label: 'Dados Cadastrais', icon: User },
+                        { id: 'endereco', label: 'Endereço', icon: Home },
+                        { id: 'conta', label: 'Conta de Energia', icon: FileText },
+                        ...(formData.tags?.includes('Energia por Assinatura') ? [{ id: 'energia', label: 'Dados de Energia', icon: Zap }] : []),
+                        ...(lead?.id ? [{ id: 'visitas', label: 'Visitas e Indicações', icon: Users }] : []),
+                        { id: 'agendamentos', label: 'Agendamentos', icon: Calendar, badge: appointments.length > 0 ? appointments.length : null },
+                        { id: 'comunicacao', label: 'Comunicados', icon: MessageCircle }
                     ].map(tab => {
                         const isActive = activeTab === tab.id;
                         const Icon = tab.icon;
@@ -588,39 +687,136 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
                                 type="button"
                                 onClick={() => setActiveTab(tab.id)}
                                 style={{
-                                    display: 'flex',
+                                    display: 'inline-flex',
                                     alignItems: 'center',
-                                    gap: '0.6rem',
-                                    padding: '1rem 0',
-                                    border: 'none',
-                                    background: 'none',
+                                    gap: '0.5rem',
+                                    padding: '0.85rem 1rem',
+                                    fontSize: '0.875rem',
+                                    fontWeight: isActive ? 600 : 500,
+                                    color: isActive ? 'var(--color-blue)' : '#64748b',
+                                    borderBottom: `2px solid ${isActive ? 'var(--color-blue)' : 'transparent'}`,
+                                    background: isActive ? 'rgba(0, 51, 102, 0.05)' : 'transparent',
+                                    borderTopLeftRadius: '8px',
+                                    borderTopRightRadius: '8px',
+                                    borderLeft: 'none',
+                                    borderRight: 'none',
+                                    borderTop: 'none',
                                     cursor: 'pointer',
-                                    color: isActive ? tab.color : '#64748b',
-                                    borderBottom: `3px solid ${isActive ? tab.color : 'transparent'}`,
-                                    transition: 'all 0.2s',
-                                    fontSize: '0.9rem',
-                                    fontWeight: isActive ? 700 : 500,
-                                    position: 'relative'
+                                    whiteSpace: 'nowrap',
+                                    flexShrink: 0,
+                                    transition: 'all 0.15s ease',
+                                    marginBottom: '-1px'
+                                }}
+                                onMouseEnter={e => {
+                                    if (!isActive) {
+                                        e.currentTarget.style.color = '#0f172a';
+                                        e.currentTarget.style.backgroundColor = '#f8fafc';
+                                    }
+                                }}
+                                onMouseLeave={e => {
+                                    if (!isActive) {
+                                        e.currentTarget.style.color = '#64748b';
+                                        e.currentTarget.style.backgroundColor = 'transparent';
+                                    }
                                 }}
                             >
-                                <div style={{
-                                    padding: '0.4rem',
-                                    borderRadius: '8px',
-                                    background: isActive ? tab.bg : 'transparent',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    color: isActive ? tab.color : '#94a3b8'
-                                }}>
-                                    <Icon size={18} />
-                                </div>
-                                {tab.label}
+                                <Icon size={16} strokeWidth={isActive ? 2.2 : 1.8} style={{ color: isActive ? 'var(--color-blue)' : '#94a3b8', flexShrink: 0 }} />
+                                <span>{tab.label}</span>
+                                {tab.badge && (
+                                    <span style={{
+                                        fontSize: '0.7rem',
+                                        fontWeight: 700,
+                                        padding: '0.1rem 0.45rem',
+                                        borderRadius: '9999px',
+                                        backgroundColor: isActive ? '#e0f2fe' : '#f1f5f9',
+                                        color: isActive ? '#0369a1' : '#64748b',
+                                        marginLeft: '0.2rem'
+                                    }}>
+                                        {tab.badge}
+                                    </span>
+                                )}
                             </button>
                         );
                     })}
                 </div>
 
-                <div style={{ flex: 1, overflowY: 'auto', padding: '2rem', background: '#f8fafc' }}>
+                {/* 3. Status Action Bar (Pinned, Clean, Aligned) */}
+                <div style={{
+                    padding: '0.625rem 1.75rem',
+                    background: '#f8fafc',
+                    borderBottom: '1px solid #e2e8f0',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.75rem',
+                    flexWrap: 'wrap',
+                    flexShrink: 0
+                }}>
+                    <span style={{
+                        fontSize: '0.72rem',
+                        fontWeight: 700,
+                        color: '#64748b',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em',
+                        whiteSpace: 'nowrap',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.35rem'
+                    }}>
+                        <Clock size={13} style={{ color: '#94a3b8' }} /> Alterar Status:
+                    </span>
+                    <div style={{ display: 'flex', gap: '0.375rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                        {statusOptions.map(opt => {
+                            const isSelected = formData.status === opt.value;
+                            const meta = getLeadStatusMeta(opt.value);
+                            return (
+                                <button
+                                    key={opt.value}
+                                    type="button"
+                                    onClick={() => handleStatusChange(opt.value)}
+                                    style={{
+                                        padding: '0.28rem 0.65rem',
+                                        borderRadius: '9999px',
+                                        fontSize: '0.75rem',
+                                        fontWeight: isSelected ? 700 : 500,
+                                        border: `1px solid ${isSelected ? meta.border : '#e2e8f0'}`,
+                                        background: isSelected ? meta.bg : '#ffffff',
+                                        color: isSelected ? meta.color : '#64748b',
+                                        cursor: 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '0.35rem',
+                                        transition: 'all 0.15s ease',
+                                        boxShadow: isSelected ? '0 1px 2px rgba(0,0,0,0.05)' : 'none'
+                                    }}
+                                    onMouseEnter={e => {
+                                        if (!isSelected) {
+                                            e.currentTarget.style.borderColor = meta.border;
+                                            e.currentTarget.style.color = meta.color;
+                                            e.currentTarget.style.background = meta.bg;
+                                        }
+                                    }}
+                                    onMouseLeave={e => {
+                                        if (!isSelected) {
+                                            e.currentTarget.style.borderColor = '#e2e8f0';
+                                            e.currentTarget.style.color = '#64748b';
+                                            e.currentTarget.style.background = '#ffffff';
+                                        }
+                                    }}
+                                >
+                                    <span style={{
+                                        width: 6,
+                                        height: 6,
+                                        borderRadius: '50%',
+                                        backgroundColor: isSelected ? meta.dot : '#cbd5e1'
+                                    }} />
+                                    {opt.label}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+
+                <div style={{ flex: 1, overflowY: 'auto', padding: '1.75rem 2rem', background: '#f8fafc' }}>
                     {activeTab === 'dados' && (
                         <form id="lead-form-dados" onSubmit={handleSubmit}>
                             <div style={{ background: 'white', padding: '1.5rem', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -1063,23 +1259,38 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
                     )}
                 </div>
 
-                {/* Footer Controls */}
+                {/* Modal Footer (Pinned) */}
                 <div style={{
                     padding: '1rem 2rem',
                     borderTop: '1px solid #e2e8f0',
-                    background: '#f8fafc',
+                    background: '#ffffff',
                     display: 'flex',
                     justifyContent: 'space-between',
-                    alignItems: 'center'
+                    alignItems: 'center',
+                    flexShrink: 0
                 }}>
                     <div>
                         {lead && onDelete && (
-                            <button type="button" onClick={handleDelete} style={{ padding: '0.6rem 1.25rem', background: '#fee2e2', color: '#dc2626', borderRadius: '6px', border: '1px solid #fecaca', fontWeight: 600 }}>
+                            <button
+                                type="button"
+                                onClick={handleDelete}
+                                style={{
+                                    padding: '0.625rem 1.25rem',
+                                    background: '#fee2e2',
+                                    color: '#dc2626',
+                                    borderRadius: '8px',
+                                    border: '1px solid #fecaca',
+                                    fontWeight: 600,
+                                    fontSize: '0.875rem',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.15s ease'
+                                }}
+                            >
                                 Excluir Lead
                             </button>
                         )}
                     </div>
-                    <div style={{ display: 'flex', gap: '0.75rem' }}>
+                    <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
                         {lead && !['ativacao', 'ativo', 'pago', 'negocio_perdido'].includes(lead.status) && onConvert && (
                             <select
                                 onChange={(e) => {
@@ -1088,43 +1299,75 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
                                             onConvert(lead, e.target.value);
                                             onClose();
                                         } else {
-                                            alert('Conversão para ' + e.target.value + ' em desenvolvimento!');
+                                            showAlert('Conversão para ' + e.target.value + ' em desenvolvimento!', 'info');
                                         }
                                         e.target.value = '';
                                     }
                                 }}
-                                style={{ padding: '0.6rem 1.25rem', background: '#ecfdf5', color: '#047857', border: '1px solid #bbf7d0', borderRadius: '6px', fontWeight: 600, outline: 'none' }}
+                                style={{
+                                    padding: '0.625rem 1rem',
+                                    background: '#ecfdf5',
+                                    color: '#047857',
+                                    border: '1px solid #a7f3d0',
+                                    borderRadius: '8px',
+                                    fontWeight: 600,
+                                    fontSize: '0.875rem',
+                                    outline: 'none',
+                                    cursor: 'pointer'
+                                }}
                             >
-                                <option value="">Converter...</option>
+                                <option value="">Converter Lead...</option>
                                 <option value="embaixador">Embaixador</option>
                                 <option value="assinante">Assinante</option>
                                 <option value="fornecedor">Fornecedor</option>
                                 <option value="dono_areas">Dono de Áreas/Vagas</option>
                             </select>
                         )}
-                        <button type="button" onClick={onClose} style={{ padding: '0.6rem 1.25rem', background: 'white', color: '#475569', borderRadius: '6px', border: '1px solid #cbd5e1', fontWeight: 600 }}>Cancelar</button>
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            style={{
+                                padding: '0.625rem 1.25rem',
+                                background: '#ffffff',
+                                color: '#475569',
+                                borderRadius: '8px',
+                                border: '1px solid #cbd5e1',
+                                fontWeight: 600,
+                                fontSize: '0.875rem',
+                                cursor: 'pointer',
+                                transition: 'all 0.15s ease'
+                            }}
+                        >
+                            Cancelar
+                        </button>
                         {['dados', 'endereco', 'conta', 'energia', 'agendamentos', 'comunicacao'].includes(activeTab) && (
                             <button
                                 type="button"
-                                onClick={(e) => {
+                                onClick={() => {
                                     let formId = 'lead-form-dados';
-                                if (activeTab === 'endereco') formId = 'lead-form-endereco';
-                                else if (activeTab === 'conta') formId = 'lead-form-conta';
-                                else if (activeTab === 'energia') formId = 'lead-form-energia';
-                                else if (activeTab === 'agendamentos' || activeTab === 'comunicacao') {
-                                    formId = 'lead-form-dados';
-                                }
-                                    document.getElementById(formId).dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+                                    if (activeTab === 'endereco') formId = 'lead-form-endereco';
+                                    else if (activeTab === 'conta') formId = 'lead-form-conta';
+                                    else if (activeTab === 'energia') formId = 'lead-form-energia';
+                                    else if (activeTab === 'agendamentos' || activeTab === 'comunicacao') {
+                                        formId = 'lead-form-dados';
+                                    }
+                                    const formEl = document.getElementById(formId);
+                                    if (formEl) {
+                                        formEl.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+                                    }
                                 }}
                                 disabled={loading}
                                 style={{
-                                    padding: '0.6rem 1.25rem',
+                                    padding: '0.625rem 1.75rem',
                                     background: 'var(--color-blue)',
-                                    color: 'white',
-                                    borderRadius: '6px',
+                                    color: '#ffffff',
+                                    borderRadius: '8px',
                                     border: 'none',
                                     fontWeight: 600,
-                                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                                    fontSize: '0.875rem',
+                                    cursor: loading ? 'not-allowed' : 'pointer',
+                                    boxShadow: '0 4px 6px -1px rgba(0, 51, 102, 0.2)',
+                                    transition: 'all 0.15s ease'
                                 }}
                             >
                                 {loading ? 'Salvando...' : 'Salvar Lead'}
