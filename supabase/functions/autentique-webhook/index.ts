@@ -177,10 +177,14 @@ serve(async (req) => {
                         }
                         assinado = 'Contrato de Gestão';
                     } else if (sig.document_type === 'compra_venda' && sig.usina_id) {
+                        // .eq(supplier_id): a data é da Compra e Venda com o
+                        // DONO da usina. Contrato enviado a quem não é mais o
+                        // dono não promove o dono atual (Santa Maria I, 27/10/2026).
                         const { error } = await supabaseAdmin
                             .from('usinas')
                             .update({ compra_venda_assinada_em: agora })
                             .eq('id', sig.usina_id)
+                            .eq('supplier_id', sig.signer_id)
                             .is('compra_venda_assinada_em', null);
                         if (error) {
                             console.error(`Falha ao datar a Compra e Venda da usina ${sig.usina_id}:`, error);
