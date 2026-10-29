@@ -198,7 +198,7 @@ describe('FAQ de Cotas', () => {
             expect(tudo, proibido).not.toContain(proibido)
         }
         expect(tudo).toContain('somente à vista')
-        expect(tudo).toContain('1,8% a 2% ao mês')
+        expect(tudo).toContain('a mesma da usina inteira: cerca de 2% ao mês')
         expect(tudo).toContain('título de propriedade')
     })
     it('o FAQ do Investidor não cita mais R$ 35.000', () => {
