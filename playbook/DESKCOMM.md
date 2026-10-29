@@ -287,7 +287,7 @@ Spec: `docs/superpowers/specs/2026-10-20-base-agente-assinatura-design.md`.
 Spec: `docs/superpowers/specs/2026-10-20-base-agente-cotas-design.md`.
 
 - **Fontes:** "Cotas — Perguntas e respostas" (faq, `bases/cotas-faq.ts`, 14 pares) e "Usinas com cotas" (documento gerado por `ponte_deskcomm_usinas_cotas`: usinas com "À venda" marcado, modelo "Cotas" e cota livre; preço da cota e cotas livres). O Agente Investidor também lê "Usinas com cotas" para a pergunta da cota.
-- **Regras:** 10 cotas por usina; preço da cota = preço da usina ÷ 10 + 10% (estruturação da associação e gestão do repasse); projeção de 1,8% a 2% ao mês, a depender do mês de geração; somente à vista; associação dos cotistas já formada, título de propriedade da cota; revenda com a ajuda da B2W.
+- **Regras:** 10 cotas por usina; preço da cota = preço da usina ÷ 10 + 10% (estruturação da associação e gestão do repasse); projeção igual à da usina inteira, cerca de 2% ao mês antes do Simples Nacional (desde 28/10/2026, Davi v9); sem cota livre, o Davi grava lista_espera e segue tirando dúvidas, sem passar para humano; somente à vista; associação dos cotistas já formada, título de propriedade da cota; revenda com a ajuda da B2W.
 - **Ofertar uma usina em cotas:** na aba Contratos da usina, marcar "À venda", "Modelo de venda" = Cotas e manter "Cotas vendidas (de 10)" atualizado. O documento se atualiza pelo gatilho de usinas.
 - **Pendências (projetos seguintes):** cadastro de cotistas por usina (substitui o contador manual) e divisão do repasse por cota no motor de split (hoje a associação divide fora do sistema).
 
