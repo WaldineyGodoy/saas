@@ -303,6 +303,8 @@ Spec `docs/superpowers/specs/2026-10-24-base-bel-recepcao-design.md`, plano `doc
 - **Dados do dono:** CNPJ "consta no contrato"; endereço Olavo Lacerda Montenegro, 467, Parque das Nações, Parnamirim/RN; equipe das 9h às 17h (Brasília), dias não informados.
 - **Pendências:** nome, público e promessa de cada anúncio (inclusive o Plano Connect 15%); regras do Connect na base da Assinatura; razão social; dias de atendimento; cobertura real em estados (o site lista 8, o sistema tem plano só para a Cosern). `base_assinatura.sql` e `base_investidor.sql` ainda citam a Gestora como destino de repasse. Teste real com anúncio: quando chegar o próximo lead.
 
+- **Recusa encerra o atendimento (29/10/2026, regra do dono para todos os atendentes).** Cliente que recusa de vez: o agente agradece numa mensagem e move o card para "Não fechou" com motivo `price`, `requested_by_customer` ou `other` (o Deskcomm só aceita motivos da lista fixa). O gatilho `trg_ponte_card_perdido_encerra` fecha a conversa (`fn_service_status`, o mesmo do botão Fechar), leva os outros cards abertos do contato para "Não fechou" e o lead do CRM para Negócio Perdido. Vale também para card movido à mão no Kanban; transferência do roteador não conta. Migrations `20261029d`/`e`, script `scripts/deskcomm/regra_encerrar_recusa.sql` (Bel ganhou `crm_move_lead_stage`).
+
 ### 8.6 Helena (Gestora / Comercializadora): base de conhecimento (25/10/2026)
 
 Spec `docs/superpowers/specs/2026-10-25-base-helena-gestora-design.md`, plano `docs/superpowers/plans/2026-10-25-base-helena-gestora.md`. Antes dela, a Helena não tinha base nenhuma.
