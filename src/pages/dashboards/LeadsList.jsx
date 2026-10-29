@@ -6,6 +6,7 @@ import SubscriberModal from '../../components/SubscriberModal';
 import SupplierModal from '../../components/SupplierModal';
 import { getTagColor } from '../../lib/tagHelpers';
 import LeadAgenda from '../../components/LeadAgenda';
+import { SeloJev } from '../../components/TermometroJev';
 import {
     DndContext,
     PointerSensor,
@@ -110,7 +111,10 @@ function KanbanCard({ lead, onClick, isOverlay, novo }) {
         >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem', marginBottom: '0.3rem' }}>
                 <span style={{ fontWeight: 'bold', color: 'var(--color-text-dark)' }}>{lead.name}</span>
-                {novo && <SeloNew />}
+                <span style={{ display: 'flex', gap: '0.3rem', alignItems: 'center', flexShrink: 0 }}>
+                    <SeloJev lead={lead} />
+                    {novo && <SeloNew />}
+                </span>
             </div>
 
             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
