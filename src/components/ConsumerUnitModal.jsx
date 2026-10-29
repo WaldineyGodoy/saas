@@ -5,6 +5,7 @@ import { fetchAddressByCep, fetchOfferData } from '../lib/api';
 import { ehPapelInterno, ehPapelAdmin } from '../lib/papeis';
 import { anexarDocumentoAssinante } from '../lib/documentosAssinante';
 import { soDigitosUc, formatarNumeroUc } from '../lib/numeroUc';
+import './ConsumerUnitModal.css';
 import DocumentosAssinante from './subscriber/DocumentosAssinante';
 import { 
     ChevronDown, ChevronUp, History, X, User, Home, Zap, Link, Settings, Key, Eye, EyeOff, 
@@ -30,6 +31,8 @@ import PowerPlantModal from './PowerPlantModal';
 import InvoiceSummaryModal from './InvoiceSummaryModal';
 import TrocaTitularidadePanel from './TrocaTitularidadePanel';
 import { ENERGY_PAID_DIVERGENT, energyStatusMatchesFilter } from '../lib/energyBillStatus';
+
+const semAcento = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase();
 
 export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDelete, defaultSection = 'geral' }) {
     // Ao encerrar uma UC, o robo para de buscar conta dela -- mas a
@@ -1390,6 +1393,11 @@ Qualquer dúvida, é só responder esta mensagem.`;
     const subscriberName = subscribers.find(s => s.id === formData.subscriber_id)?.name || '';
 
     const currentStatusMeta = getUcStatusMeta(formData.status);
+    // O cabecalho mostrava assinante e titular em sequencia, e quando sao a
+    // mesma pessoa o nome saia duas vezes.
+    const nomeAssinante = subscriberName || 'Sem assinante';
+    const subtituloUc = [nomeAssinante, semAcento(subscriberName) === semAcento(formData.titular_conta) ? '' : formData.titular_conta]
+        .filter(Boolean).join(' · ');
 
     return (
         <div style={{
@@ -1397,60 +1405,29 @@ Qualquer dúvida, é só responder esta mensagem.`;
             backgroundColor: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(4px)',
             display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000
         }}>
-            <div style={{
-                background: 'white',
-                borderRadius: '16px',
-                width: '95%',
-                maxWidth: '1180px',
-                maxHeight: '92vh',
-                overflow: 'hidden',
-                display: 'flex',
-                flexDirection: 'column',
-                boxShadow: '0 25px 50px -12px rgba(15, 23, 42, 0.25)',
-                border: '1px solid #e2e8f0'
-            }}>
-                {/* 1. Modal Header (Pinned) */}
-                <div style={{
-                    padding: '1.15rem 1.75rem',
-                    borderBottom: '1px solid #e2e8f0',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    background: '#ffffff',
-                    flexShrink: 0
-                }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.875rem', flexWrap: 'wrap', minWidth: 0, flex: 1, marginRight: '1rem' }}>
-                        <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {consumerUnit?.id ? (
-                                `${formData.numero_uc} - ${subscriberName || 'Sem assinante'}`
-                            ) : 'Nova Unidade Consumidora'}
+            <div className="uc-modal__panel" role="dialog" aria-modal="true" aria-labelledby="uc-modal-titulo">
+                {/* Modal Header */}
+                <div className="uc-modal__header">
+                    <div className="uc-modal__heading">
+                        <h3 id="uc-modal-titulo" className="uc-modal__title">
+                            {consumerUnit?.id ? `UC ${formatarNumeroUc(formData.numero_uc)}` : 'Nova Unidade Consumidora'}
                         </h3>
-                        {formData.titular_conta && (
-                            <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 500 }}>
-                                • {formData.titular_conta}
-                            </span>
-                        )}
-                        {consumerUnit?.id && (
-                            <span style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '0.375rem',
-                                padding: '0.25rem 0.75rem',
-                                borderRadius: '9999px',
-                                fontSize: '0.75rem',
-                                fontWeight: 600,
-                                background: currentStatusMeta.bg,
-                                color: currentStatusMeta.color,
-                                border: `1px solid ${currentStatusMeta.border}`,
-                                letterSpacing: '0.01em',
-                                flexShrink: 0
-                            }}>
-                                <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: currentStatusMeta.dot }} />
-                                {currentStatusMeta.label}
-                            </span>
+                        {consumerUnit?.id && subtituloUc && (
+                            <p className="uc-modal__subtitle" title={`${formData.numero_uc} - ${nomeAssinante} - ${formData.titular_conta}`}>
+                                {subtituloUc}
+                            </p>
                         )}
                     </div>
-                    <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexShrink: 0 }}>
+                    {consumerUnit?.id && (
+                        <span
+                            className="uc-modal__badge"
+                            style={{ background: currentStatusMeta.bg, color: currentStatusMeta.color, borderColor: currentStatusMeta.border }}
+                        >
+                            <span className="uc-modal__badge-dot" style={{ backgroundColor: currentStatusMeta.dot }} />
+                            {currentStatusMeta.label}
+                        </span>
+                    )}
+                    <div className="uc-modal__actions">
                         {consumerUnit?.id && (
                             <button
                                 type="button"
@@ -1469,36 +1446,15 @@ Qualquer dúvida, é só responder esta mensagem.`;
                                 <History size={16} /> Histórico
                             </button>
                         )}
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            style={{
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                width: '36px', height: '36px',
-                                background: 'none', border: 'none', borderRadius: '8px',
-                                cursor: 'pointer', color: '#64748b',
-                                transition: 'all 0.15s ease'
-                            }}
-                            onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#f1f5f9'; e.currentTarget.style.color = '#0f172a'; }}
-                            onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#64748b'; }}
-                        >
-                            <X size={20} />
+                        <button type="button" onClick={onClose} className="uc-modal__close" aria-label="Fechar">
+                            <X size={22} />
                         </button>
                     </div>
                 </div>
-
-                {/* 2. Top Tabs Navigation Bar (Pinned) */}
-                <div style={{
-                    display: 'flex',
-                    gap: '0.25rem',
-                    padding: '0 1.5rem',
-                    borderBottom: '1px solid #e2e8f0',
-                    background: '#ffffff',
-                    overflowX: 'auto',
-                    scrollbarWidth: 'none',
-                    flexShrink: 0
-                }}>
-                    {[
+                <div className="uc-modal__scroll">
+                    <div className="uc-modal__tabbar">
+                    <div className="uc-modal__tabs" role="tablist" aria-label="Seções da unidade consumidora">
+                        {[
                         { id: 'geral', label: 'Geral', icon: User },
                         { id: 'tecnico', label: 'Técnico', icon: Zap },
                         { id: 'faturas_contas', label: 'Faturas e Contas de Energia', icon: FileText },
@@ -1506,80 +1462,37 @@ Qualquer dúvida, é só responder esta mensagem.`;
                         { id: 'comunicados', label: 'Comunicados', icon: MessageSquare },
                         { id: 'contrato', label: 'Contrato', icon: FileSignature }
                     ]
-                        .filter(tab => tab.id !== 'faturas_contas' || ehPapelInterno(profile?.role))
-                        .map(tab => {
+                        
+                            // "Faturas e Contas de Energia" cria fatura, sobe conta
+                            // da concessionaria, gera fatura zerada e edita fatura --
+                            // escrita em `invoices`, que desde a migracao 20260922h
+                            // so o papel interno grava. A tela Unidades Consumidoras
+                            // esta no menu do embaixador e do fornecedor, e sem este
+                            // filtro os botoes apareceriam para quem leva 42501.
+                            .filter(tab => tab.id !== 'faturas_contas' || ehPapelInterno(profile?.role))
+                            .map(tab => {
                             const isActive = activeTab === tab.id;
                             const Icon = tab.icon;
                             return (
                                 <button
                                     key={tab.id}
                                     type="button"
+                                    role="tab"
+                                    aria-selected={isActive}
+                                    className="uc-modal__tab"
                                     onClick={() => setActiveTab(tab.id)}
-                                    style={{
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: '0.5rem',
-                                        padding: '0.85rem 1rem',
-                                        fontSize: '0.875rem',
-                                        fontWeight: isActive ? 600 : 500,
-                                        color: isActive ? 'var(--color-blue)' : '#64748b',
-                                        borderBottom: `2px solid ${isActive ? 'var(--color-blue)' : 'transparent'}`,
-                                        background: isActive ? 'rgba(0, 51, 102, 0.05)' : 'transparent',
-                                        borderTopLeftRadius: '8px',
-                                        borderTopRightRadius: '8px',
-                                        borderLeft: 'none',
-                                        borderRight: 'none',
-                                        borderTop: 'none',
-                                        cursor: 'pointer',
-                                        whiteSpace: 'nowrap',
-                                        flexShrink: 0,
-                                        transition: 'all 0.15s ease',
-                                        marginBottom: '-1px'
-                                    }}
-                                    onMouseEnter={e => {
-                                        if (!isActive) {
-                                            e.currentTarget.style.color = '#0f172a';
-                                            e.currentTarget.style.backgroundColor = '#f8fafc';
-                                        }
-                                    }}
-                                    onMouseLeave={e => {
-                                        if (!isActive) {
-                                            e.currentTarget.style.color = '#64748b';
-                                            e.currentTarget.style.backgroundColor = 'transparent';
-                                        }
-                                    }}
                                 >
-                                    <Icon size={16} strokeWidth={isActive ? 2.2 : 1.8} style={{ color: isActive ? 'var(--color-blue)' : '#94a3b8', flexShrink: 0 }} />
-                                    <span>{tab.label}</span>
+                                    <Icon size={18} />
+                                    {tab.label}
                                 </button>
                             );
                         })}
-                </div>
+                    </div>
+                    </div>
 
-                {/* 3. Status Action Bar (Pinned, Clean, Aligned) */}
-                <div style={{
-                    padding: '0.625rem 1.75rem',
-                    background: '#f8fafc',
-                    borderBottom: '1px solid #e2e8f0',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.75rem',
-                    flexWrap: 'wrap',
-                    flexShrink: 0
-                }}>
-                    <span style={{
-                        fontSize: '0.72rem',
-                        fontWeight: 700,
-                        color: '#64748b',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.05em',
-                        whiteSpace: 'nowrap',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.35rem'
-                    }}>
-                        <Clock size={13} style={{ color: '#94a3b8' }} /> Alterar Status:
-                    </span>
+                    {/* Faixa de status: a troca grava na hora (handleUpdateStatus, PR #64) */}
+                    <div className="uc-modal__status">
+                        <span className="uc-modal__status-label">Alterar Status da UC</span>
                     <div style={{ display: 'flex', gap: '0.375rem', flexWrap: 'wrap', alignItems: 'center' }}>
                         {statusOptions.map(opt => {
                             const isSelected = formData.status === opt.value;
@@ -1630,16 +1543,15 @@ Qualquer dúvida, é só responder esta mensagem.`;
                             );
                         })}
                     </div>
-                </div>
+                    </div>
 
-                {/* 4. Form Wrapping Scrollable Body & Pinned Footer */}
-                <form onSubmit={handleSubmit} style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
-                    <div style={{ flex: 1, overflowY: 'auto', padding: '1.75rem 2rem', background: '#f8fafc' }}>
+                    <div className="uc-modal__body">
+                        <form className="uc-modal__form" onSubmit={handleSubmit}>
                             {/* Tab Content: Geral */}
                             {activeTab === 'geral' && (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                                     {!consumerUnit?.id && <PreencherUcPelaConta onLeitura={aplicarContaNaUc} />}
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', alignItems: 'start' }}>
                                         <div style={{ background: '#f8fafc', padding: '1.25rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
                                             <h4 style={{ margin: '0 0 1rem 0', fontSize: '0.9rem', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                                 <Zap size={18} color="var(--color-blue)" /> Identificação da UC
@@ -2899,7 +2811,7 @@ Qualquer dúvida, é só responder esta mensagem.`;
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#475569', fontWeight: 700, fontSize: '0.9rem' }}>
                                             <Filter size={18} color="var(--color-blue)" /> Filtros Sincronizados
                                         </div>
-                                        <div style={{ display: 'flex', gap: '1.25rem', alignItems: 'center' }}>
+                                        <div style={{ display: 'flex', gap: '1.25rem', alignItems: 'center', flexWrap: 'wrap' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                                 <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>Ano Referência:</span>
                                                 <select
@@ -3374,18 +3286,8 @@ Qualquer dúvida, é só responder esta mensagem.`;
                                 </div>
                             )}
 
-                    </div>
-
-                    {/* 5. Pinned Actions Footer */}
-                    <div style={{
-                        padding: '1rem 2rem',
-                        borderTop: '1px solid #e2e8f0',
-                        background: '#ffffff',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        flexShrink: 0
-                    }}>
+                    {/* Rodape de acoes: fixo no fundo da rolagem */}
+                    <div className="uc-modal__footer">
                         <div>
                             {consumerUnit?.id && onDelete && (
                                 <button
@@ -3448,7 +3350,9 @@ Qualquer dúvida, é só responder esta mensagem.`;
                             </button>
                         </div>
                     </div>
-                </form>
+                        </form>
+                    </div>
+                </div>
             </div>
 
             {showHistory && consumerUnit?.id && (
