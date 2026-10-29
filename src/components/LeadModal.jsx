@@ -10,6 +10,7 @@ import HistoryTimeline, { CollapsibleSection } from './HistoryTimeline';
 import TagInput from './TagInput';
 import ContaEnergiaLead from './ContaEnergiaLead';
 import LeadVisitas from './LeadVisitas';
+import { SeloJev, PainelJev } from './TermometroJev';
 import { separarNumero } from '../lib/energyBillParser';
 
 export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }) {
@@ -621,6 +622,7 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
                             <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: leadStatusMeta.dot }} />
                             {leadStatusMeta.label}
                         </span>
+                        <SeloJev lead={lead} />
                     </div>
                     <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexShrink: 0 }}>
                         {lead && (
@@ -883,6 +885,8 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
                                         onChange={(newTags) => setFormData({ ...formData, tags: newTags })} 
                                     />
                                 </div>
+
+                                <PainelJev lead={lead} />
 
                                 {lead?.qualificacao?.investimento && (
                                     <QualificacaoInvestimento q={lead.qualificacao.investimento} />
