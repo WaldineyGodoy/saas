@@ -191,6 +191,15 @@ const PUBLICO: Record<string, string> = {
     ambos: 'pessoa física e empresa',
 }
 const PUBLICO_INDEFINIDO = 'não definido (pergunte se é pessoa física ou empresa)'
+/**
+ * Pessoa fisica ou empresa so muda a conversa na Energia por Assinatura. Em anuncio de
+ * investimento a pergunta atrasa o especialista (caso de 28/10/2026, anuncio "R$ 300 mil").
+ */
+const ASSINATURA = 'Energia por Assinatura'
+const PUBLICO_NAO_SE_APLICA = 'não se aplica (não pergunte se é pessoa física ou empresa)'
+
+const publicoDoAnuncio = (a: AnuncioEntrada) =>
+    a.categoria_nome !== ASSINATURA ? PUBLICO_NAO_SE_APLICA : (PUBLICO[a.publico] ?? PUBLICO_INDEFINIDO)
 
 /**
  * Percentual de anuncio nao entra na base: a trava de promessas do Deskcomm aceita como
@@ -203,7 +212,7 @@ function blocoAnuncio(a: AnuncioEntrada): string {
     const plataformas = a.plataformas.length > 0 ? a.plataformas.join(', ') : 'a confirmar'
     return [
         `### anuncio:${a.slug} — ${semPercentual(a.nome)}`,
-        `Plataformas: ${plataformas} · Público: ${PUBLICO[a.publico] ?? PUBLICO_INDEFINIDO} · Produto: ${a.categoria_nome}`,
+        `Plataformas: ${plataformas} · Público: ${publicoDoAnuncio(a)} · Produto: ${a.categoria_nome}`,
         `Título do anúncio: ${semPercentual(a.titulo?.trim() || A_CONFIRMAR)}`,
         `Promessa do anúncio: ${semPercentual(a.promessa?.trim() || A_CONFIRMAR)}`,
     ].join('\n')
@@ -211,7 +220,9 @@ function blocoAnuncio(a: AnuncioEntrada): string {
 
 const ABERTURA_ANUNCIO =
     'Com a etiqueta, abra falando do que o anúncio ofereceu e não pergunte o que a pessoa procura. ' +
-    'Confirme se é pessoa física ou empresa: nunca presuma, mesmo no anúncio de CNPJ. ' +
+    'Só em anúncio de Energia por Assinatura confirme se é pessoa física ou empresa: nunca presuma, mesmo no anúncio de CNPJ. ' +
+    'Em anúncio de outro produto (Usinas de Investimento, Cotas e os demais), não pergunte se é pessoa física ou empresa: ' +
+    'o produto já está claro, abra falando do anúncio e siga. ' +
     'A promessa do anúncio não é garantia: nunca repita um percentual do anúncio como valor garantido; ' +
     'o percentual do cliente sai da simulação. Se o contato tiver mais de uma etiqueta de anúncio, vale a última.'
 

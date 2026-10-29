@@ -278,9 +278,16 @@ describe('montarEntradas', () => {
         }
     })
 
-    it('regras de abertura: pergunta pessoa física ou empresa e nunca repete percentual do anúncio como garantia', () => {
+    it('anúncio de outro produto não manda perguntar pessoa física ou empresa, mesmo com público indefinido', () => {
+        const md = montarEntradas([{ ...anuncioPf, slug: '44050337-investimento', publico: 'nao_definido', categoria_nome: 'Usinas de Investimento' }])
+        expect(md).toContain('Público: não se aplica (não pergunte se é pessoa física ou empresa) · Produto: Usinas de Investimento')
+        expect(md).not.toContain('Público: não definido')
+    })
+
+    it('regras de abertura: pessoa física ou empresa só na assinatura e nunca repete percentual do anúncio como garantia', () => {
         const md = montarEntradas([anuncioPf])
-        expect(md).toContain('nunca presuma, mesmo no anúncio de CNPJ')
+        expect(md).toContain('Só em anúncio de Energia por Assinatura confirme se é pessoa física ou empresa: nunca presuma, mesmo no anúncio de CNPJ')
+        expect(md).toContain('Em anúncio de outro produto (Usinas de Investimento, Cotas e os demais), não pergunte se é pessoa física ou empresa')
         expect(md).toContain('nunca repita um percentual do anúncio como valor garantido')
         expect(md).toContain('vale a última')
     })
