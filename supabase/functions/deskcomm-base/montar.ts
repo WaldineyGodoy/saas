@@ -35,6 +35,7 @@ export interface CoberturaAssinatura {
     desconto_pct: number | null
     tarifa: number | null
     credito_indicacao_100kwh: number | null
+    pct_indicacao: number | null
 }
 
 export const SEM_COBERTURA =
@@ -115,8 +116,10 @@ function blocoCobertura(c: CoberturaAssinatura) {
         'Custo mínimo da distribuidora: 30 kWh (mono), 50 kWh (bi), 100 kWh (tri)',
         'Consumo mínimo para assinar: 150 kWh/mês',
     ]
-    if (c.credito_indicacao_100kwh && Number(c.credito_indicacao_100kwh) > 0) {
-        linhas.push(`Crédito de indicação: cerca de ${reais(Number(c.credito_indicacao_100kwh))} a cada 100 kWh compensados pelo indicado`)
+    // "2%" precisa estar aqui: a trava de promessas do Deskcomm so libera o
+    // percentual que a Bia cita se ele estiver na base.
+    if (Number(c.credito_indicacao_100kwh) > 0 && Number(c.pct_indicacao) > 0) {
+        linhas.push(`Cashback de indicação: ${numero(Number(c.pct_indicacao))}% sobre a energia compensada de cada indicado (cerca de ${reais(Number(c.credito_indicacao_100kwh))} a cada 100 kWh), abatido na fatura de quem indicou`)
     }
     linhas.push('Vencimento do boleto: dia 5')
     return linhas.join('\n')
@@ -167,6 +170,135 @@ export function montarUsinasCotas(usinas: UsinaCotas[]): string {
     const ordenadas = [...validas].sort((a, b) =>
         (a.previsao_entrega ?? '9999').localeCompare(b.previsao_entrega ?? '9999') || a.nome.localeCompare(b.nome))
     return '# Usinas com cotas\n\n' + ordenadas.map(blocoCotas).join('\n\n') + '\n'
+}
+
+export interface AnuncioEntrada {
+    slug: string
+    nome: string
+    titulo: string | null
+    plataformas: string[]
+    publico: string
+    categoria_nome: string
+    promessa: string | null
+}
+
+export const SEM_ANUNCIOS =
+    'Nenhum anúncio identificado até agora. Contato de anúncio sem etiqueta: veja "Contato da Meta sem etiqueta de anúncio".\n'
+
+const PUBLICO: Record<string, string> = {
+    pf: 'pessoa física',
+    pj: 'empresa (CNPJ)',
+    ambos: 'pessoa física e empresa',
+}
+const PUBLICO_INDEFINIDO = 'não definido (pergunte se é pessoa física ou empresa)'
+
+/**
+ * Percentual de anuncio nao entra na base: a trava de promessas do Deskcomm aceita como
+ * provado qualquer numero que apareca numa fonte, e "ate 20%" no titulo faria a Bel
+ * repeti-lo como valor garantido. O percentual do cliente sai da simulacao.
+ */
+const semPercentual = (t: string) => t.replace(/\d+(?:[.,]\d+)?\s?%/g, '[percentual do anúncio]')
+
+function blocoAnuncio(a: AnuncioEntrada): string {
+    const plataformas = a.plataformas.length > 0 ? a.plataformas.join(', ') : 'a confirmar'
+    return [
+        `### anuncio:${a.slug} — ${semPercentual(a.nome)}`,
+        `Plataformas: ${plataformas} · Público: ${PUBLICO[a.publico] ?? PUBLICO_INDEFINIDO} · Produto: ${a.categoria_nome}`,
+        `Título do anúncio: ${semPercentual(a.titulo?.trim() || A_CONFIRMAR)}`,
+        `Promessa do anúncio: ${semPercentual(a.promessa?.trim() || A_CONFIRMAR)}`,
+    ].join('\n')
+}
+
+const ABERTURA_ANUNCIO =
+    'Com a etiqueta, abra falando do que o anúncio ofereceu e não pergunte o que a pessoa procura. ' +
+    'Confirme se é pessoa física ou empresa: nunca presuma, mesmo no anúncio de CNPJ. ' +
+    'A promessa do anúncio não é garantia: nunca repita um percentual do anúncio como valor garantido; ' +
+    'o percentual do cliente sai da simulação. Se o contato tiver mais de uma etiqueta de anúncio, vale a última.'
+
+const ENTRADAS_FIXAS = `## Contato da Meta sem etiqueta de anúncio
+Contato com origem meta_ads e sem etiqueta anuncio:… é interesse em desconto na conta de luz (Energia por Assinatura). Pergunte se é pessoa física ou empresa.
+
+## Mensagem genérica de anúncio
+"Olá! Posso ter mais informações sobre isso?" vem do botão do anúncio e não diz o produto. Use a etiqueta do anúncio; sem etiqueta, siga a regra acima.
+
+## Site (botões e simulador)
+Mensagens prontas dos botões do site b2wenergia.com.br. Todas são de Energia por Assinatura:
+- "Olá! Vim pelo site da B2W Energia e quero assinar e começar a economizar." — quer assinar.
+- "Olá! Quero assinar a energia solar da B2W Energia e começar a economizar." — quer assinar.
+- "Olá! Tenho uma dúvida sobre a energia solar por assinatura da B2W Energia." — tem dúvida.
+- "Olá! Vim pelo site da B2W Energia." — botão flutuante, sem intenção clara; o mais provável é Energia por Assinatura.
+Mensagem do simulador: "Olá! Simulei no site da B2W Energia: <distribuidora>, <consumo> kWh/mês, economia estimada de R$ <valor> por mês. Quero assinar." Ela já traz distribuidora e consumo: grave o consumo (consumo_kwh) e não pergunte de novo. A economia é estimativa do simulador; a confirmação sai da simulação do atendimento.
+
+## Indicação e origem
+O texto pronto do site pode terminar com um código. (cód. IND-xxxxxxxx) é indicação de um assinante ou originador; (cód. IG), (cód. GG) e (cód. FB) são Instagram, Google e Facebook. Se a origem ou o indicador já estiver gravado, não pergunte de novo.
+
+## App do assinante
+Quem diz que não conseguiu se cadastrar pelo link do app: passe para humano (crm_request_human_handoff) com o motivo "cadastro no app".
+
+## Cliente já cadastrado
+Se b2w_identificar_contato disser cliente_ativo, abra como cliente, sem dizer qual produto ele tem. Fatura, boleto, contrato, repasse ou app: humano, motivo "suporte".
+`
+
+/** Documento "Recepção: entradas". Anúncios na ordem recebida; o resto é texto fixo. */
+export function montarEntradas(anuncios: AnuncioEntrada[]): string {
+    const secaoAnuncios = anuncios.length === 0 ? SEM_ANUNCIOS : anuncios.map(blocoAnuncio).join('\n\n') + '\n'
+    return [
+        '# Recepção: entradas',
+        '',
+        'Como cada porta de entrada chega à Recepção e como a Bel abre a conversa.',
+        '',
+        '## Anúncios da Meta (etiqueta anuncio:… no contato)',
+        ABERTURA_ANUNCIO,
+        '',
+        secaoAnuncios,
+        ENTRADAS_FIXAS,
+    ].join('\n')
+}
+
+export interface PlanoGestora {
+    nome: string
+    taxa_gestao_pct: number
+    desconto_assinante_pct: number
+    dia_corte: number
+    dia_repasse: number
+    setup_pct: number | null
+    setup_base: string | null
+    carencia_dias: number | null
+    prazo_primeiro_repasse_dias: number | null
+}
+
+export const SEM_PLANOS_GESTORA =
+    'Nenhum plano de usina vigente no momento: taxa de gestão, desconto, setup, carência e prazo são confirmados pelo especialista.\n'
+
+const ESPECIALISTA_CONFIRMA = 'o especialista confirma'
+const percentual = (v: number) => `${Number(v).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%`
+const dias = (v: number) => `${v} ${v === 1 ? 'dia' : 'dias'}`
+
+function blocoPlanoGestora(p: PlanoGestora): string {
+    const setup = p.setup_pct != null && p.setup_base
+        ? `${percentual(p.setup_pct)} sobre ${p.setup_base}`
+        : `existe, mas o valor ainda não está definido; ${ESPECIALISTA_CONFIRMA}`
+    return [
+        `## ${p.nome}`,
+        `- Taxa de gestão: ${percentual(p.taxa_gestao_pct)}`,
+        `- Desconto do assinante: ${percentual(p.desconto_assinante_pct)}`,
+        `- Repasse ao dono: todo dia ${p.dia_repasse}`,
+        `- Dia de corte: dia ${p.dia_corte} (fechamento da apuração das faturas pagas pelo assinante que entram no repasse do dia ${p.dia_repasse})`,
+        `- Custo de setup: ${setup}`,
+        `- Carência: ${p.carencia_dias != null ? dias(p.carencia_dias) : `ainda não definida; ${ESPECIALISTA_CONFIRMA}`}`,
+        `- Prazo até o primeiro repasse: ${p.prazo_primeiro_repasse_dias != null ? dias(p.prazo_primeiro_repasse_dias) : `ainda não definido; ${ESPECIALISTA_CONFIRMA}`}`,
+    ].join('\n')
+}
+
+/** Documento "Gestora: planos vigentes". So os campos do contrato desta funcao entram. */
+export function montarGestoraPlanos(planos: PlanoGestora[]): string {
+    return [
+        '# Gestora: planos vigentes',
+        '',
+        'Valores do plano vigente para o dono de usina. Explique a fórmula do repasse e só cite a taxa de gestão e o desconto se o fornecedor perguntar, sempre dizendo que o especialista confirma o plano e o valor da usina dele. Custo de setup, carência e prazo até o primeiro repasse devem ser mencionados antes de passar ao especialista; o que estiver "ainda não definido" nunca é estimado.',
+        '',
+        planos.length === 0 ? SEM_PLANOS_GESTORA : planos.map(blocoPlanoGestora).join('\n\n') + '\n',
+    ].join('\n')
 }
 
 /**

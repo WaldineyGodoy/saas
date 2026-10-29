@@ -32,16 +32,6 @@ import InvoiceSummaryModal from './InvoiceSummaryModal';
 import TrocaTitularidadePanel from './TrocaTitularidadePanel';
 import { ENERGY_PAID_DIVERGENT, energyStatusMatchesFilter } from '../lib/energyBillStatus';
 
-// Cores do selo de status no cabeçalho. Só quatro estados têm cor própria; os
-// demais (inclusive os que a faixa "Alterar Status" oferece) usam o neutro.
-const STATUS_BADGE = {
-    ativo: { background: '#ecfdf5', color: '#059669', borderColor: '#d1fae5' },
-    em_ativacao: { background: '#eff6ff', color: '#2563eb', borderColor: '#dbeafe' },
-    vinculado: { background: '#e0e7ff', color: '#4f46e5', borderColor: '#c7d2fe' },
-    em_atraso: { background: '#fff1f2', color: '#e11d48', borderColor: '#ffe4e6' },
-};
-const STATUS_BADGE_PADRAO = { background: '#f1f5f9', color: '#475569', borderColor: '#e2e8f0' };
-
 const semAcento = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase();
 
 export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDelete, defaultSection = 'geral' }) {
@@ -174,6 +164,33 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
         { value: 'cancelado', label: 'Cancelado' },
         { value: 'cancelado_inadimplente', label: 'Cancelado (Inadimplente)' }
     ];
+
+    const getUcStatusMeta = (status) => {
+        switch (status) {
+            case 'ativo':
+                return { label: 'Ativo', color: '#059669', bg: '#ecfdf5', border: '#a7f3d0', dot: '#10b981' };
+            case 'em_ativacao':
+                return { label: 'Em Ativação', color: '#2563eb', bg: '#eff6ff', border: '#bfdbfe', dot: '#3b82f6' };
+            case 'vinculado':
+                return { label: 'Vinculado a Usina', color: '#4338ca', bg: '#e0e7ff', border: '#c7d2fe', dot: '#6366f1' };
+            case 'aguardando_conexao':
+                return { label: 'Aguardando Conexão', color: '#d97706', bg: '#fffbeb', border: '#fde68a', dot: '#f59e0b' };
+            case 'em_transf_titularidade':
+                return { label: 'Em Transf. de Titularidade', color: '#7e22ce', bg: '#faf5ff', border: '#e9d5ff', dot: '#a855f7' };
+            case 'sem_geracao':
+                return { label: 'Sem Geração', color: '#c2410c', bg: '#fff7ed', border: '#ffedd5', dot: '#f97316' };
+            case 'em_atraso':
+                return { label: 'Em Atraso', color: '#dc2626', bg: '#fef2f2', border: '#fecaca', dot: '#ef4444' };
+            case 'desconectado':
+                return { label: 'Desconectado', color: '#475569', bg: '#f1f5f9', border: '#cbd5e1', dot: '#64748b' };
+            case 'cancelado':
+                return { label: 'Cancelado', color: '#64748b', bg: '#f8fafc', border: '#e2e8f0', dot: '#94a3b8' };
+            case 'cancelado_inadimplente':
+                return { label: 'Cancelado (Inadimplente)', color: '#be123c', bg: '#fff1f2', border: '#fecdd3', dot: '#f43f5e' };
+            default:
+                return { label: status || 'Sem status', color: '#475569', bg: '#f1f5f9', border: '#e2e8f0', dot: '#94a3b8' };
+        }
+    };
 
     const rotuloModalidade = (m) => (
         m === 'auto_consumo_remoto' ? 'Auto Consumo Remoto'
@@ -956,6 +973,42 @@ Qualquer dúvida, é só responder esta mensagem.`;
         }
     };
 
+    const handleUpdateStatus = async (newStatus, statusLabel) => {
+        let activationDate = formData.data_ativacao;
+        if (newStatus === 'ativo' && !formData.data_ativacao) {
+            activationDate = new Date().toISOString().split('T')[0];
+        }
+        setFormData(prev => ({
+            ...prev,
+            status: newStatus,
+            data_ativacao: activationDate
+        }));
+
+        if (consumerUnit?.id) {
+            try {
+                const { error } = await supabase
+                    .from('consumer_units')
+                    .update({
+                        status: newStatus,
+                        data_ativacao: activationDate || null
+                    })
+                    .eq('id', consumerUnit.id);
+                if (error) throw error;
+
+                await addHistory(
+                    'uc',
+                    consumerUnit.id,
+                    `Status alterado diretamente no modal para: ${statusLabel}`,
+                    { status: newStatus, data_ativacao: activationDate || null }
+                );
+                showAlert(`Status da UC alterado para "${statusLabel}" com sucesso!`, 'success');
+            } catch (err) {
+                console.error('Error updating status immediately:', err);
+                showAlert('Erro ao atualizar status: ' + err.message, 'error');
+            }
+        }
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
 
@@ -1338,16 +1391,19 @@ Qualquer dúvida, é só responder esta mensagem.`;
 
     // Find subscriber name for header
     const subscriberName = subscribers.find(s => s.id === formData.subscriber_id)?.name || '';
-    // O cabeçalho mostrava assinante e titular em sequência, e quando são a
-    // mesma pessoa o nome saía duas vezes ("JONSUELO ... - JONSUELO ...").
-    const subtituloUc = [subscriberName, semAcento(subscriberName) === semAcento(formData.titular_conta) ? '' : formData.titular_conta]
+
+    const currentStatusMeta = getUcStatusMeta(formData.status);
+    // O cabecalho mostrava assinante e titular em sequencia, e quando sao a
+    // mesma pessoa o nome saia duas vezes.
+    const nomeAssinante = subscriberName || 'Sem assinante';
+    const subtituloUc = [nomeAssinante, semAcento(subscriberName) === semAcento(formData.titular_conta) ? '' : formData.titular_conta]
         .filter(Boolean).join(' · ');
-    const badgeStatus = STATUS_BADGE[formData.status] || STATUS_BADGE_PADRAO;
 
     return (
         <div style={{
             position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000
+            backgroundColor: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(4px)',
+            display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000
         }}>
             <div className="uc-modal__panel" role="dialog" aria-modal="true" aria-labelledby="uc-modal-titulo">
                 {/* Modal Header */}
@@ -1357,14 +1413,18 @@ Qualquer dúvida, é só responder esta mensagem.`;
                             {consumerUnit?.id ? `UC ${formatarNumeroUc(formData.numero_uc)}` : 'Nova Unidade Consumidora'}
                         </h3>
                         {consumerUnit?.id && subtituloUc && (
-                            <p className="uc-modal__subtitle" title={`${formData.numero_uc} - ${subscriberName} - ${formData.titular_conta}`}>
+                            <p className="uc-modal__subtitle" title={`${formData.numero_uc} - ${nomeAssinante} - ${formData.titular_conta}`}>
                                 {subtituloUc}
                             </p>
                         )}
                     </div>
                     {consumerUnit?.id && (
-                        <span className="uc-modal__badge" style={badgeStatus}>
-                            {statusOptions.find(o => o.value === formData.status)?.label || formData.status}
+                        <span
+                            className="uc-modal__badge"
+                            style={{ background: currentStatusMeta.bg, color: currentStatusMeta.color, borderColor: currentStatusMeta.border }}
+                        >
+                            <span className="uc-modal__badge-dot" style={{ backgroundColor: currentStatusMeta.dot }} />
+                            {currentStatusMeta.label}
                         </span>
                     )}
                     <div className="uc-modal__actions">
@@ -1374,11 +1434,14 @@ Qualquer dúvida, é só responder esta mensagem.`;
                                 onClick={() => setShowHistory(true)}
                                 style={{
                                     display: 'flex', alignItems: 'center', gap: '0.4rem',
-                                    background: '#fff', color: 'var(--color-blue)',
-                                    border: '1px solid var(--color-blue)',
-                                    padding: '0.4rem 0.8rem', borderRadius: '6px',
-                                    cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600
+                                    background: '#ffffff', color: 'var(--color-blue)',
+                                    border: '1px solid #cbd5e1',
+                                    padding: '0.45rem 0.85rem', borderRadius: '8px',
+                                    cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600,
+                                    transition: 'all 0.15s ease'
                                 }}
+                                onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f8fafc'}
+                                onMouseLeave={e => e.currentTarget.style.backgroundColor = '#ffffff'}
                             >
                                 <History size={16} /> Histórico
                             </button>
@@ -1392,15 +1455,16 @@ Qualquer dúvida, é só responder esta mensagem.`;
                     <div className="uc-modal__tabbar">
                     <div className="uc-modal__tabs" role="tablist" aria-label="Seções da unidade consumidora">
                         {[
-                            { id: 'geral', label: 'Geral', icon: User },
-                            { id: 'tecnico', label: 'Técnico', icon: Zap },
-                            { id: 'faturas_contas', label: 'Faturas e Contas de Energia', icon: FileText },
-                            { id: 'financeiro', label: 'Financeiro', icon: CreditCard },
-                            { id: 'comunicados', label: 'Comunicados', icon: MessageSquare },
-                            { id: 'contrato', label: 'Contrato', icon: FileSignature }
-                        ]
+                        { id: 'geral', label: 'Geral', icon: User },
+                        { id: 'tecnico', label: 'Técnico', icon: Zap },
+                        { id: 'faturas_contas', label: 'Faturas e Contas de Energia', icon: FileText },
+                        { id: 'financeiro', label: 'Financeiro', icon: CreditCard },
+                        { id: 'comunicados', label: 'Comunicados', icon: MessageSquare },
+                        { id: 'contrato', label: 'Contrato', icon: FileSignature }
+                    ]
+                        
                             // "Faturas e Contas de Energia" cria fatura, sobe conta
-                            // da concessionaria, gera fatura zerada e edita fatura —
+                            // da concessionaria, gera fatura zerada e edita fatura --
                             // escrita em `invoices`, que desde a migracao 20260922h
                             // so o papel interno grava. A tela Unidades Consumidoras
                             // esta no menu do embaixador e do fornecedor, e sem este
@@ -1426,130 +1490,59 @@ Qualquer dúvida, é só responder esta mensagem.`;
                     </div>
                     </div>
 
-                    {/* Quick Status Selector Block */}
+                    {/* Faixa de status: a troca grava na hora (handleUpdateStatus, PR #64) */}
                     <div className="uc-modal__status">
                         <span className="uc-modal__status-label">Alterar Status da UC</span>
-                        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                            {statusOptions.map(opt => {
-                                const isSelected = formData.status === opt.value;
-                                
-                                // Color system mapping
-                                let bg = '#f1f5f9';
-                                let color = '#475569';
-                                let border = '#cbd5e1';
-                                
-                                if (opt.value === 'ativo') {
-                                    bg = isSelected ? '#10b981' : '#ecfdf5';
-                                    color = isSelected ? '#ffffff' : '#059669';
-                                    border = isSelected ? '#10b981' : '#a7f3d0';
-                                } else if (opt.value === 'em_ativacao') {
-                                    bg = isSelected ? '#3b82f6' : '#eff6ff';
-                                    color = isSelected ? '#ffffff' : '#2563eb';
-                                    border = isSelected ? '#3b82f6' : '#bfdbfe';
-                                } else if (opt.value === 'vinculado') {
-                                    bg = isSelected ? '#4f46e5' : '#e0e7ff';
-                                    color = isSelected ? '#ffffff' : '#4338ca';
-                                    border = isSelected ? '#4f46e5' : '#c7d2fe';
-                                } else if (opt.value === 'em_atraso' || opt.value === 'cancelado' || opt.value === 'cancelado_inadimplente') {
-                                    bg = isSelected ? '#ef4444' : '#fff1f2';
-                                    color = isSelected ? '#ffffff' : '#e11d48';
-                                    border = isSelected ? '#ef4444' : '#fecaca';
-                                } else if (opt.value === 'aguardando_conexao' || opt.value === 'em_transf_titularidade') {
-                                    bg = isSelected ? '#f59e0b' : '#fffbeb';
-                                    color = isSelected ? '#ffffff' : '#d97706';
-                                    border = isSelected ? '#f59e0b' : '#fde68a';
-                                } else {
-                                    bg = isSelected ? '#64748b' : '#f8fafc';
-                                    color = isSelected ? '#ffffff' : '#475569';
-                                    border = isSelected ? '#64748b' : '#cbd5e1';
-                                }
-
-                                return (
-                                    <button
-                                        key={opt.value}
-                                        type="button"
-                                        onClick={async () => {
-                                            const newStatus = opt.value;
-                                            
-                                            // 1. Update form data locally
-                                            let activationDate = formData.data_ativacao;
-                                            if (newStatus === 'ativo' && !formData.data_ativacao) {
-                                                activationDate = new Date().toISOString().split('T')[0];
-                                            }
-                                            
-                                            setFormData(prev => ({
-                                                ...prev,
-                                                status: newStatus,
-                                                data_ativacao: activationDate
-                                            }));
-
-                                            // 2. If it's an existing consumer unit, update the database immediately
-                                            if (consumerUnit?.id) {
-                                                try {
-                                                    const { error } = await supabase
-                                                        .from('consumer_units')
-                                                        .update({
-                                                            status: newStatus,
-                                                            data_ativacao: activationDate || null
-                                                        })
-                                                        .eq('id', consumerUnit.id);
-                                                    
-                                                    if (error) throw error;
-                                                    
-                                                    // Add to chronological CRM history log
-                                                    const statusLabel = opt.label;
-                                                    await addHistory(
-                                                        'uc',
-                                                        consumerUnit.id,
-                                                        `Status alterado diretamente no modal para: ${statusLabel}`,
-                                                        { 
-                                                            status: newStatus,
-                                                            data_ativacao: activationDate || null
-                                                        }
-                                                    );
-                                                    
-                                                    showAlert(`Status da UC alterado para "${statusLabel}" com sucesso!`, 'success');
-                                                } catch (err) {
-                                                    console.error('Error updating status immediately:', err);
-                                                    showAlert('Erro ao atualizar status: ' + err.message, 'error');
-                                                }
-                                            }
-                                        }}
-                                        style={{
-                                            padding: '0.35rem 0.75rem',
-                                            borderRadius: '20px',
-                                            fontSize: '0.75rem',
-                                            fontWeight: 600,
-                                            border: `1.5px solid ${border}`,
-                                            background: bg,
-                                            color: color,
-                                            cursor: 'pointer',
-                                            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '0.25rem',
-                                            boxShadow: isSelected ? '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)' : 'none',
-                                            transform: isSelected ? 'scale(1.05)' : 'none'
-                                        }}
-                                        onMouseEnter={e => {
-                                            if (!isSelected) {
-                                                e.currentTarget.style.borderColor = color;
-                                                e.currentTarget.style.background = isSelected ? bg : '#e2e8f0';
-                                            }
-                                        }}
-                                        onMouseLeave={e => {
-                                            if (!isSelected) {
-                                                e.currentTarget.style.borderColor = border;
-                                                e.currentTarget.style.background = bg;
-                                            }
-                                        }}
-                                    >
-                                        {isSelected && <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'white', display: 'inline-block' }}></span>}
-                                        {opt.label}
-                                    </button>
-                                );
-                            })}
-                        </div>
+                    <div style={{ display: 'flex', gap: '0.375rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                        {statusOptions.map(opt => {
+                            const isSelected = formData.status === opt.value;
+                            const meta = getUcStatusMeta(opt.value);
+                            return (
+                                <button
+                                    key={opt.value}
+                                    type="button"
+                                    onClick={() => handleUpdateStatus(opt.value, opt.label)}
+                                    style={{
+                                        padding: '0.28rem 0.65rem',
+                                        borderRadius: '9999px',
+                                        fontSize: '0.75rem',
+                                        fontWeight: isSelected ? 700 : 500,
+                                        border: `1px solid ${isSelected ? meta.border : '#e2e8f0'}`,
+                                        background: isSelected ? meta.bg : '#ffffff',
+                                        color: isSelected ? meta.color : '#64748b',
+                                        cursor: 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '0.35rem',
+                                        transition: 'all 0.15s ease',
+                                        boxShadow: isSelected ? '0 1px 2px rgba(0,0,0,0.05)' : 'none'
+                                    }}
+                                    onMouseEnter={e => {
+                                        if (!isSelected) {
+                                            e.currentTarget.style.borderColor = meta.border;
+                                            e.currentTarget.style.color = meta.color;
+                                            e.currentTarget.style.background = meta.bg;
+                                        }
+                                    }}
+                                    onMouseLeave={e => {
+                                        if (!isSelected) {
+                                            e.currentTarget.style.borderColor = '#e2e8f0';
+                                            e.currentTarget.style.color = '#64748b';
+                                            e.currentTarget.style.background = '#ffffff';
+                                        }
+                                    }}
+                                >
+                                    <span style={{
+                                        width: 6,
+                                        height: 6,
+                                        borderRadius: '50%',
+                                        backgroundColor: isSelected ? meta.dot : '#cbd5e1'
+                                    }} />
+                                    {opt.label}
+                                </button>
+                            );
+                        })}
+                    </div>
                     </div>
 
                     <div className="uc-modal__body">
@@ -3293,42 +3286,70 @@ Qualquer dúvida, é só responder esta mensagem.`;
                                 </div>
                             )}
 
-                            {/* Actions Footer */}
-                            <div className="uc-modal__footer">
-                                {consumerUnit?.id && onDelete && (
-                                    <button 
-                                        type="button" 
-                                        onClick={handleDelete} 
-                                        style={{ marginRight: 'auto', padding: '0.7rem 1.5rem', background: '#fee2e2', color: '#dc2626', borderRadius: '10px', border: '1px solid #fecaca', fontWeight: 700, cursor: 'pointer', fontSize: '0.9rem' }}
-                                    >
-                                        Excluir Unidade
-                                    </button>
-                                )}
-                                <button 
-                                    type="button" 
-                                    onClick={onClose} 
-                                    style={{ padding: '0.7rem 1.5rem', background: '#f8fafc', color: '#475569', borderRadius: '10px', border: '1px solid #e2e8f0', fontWeight: 600, cursor: 'pointer', fontSize: '0.9rem' }}
-                                >
-                                    Cancelar
-                                </button>
+                    {/* Rodape de acoes: fixo no fundo da rolagem */}
+                    <div className="uc-modal__footer">
+                        <div>
+                            {consumerUnit?.id && onDelete && (
                                 <button
-                                    type="submit"
-                                    disabled={loading}
+                                    type="button"
+                                    onClick={handleDelete}
                                     style={{
-                                        padding: '0.7rem 2rem',
-                                        background: 'var(--color-blue)',
-                                        color: 'white',
-                                        borderRadius: '10px',
-                                        fontWeight: 700,
-                                        border: 'none',
-                                        boxShadow: '0 10px 15px -3px rgba(59, 130, 246, 0.3)',
-                                        cursor: loading ? 'not-allowed' : 'pointer',
-                                        fontSize: '0.9rem'
+                                        padding: '0.625rem 1.25rem',
+                                        background: '#fee2e2',
+                                        color: '#dc2626',
+                                        borderRadius: '8px',
+                                        border: '1px solid #fecaca',
+                                        fontWeight: 600,
+                                        fontSize: '0.875rem',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.15s ease'
                                     }}
                                 >
-                                    {loading ? 'Salvando...' : 'Salvar Unidade'}
+                                    Excluir Unidade
                                 </button>
-                            </div>
+                            )}
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                            <button
+                                type="button"
+                                onClick={onClose}
+                                style={{
+                                    padding: '0.625rem 1.25rem',
+                                    background: '#ffffff',
+                                    color: '#475569',
+                                    borderRadius: '8px',
+                                    border: '1px solid #cbd5e1',
+                                    fontWeight: 600,
+                                    fontSize: '0.875rem',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.15s ease'
+                                }}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="submit"
+                                disabled={loading}
+                                style={{
+                                    padding: '0.625rem 1.75rem',
+                                    background: 'var(--color-blue)',
+                                    color: '#ffffff',
+                                    borderRadius: '8px',
+                                    border: 'none',
+                                    fontWeight: 600,
+                                    fontSize: '0.875rem',
+                                    cursor: loading ? 'not-allowed' : 'pointer',
+                                    boxShadow: '0 4px 6px -1px rgba(0, 51, 102, 0.2)',
+                                    transition: 'all 0.15s ease',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.5rem'
+                                }}
+                            >
+                                {loading ? 'Salvando...' : 'Salvar Unidade'}
+                            </button>
+                        </div>
+                    </div>
                         </form>
                     </div>
                 </div>

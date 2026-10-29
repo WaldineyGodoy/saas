@@ -53,6 +53,9 @@ WhatsApp ──► Deskcomm
 
 ### 2.1 Categorias: tag B2W ↔ funil ↔ agente
 
+> **Correção de 24/10/2026 — linha Gestora / Comercializadora.** A primeira versão deste desenho descrevia a linha como "empresa que quer mercado livre ou gestão de energia", o que estava errado. Ela atende **fornecedores**, donos de usina que querem fornecer energia à B2W. Quem quer desconto na conta de luz, **pessoa física ou empresa (CNPJ)**, é sempre **Energia por Assinatura**. Foram corrigidos o roteiro da Helena (v6), a linha da Bel (v6), as intenções do roteador e a função `jev-temperatura`. A intenção de Assinatura passou a incluir exemplos de empresa.
+
+
 As tags já existem no CRM (`src/lib/tagHelpers.js`). Cada categoria vira um **funil de produto** no Deskcomm, com **um agente**.
 
 | Categoria (slug da ponte) | Tag no CRM B2W | Funil no Deskcomm | Agente |
@@ -129,7 +132,7 @@ Todos seguem a mesma regra: **números (desconto, preço, retorno, potência) s�
 | **Eletroposto** | Recarga e parceria de eletropostos (marca VOLT) | é motorista ou dono de local? endereço, tipo de estabelecimento, fluxo de veículos | Reunião / Proposta |
 | **Cotas** | Venda de cotas de usina | quantidade ou valor, objetivo (abater conta ou renda) | Simulação → Contrato |
 | **Arrendamento** | Captar áreas para usina | localização (cidade/coordenada), tamanho (ha), distância da rede, documentação do imóvel | Reunião agendada |
-| **Mercado Livre** | Gestão e comercialização para empresas | CNPJ, demanda contratada, consumo mensal, distribuidora, se já está no mercado livre | Reunião agendada |
+| **Mercado Livre** (Helena) | **Fornecedores:** donos de usina que querem fornecer energia à B2W (não atende assinante) | responsável e CNPJ, local e distribuidora, fonte e potência, situação da usina e da conexão, energia a fornecer | Reunião agendada |
 | **Vagas** | Locação de vagas de estacionamento | quer alugar ou oferecer? local, quantidade, com ou sem recarga | Proposta |
 
 ### 4.1 Intenções do roteador (descrição + exemplos)
@@ -143,7 +146,7 @@ Cada intenção aponta para o agente e para o funil/etapa "Novo contato" do prod
 | Eletropostos | Recarga de carro elétrico / parceria | "onde carrego meu carro elétrico?", "quero colocar um carregador no meu posto", "parceria de eletroposto" |
 | Cotas | Comprar fração de usina | "quero comprar cotas", "dá pra ter uma parte de uma usina?" |
 | Áreas de Arrendamento | Arrendar terreno | "tenho um terreno e quero arrendar", "vocês alugam área para usina?" |
-| Gestora / Comercializadora | Mercado livre, gestão de energia | "sou empresa e quero ir pro mercado livre", "gestão de energia para indústria" |
+| Gestora / Comercializadora | Dono de usina que quer fornecer energia à B2W | "tenho uma usina e quero vender energia", "vocês compram energia de usinas?" |
 | Locação de Vagas | Alugar vaga | "quero alugar uma vaga", "tenho vagas para locar" |
 
 Fallback do roteador: **Bel**, que segura o card na Recepção até a intenção ficar clara.
@@ -266,6 +269,9 @@ Spec: `docs/superpowers/specs/2026-10-20-bel-recepcao-design.md`.
 - **Mudar a abertura:** o bloco `v_comum` é o mesmo em `scripts/deskcomm/bel_recepcao.sql` e `base_investidor.sql`; altere os dois e rode `bel_recepcao.sql` (idempotente).
 - **Dado pendente:** a tabela `"Concessionaria"` está incompleta (ex.: São Gonçalo do Amarante/RN não está; RN tem 143 de 167 municípios). Cidade fora da tabela cai em "lista de espera".
 
+- **Já tem energia solar (23/10/2026):** regra no bloco comum dos 8 agentes — quem já tem energia solar instalada não pode aderir (restrição técnica interna); o agente agradece o retorno e encerra, sem explicar o produto nem passar a humano. Aplicada por `scripts/deskcomm/regra_ja_tem_solar.sql` (cirúrgico sobre a versão publicada).
+- **Atenção:** os prompts publicados têm seções de persona (Bel, Bia, Leo, Davi…) que os scripts `base_*.sql`, `bel_recepcao.sql` e `seed_funis_agentes.sql` não têm. Rodar um desses scripts de novo sobrescreve a persona. Para ajustar regra em produção, prefira alteração cirúrgica como a de `regra_ja_tem_solar.sql`.
+
 ### 8.3 Base do Agente Assinatura — no ar desde 20/10/2026
 
 Spec: `docs/superpowers/specs/2026-10-20-base-agente-assinatura-design.md`.
@@ -284,3 +290,48 @@ Spec: `docs/superpowers/specs/2026-10-20-base-agente-cotas-design.md`.
 - **Regras:** 10 cotas por usina; preço da cota = preço da usina ÷ 10 + 10% (estruturação da associação e gestão do repasse); projeção de 1,8% a 2% ao mês, a depender do mês de geração; somente à vista; associação dos cotistas já formada, título de propriedade da cota; revenda com a ajuda da B2W.
 - **Ofertar uma usina em cotas:** na aba Contratos da usina, marcar "À venda", "Modelo de venda" = Cotas e manter "Cotas vendidas (de 10)" atualizado. O documento se atualiza pelo gatilho de usinas.
 - **Pendências (projetos seguintes):** cadastro de cotistas por usina (substitui o contador manual) e divisão do repasse por cota no motor de split (hoje a associação divide fora do sistema).
+
+### 8.5 Bel (Recepção): base de conhecimento e anúncio de origem (24/10/2026)
+
+Spec `docs/superpowers/specs/2026-10-24-base-bel-recepcao-design.md`, plano `docs/superpowers/plans/2026-10-24-base-bel-recepcao.md`.
+
+- **Rastreio do anúncio.** O contato que vem da Meta ganha a etiqueta `anuncio:<slug>`, e o anúncio é registrado em `ponte_deskcomm.anuncios` (nome provisório `anuncio-<8 últimos dígitos>`; o dono troca o slug, o nome, o público e a promessa, e contatos e leads acompanham). O lead da B2W recebe o anúncio em `qualificacao.deskcomm.anuncio`. Relatório: `select * from ponte_deskcomm.v_leads_por_anuncio;`.
+- **Base da Bel.** Duas fontes: "Recepção — Perguntas e respostas" (18 itens, `bases/recepcao-faq.ts`) e "Recepção: entradas" (documento gerado da tabela de anúncios, regerado quando ela muda). Só fatos: sem percentual, preço nem lista de estados. Percentual de título de anúncio é mascarado.
+- **Bel v7.** Regra de anúncio no roteiro: abre pelo que o anúncio ofereceu, pergunta pessoa física ou empresa, nunca repete percentual do anúncio como garantia, oferece videochamada com o time comercial e passa para humano com o motivo `videochamada`.
+- **Dados do dono:** CNPJ "consta no contrato"; endereço Olavo Lacerda Montenegro, 467, Parque das Nações, Parnamirim/RN; equipe das 9h às 17h (Brasília), dias não informados.
+- **Pendências:** nome, público e promessa de cada anúncio (inclusive o Plano Connect 15%); regras do Connect na base da Assinatura; razão social; dias de atendimento; cobertura real em estados (o site lista 8, o sistema tem plano só para a Cosern). `base_assinatura.sql` e `base_investidor.sql` ainda citam a Gestora como destino de repasse. Teste real com anúncio: quando chegar o próximo lead.
+
+### 8.6 Helena (Gestora / Comercializadora): base de conhecimento (25/10/2026)
+
+Spec `docs/superpowers/specs/2026-10-25-base-helena-gestora-design.md`, plano `docs/superpowers/plans/2026-10-25-base-helena-gestora.md`. Antes dela, a Helena não tinha base nenhuma.
+
+- **Modelo.** A B2W gerencia a usina em nome do dono (operação, rateio, cobrança dos assinantes) e repassa o resultado. Não compra nem aluga a energia. Só usina solar, de qualquer potência, operando ou em construção com prazo de entrega. Projeto no papel: a Helena oferece o **Leo** (Usinas de Investimento), com a proposta especial de construção.
+- **Repasse.** Sobre a energia **compensada** (não a injetada; são grandezas distintas). Valor por kWh = tarifa da concessionária − desconto do assinante − Fio B − taxa de gestão. Pago todo dia 10.
+- **Duas fontes.** "Gestora — Perguntas e respostas" (14 itens, `bases/gestora-faq.ts`, nenhum número) e "Gestora: planos vigentes" (documento gerado de `planos_usina` com status `ativo`: taxa de gestão = `percentual_recorrente`, desconto do assinante = `desconto_pct`, `dia_repasse`, `dia_corte`, e os campos novos). `dia_corte` = fechamento da apuração das faturas pagas pelo assinante que entram no repasse do dia 10. Mudou o plano no CRM, o documento se regera (`trg_ponte_planos_usina_base`).
+- **Campos novos no plano:** `setup_pct` + `setup_base`, `carencia_dias`, `prazo_primeiro_repasse_dias`. Vazios até o dono definir; a Helena diz "o especialista confirma" e nunca estima. O setup só vira número com `setup_pct` e `setup_base` preenchidos. Essas colunas não estão na trava `fn_planos_usina_trava`.
+- **Helena v7** (`scripts/deskcomm/base_helena.sql`, cirúrgico: persona preservada). Só cita taxa e desconto se o fornecedor perguntar. Passa ao especialista com os dados básicos. Intenções do roteador: a da Helena fala de usina solar em operação/construção; a do Leo inclui projeto de usina ainda no papel.
+- **Não afirma:** taxa de recuperação, retenção na rescisão, multas, valor do Fio B, documentos, prazo de implantação, exclusividade.
+- **Pendências:** preencher setup, carência e prazo no plano; **o Leo precisa ter a proposta de construção na base dele**; teste real com um fornecedor.
+
+### 8.7 Leo (Usinas de Investimento): construção sob medida (25/10/2026)
+
+Spec `docs/superpowers/specs/2026-10-25-base-leo-construcao-design.md`. Complementa a base do Investidor (§8.1), que só trata da **compra**.
+
+- **Para quem.** Dono de projeto de usina solar no papel que a Helena (§8.6) encaminha, e quem quer construir a própria usina. O Leo apresenta as duas opções: construir com a B2W, que cuida de tudo (projeto, homologação, obra e conexão) e a usina continua sendo do dono, ou comprar uma usina da B2W já em construção ("Usinas à venda").
+- **Vantagens que destaca:** experiência comprovada; a usina já nasce com assinantes e gestão da B2W; acompanhamento da obra pelo app do investidor e custos iniciais (seguro e manutenção inclusos no primeiro ano, contador da abertura por conta da B2W). As garantias ficam na base do Investidor.
+- **Custo da obra:** nenhum valor. O orçamento depende do projeto e é do consultor. O requisito é ter recursos para a obra (à vista, parcelado ou financiamento); terreno e projeto, o consultor avalia caso a caso.
+- **Fonte nova:** "Construção — Perguntas e respostas" (9 itens, `bases/construcao-faq.ts`); os únicos números são cópia literal da base do Investidor. **Leo v7** (`scripts/deskcomm/base_leo_construcao.sql`, cirúrgico): regra antes do bloco "Desvios", passa ao consultor com o motivo `construção sob medida`.
+- **Pendências:** valor de referência de obra (se o dono quiser que o Leo cite algum), documentos exigidos, teste real da passagem Helena → Leo.
+
+### 8.4 Adesão pelo WhatsApp — no ar desde 26/10/2026
+
+Spec: `docs/superpowers/specs/2026-10-26-adesao-whatsapp-design.md` · Plano: `docs/superpowers/plans/2026-10-26-adesao-whatsapp.md`.
+
+- **Fluxo:** a Bia grava `adesao_etapa` e os dados no card; `trg_ponte_adesao_midia` leva foto/PDF da conta e do documento, e `trg_ponte_adesao_card` leva CPF/e-mail/telefone/titular e o `confirmado`, para a Edge Function `adesao-whatsapp`. Estado em `ponte_deskcomm.adesoes`; a Bia lê por `b2w_status_adesao` (CPF mascarado, só o telefone do cabeçalho).
+- **Criação:** `fn_criar_assinante_publico` (com originador e indicador do lead) + documentos copiados de `whatsapp-media` para `documentos-assinante` + contrato pelo `onboarding-finalizar` com `sem_whatsapp` (só e-mail; a Bia entrega o link). A ação `criar` revalida CPF/e-mail/titular antes de decidir e é idempotente.
+- **Link do contrato:** a Bia agenda um retorno de 2 minutos depois do `confirmado` para entregar o link (o contrato fica pronto segundos depois). Fora da janela de envio, o link chega pelo e-mail e a Bia manda quando o cliente responder.
+- **Originador no card:** `trg_ponte_card_originador` preenche `custom_fields.originador` com o nome do originador do lead da B2W.
+- **Pendência de adesão:** etapa do funil da Assinatura (exige humano, avisa na central) para titular divergente, CNPJ, várias UCs, CPF já cadastrado e falha ao criar.
+- **Leitor de conta:** `_shared/leitura-conta.ts`, usado por `parse-invoice-image` e `adesao-whatsapp`.
+- **Checklist pós-atualização do Deskcomm:** mídia ainda em `messages.media_storage_path`, bucket `whatsapp-media`.
+- **Pendência:** regra de retenção para limpar `adesao_cpf` e afins do card depois da adesão fechada.

@@ -35,7 +35,8 @@ Fora do escopo:
 | Consumo mínimo | 150 kWh/mês. Abaixo: explica (o custo mínimo come a economia), não insiste, registra. |
 | Grupo A (média/alta tensão) | Humano, motivo "Grupo A — avaliar Mercado Livre/Gestora". |
 | B optante | Regra da ANEEL: só recebe créditos de usina instalada no local. ≥ 5.000 kWh/mês → oferece análise de usina no local em comodato, contrato de 48 meses; aceitou → humano. < 5.000 → explica e encerra cordialmente, registra. |
-| Já tem placa solar ou está em outra cooperativa/associação | Humano. |
+| Já tem energia solar instalada | Agradece o retorno e encerra (restrição técnica interna; decisão de 23/10/2026, regra comum dos 8 agentes). |
+| Está em outra cooperativa/associação | Humano. |
 | Tarifa social | Fluxo normal. |
 | Indicação | Pode explicar o abatimento: link e QR próprios; cada indicado ativo gera crédito mensal na fatura de quem indicou (2% da base líquida do plano, nível 1), enquanto ambos ativos e em dia; abate a fatura mais próxima; sobra do ciclo é descartada. |
 | Proibido | "30% de desconto"; fidelidade ou multa de saída; desconto sobre a conta inteira; qualquer número que não veio da ferramenta ou da base; dizer qual usina atende o cliente. |
@@ -59,7 +60,8 @@ e troca o bloco próprio do agente pelo roteiro abaixo.
 | Grupo A | `crm_request_human_handoff` "Grupo A — avaliar Mercado Livre/Gestora". |
 | B optante ≥ 5.000 kWh | Explica a regra; oferece análise de usina no local em comodato (48 meses); aceitou → handoff "B optante — usina no local em comodato". |
 | B optante < 5.000 kWh | Explica a regra e encerra cordialmente. |
-| Placa solar / outra cooperativa | Handoff "já gera energia ou participa de outra associação". |
+| Já tem energia solar instalada | Agradece o retorno e encerra, sem explicar o produto nem passar a humano. |
+| Outra cooperativa/associação | Handoff "participa de outra associação". |
 | `vaga = imediata` | Estimativa mensal e anual + prazo de 30–60 dias com até 2 contas proporcionais sem desconto + link. |
 | `vaga = pre_operacao` | Estimativa + "assina agora; o desconto começa quando a usina entrar em operação" (com a previsão, se houver) + link. |
 | `vaga = fila` | Grava `lista_espera = true`, explica a fila, "a equipe avisa quando abrir vaga". Sem link. |

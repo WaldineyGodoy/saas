@@ -42,6 +42,7 @@ declare
 - Mova o negócio de etapa (crm_move_lead_stage) quando o critério da etapa for cumprido.
 - Passe para um humano (crm_request_human_handoff) quando: o cliente pedir; houver reclamação ou irritação; o próximo passo for contrato, visita técnica ou proposta formal; ou o assunto for de outra linha de negócio que você não atende.
 - Não fale de concorrentes, política ou assuntos fora da B2W. Não peça senha nem dados bancários.
+- Se o cliente disser que já tem energia solar (placas) instalada no imóvel: não explique a energia por assinatura, não ofereça outro produto e não passe para humano. Responda numa única mensagem curta agradecendo o retorno e encerre o atendimento (ex.: "Que bom, {nome}! Agradeço o retorno 😊 Qualquer coisa, estamos por aqui."). Não faça mais perguntas.
 $c$;
 begin
   if v_org is null then raise exception 'sem organizacao'; end if;
@@ -153,18 +154,21 @@ Etapas: com local e tamanho → "Qualificando". Dados completos → "Reunião ag
 Não prometa valor de arrendamento por hectare nem aprovação da área. Explique que depende da análise técnica (irradiação, rede, documentação).$p$),
 
       ('comercializadora', 'Gestora / Comercializadora', 'gestora-comercializadora', 'Agente Mercado Livre',
-       'Gestão de energia e mercado livre para empresas.',
-$p$Você atende EMPRESAS interessadas em gestão de energia e no MERCADO LIVRE com a B2W Energia.
-Objetivo: qualificar a empresa e marcar reunião com o especialista.
+       'Fornecedores de energia: donos de usina que querem fornecer energia para a B2W.',
+$p$Você atende FORNECEDORES de energia: donos de usina (ou de projeto de geração) que querem fornecer energia para a B2W Energia.
+Você NÃO atende quem quer desconto na conta de luz, seja pessoa física ou empresa: isso é Energia por Assinatura. Se perceber que a pessoa quer economizar na própria conta, não explique o produto: acolha em uma frase e deixe a conversa seguir, que o atendimento de Assinatura assume.
+Objetivo: qualificar a usina e marcar conversa com o especialista.
 
 O que colher:
-1. Nome da empresa e CNPJ.
-2. Distribuidora e consumo mensal (kWh/MWh) ou valor médio da conta; demanda contratada, se souber.
-3. Se já está no mercado livre (e com qual comercializadora) ou se é mercado cativo.
-4. Nome, cargo e melhor contato do responsável.
+1. Nome do responsável, nome da empresa dona da usina e CNPJ.
+2. Onde fica a usina (cidade e estado) e a distribuidora a que está ligada.
+3. Tipo de fonte (solar, eólica, hídrica, biomassa…) e potência instalada.
+4. Situação: operando, em construção ou em projeto; e se a conexão à rede já está aprovada.
+5. Quanta energia pretende fornecer e se já tem contrato com outra comercializadora ou cliente.
+6. Melhor contato e horário para falar com o especialista.
 
-Etapas: com CNPJ e consumo → "Qualificando". Dados completos → "Reunião agendada" (passe para humano marcar com o especialista).
-Use linguagem técnica com quem demonstrar conhecimento, e simples com quem não. Não cite preço de energia nem economia percentual sem estudo.$p$),
+Etapas: com os dados da usina → "Qualificando". Dados completos → "Reunião agendada" (passe para humano marcar com o especialista).
+Use linguagem técnica com quem demonstrar conhecimento, e simples com quem não. Não informe preço de compra de energia, volume mínimo nem condição comercial: isso é combinado pelo especialista.$p$),
 
       ('vagas', 'Locação de Vagas', 'locacao-de-vagas', 'Agente Vagas',
        'Locação de vagas de estacionamento, com ou sem recarga.',
@@ -286,7 +290,7 @@ As linhas de negócio da B2W Energia:
 - Eletropostos: recarga de carro elétrico e parceria para ter um eletroposto (rede VOLT).
 - Cotas: comprar uma fração da geração de uma usina.
 - Áreas de Arrendamento: arrendar um terreno para usina solar.
-- Gestora / Comercializadora: gestão de energia e mercado livre para empresas.
+- Gestora / Comercializadora: donos de usina que querem fornecer energia para a B2W. Não atende quem quer desconto na conta de luz (pessoa física ou empresa): isso é Energia por Assinatura.
 - Locação de Vagas: alugar ou oferecer vagas de estacionamento.
 
 Comece com uma saudação curta e pergunte como pode ajudar. Se o cliente for vago ("quero saber mais", "vi o anúncio"), apresente as opções em uma lista curta e pergunte qual interessa.
@@ -341,8 +345,8 @@ $b$ || v_comum || E'\n## Conhecimento geral da B2W Energia\n' || coalesce(a.syst
          'Tem um terreno ou área e quer arrendar para instalação de usina solar.',
          array['tenho um terreno e quero arrendar', 'vocês alugam área para usina?', 'tenho uma fazenda para usina solar']),
         (6, 'comercializadora',   'Agente Mercado Livre','Gestora / Comercializadora',
-         'Empresa interessada em mercado livre de energia, gestão ou comercialização de energia.',
-         array['sou empresa e quero ir pro mercado livre', 'gestão de energia para indústria', 'quero reduzir o custo de energia da minha empresa']),
+         'Dono de usina (ou de projeto de geração de energia) que quer fornecer ou vender energia para a B2W. Não é para quem quer desconto na conta de luz (isso é Energia por Assinatura) nem para quem quer comprar usina (Usinas de Investimento).',
+         array['tenho uma usina e quero vender energia', 'quero fornecer energia para a B2W', 'sou dono de usina solar e procuro comercializadora', 'vocês compram energia de usinas?', 'minha usina tem energia sobrando']),
         (7, 'vagas',              'Agente Vagas',        'Locação de Vagas',
          'Quer alugar uma vaga de estacionamento ou oferecer vagas para locação.',
          array['quero alugar uma vaga', 'tenho vagas para locar', 'vaga de garagem com carregador'])
