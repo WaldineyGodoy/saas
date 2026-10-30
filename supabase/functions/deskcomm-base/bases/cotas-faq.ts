@@ -12,13 +12,16 @@ export const FAQ_COTAS = `## Pergunta: O que é uma cota de usina?
 ## Resposta: O preço da usina dividido por 10, mais 10% de taxa, que cobre a estruturação jurídica da associação e a gestão da divisão do repasse. O valor de cada usina está em "Usinas com cotas".
 
 ## Pergunta: Qual o retorno da cota?
-## Resposta: A projeção é a mesma da usina inteira: cerca de 2% ao mês, antes do Simples Nacional. Projeção, não garantia: varia com a geração anual, a tarifa da concessionária e o estágio da obra. Payback e rentabilidade detalhada são apresentados pelo consultor.
+## Resposta: A projeção é a mesma da usina inteira: cerca de 2% ao mês. Projeção, não garantia: varia com a geração anual, a tarifa da concessionária e o estágio da obra. Payback e rentabilidade detalhada são apresentados pelo consultor.
 
 ## Pergunta: De onde vem a receita?
 ## Resposta: Os assinantes pagam a energia da usina com desconto. Desse valor saem o Fio B e a gestão da B2W; o que sobra é o repasse da usina, dividido entre os cotistas.
 
 ## Pergunta: Como eu recebo?
 ## Resposta: A associação dos cotistas recebe o repasse da B2W e transfere a parte de cada cotista, todo mês. A tributação é orientada pelo contador.
+
+## Pergunta: O rendimento já vem descontado de impostos?
+## Resposta: Não: a projeção de cerca de 2% ao mês é antes dos impostos (Simples Nacional). A associação repassa a parte de cada cotista, e a tributação é orientada pelo contador.
 
 ## Pergunta: Quais são os custos mensais?
 ## Resposta: Os custos da usina — arrendamento da área, internet, água e energia do local e, a partir do 13º mês, manutenção e seguro — são descontados do repasse antes da divisão. Cada cota arca com 1/10.

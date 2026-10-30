@@ -11,7 +11,7 @@ export const FAQ_INVESTIDOR = `## Pergunta: Como funciona o investimento em usin
 ## Resposta: A partir de R$ 290.000. O valor depende do estágio da obra e da previsão de entrega: quanto antes você entra, menor o preço. Também é possível comprar cotas de uma usina, pelo preço da usina dividido por 10, mais 10%.
 
 ## Pergunta: Qual é o retorno do investimento? Quanto rende por mês?
-## Resposta: A projeção é de cerca de 2% ao mês, antes do Simples Nacional. É uma projeção, não garantia: varia com a geração anual da usina, a tarifa da concessionária e o estágio da obra no momento do aporte. Payback e rentabilidade detalhada são apresentados pelo consultor em uma reunião.
+## Resposta: A projeção é de cerca de 2% ao mês. É uma projeção, não garantia: varia com a geração anual da usina, a tarifa da concessionária e o estágio da obra no momento do aporte. Payback e rentabilidade detalhada são apresentados pelo consultor em uma reunião.
 
 ## Pergunta: De onde vem a receita do investidor?
 ## Resposta: A receita é lastreada na tarifa da concessionária. A conta é a geração da usina multiplicada pela tarifa de energia; desse valor saem o desconto oferecido ao assinante, o Fio B e a gestão da B2W (10% para usinas construídas pela B2W). O que sobra é a tarifa do investidor, que é a fonte da receita e da rentabilidade.
@@ -37,8 +37,8 @@ export const FAQ_INVESTIDOR = `## Pergunta: Como funciona o investimento em usin
 ## Pergunta: E o Fio B? A rentabilidade cai com o tempo?
 ## Resposta: O Fio B sobe gradualmente até 2029, como prevê a Lei 14.300, e isso já está considerado na projeção. O reajuste anual da tarifa de energia neutraliza parte desse impacto. A projeção ano a ano é apresentada pelo consultor.
 
-## Pergunta: Como fica o imposto? Posso investir como pessoa física?
-## Resposta: O repasse é feito sempre para uma empresa. Ao adquirir a usina, constituímos uma SPE ou um MEI, conforme o caso e com a orientação do contador, e os honorários do contador para a abertura ficam por conta da B2W. A tributação é pelo Simples Nacional.
+## Pergunta: Como fica o imposto? O rendimento já vem descontado de impostos? Posso investir como pessoa física?
+## Resposta: Não: a projeção de cerca de 2% ao mês é antes dos impostos (Simples Nacional). O repasse é feito sempre para uma empresa. Ao adquirir a usina, constituímos uma SPE ou um MEI, conforme o caso e com a orientação do contador, e os honorários do contador para a abertura ficam por conta da B2W. A tributação é pelo Simples Nacional.
 
 ## Pergunta: De quem é o terreno da usina?
 ## Resposta: A usina fica em uma área arrendada, com contrato de arrendamento em nome do investidor, e o valor do arrendamento é descontado do repasse. Em algumas usinas é possível comprar a área, mas nem toda área está disponível para venda: é caso a caso, e o consultor confirma para a usina que você escolher.
