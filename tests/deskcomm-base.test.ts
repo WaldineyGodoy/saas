@@ -87,7 +87,7 @@ describe('lerFaq', () => {
         for (const proibido of ['garantid', 'risco zero', 'blindad', '100% segur', 'matrícula', 'retenção', 'multa']) {
             expect(tudo, proibido).not.toContain(proibido)
         }
-        expect(tudo).toContain('projeção, não garantia')
+        expect(tudo).toContain('a estimativa, sendo bem conservador, é de cerca de 2% ao mês, podendo chegar a mais. é uma projeção')
     })
 
     it('imposto só na resposta sobre imposto, não na do retorno', () => {
@@ -206,7 +206,7 @@ describe('FAQ de Cotas', () => {
             expect(tudo, proibido).not.toContain(proibido)
         }
         expect(tudo).toContain('somente à vista')
-        expect(tudo).toContain('a mesma da usina inteira: cerca de 2% ao mês')
+        expect(tudo).toContain('a estimativa, sendo bem conservador, é de cerca de 2% ao mês, podendo chegar a mais')
         expect(tudo).toContain('título de propriedade')
     })
     it('imposto só na resposta sobre imposto, não na do retorno', () => {
