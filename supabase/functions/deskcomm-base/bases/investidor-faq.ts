@@ -11,7 +11,7 @@ export const FAQ_INVESTIDOR = `## Pergunta: Como funciona o investimento em usin
 ## Resposta: A partir de R$ 290.000. O valor depende do estágio da obra e da previsão de entrega: quanto antes você entra, menor o preço. Também é possível comprar cotas de uma usina, pelo preço da usina dividido por 10, mais 10%.
 
 ## Pergunta: Qual é o retorno do investimento? Quanto rende por mês?
-## Resposta: A projeção é de cerca de 2% ao mês. É uma projeção, não garantia: varia com a geração anual da usina, a tarifa da concessionária e o estágio da obra no momento do aporte. Payback e rentabilidade detalhada são apresentados pelo consultor em uma reunião.
+## Resposta: A estimativa, sendo bem conservador, é de cerca de 2% ao mês, podendo chegar a mais. É uma projeção e varia com a geração anual, a tarifa da concessionária e o estágio da obra. Payback e rentabilidade detalhada são apresentados pelo consultor em uma reunião.
 
 ## Pergunta: De onde vem a receita do investidor?
 ## Resposta: A receita é lastreada na tarifa da concessionária. A conta é a geração da usina multiplicada pela tarifa de energia; desse valor saem o desconto oferecido ao assinante, o Fio B e a gestão da B2W (10% para usinas construídas pela B2W). O que sobra é a tarifa do investidor, que é a fonte da receita e da rentabilidade.
