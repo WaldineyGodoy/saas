@@ -89,6 +89,14 @@ describe('lerFaq', () => {
         }
         expect(tudo).toContain('projeção, não garantia')
     })
+
+    it('imposto só na resposta sobre imposto, não na do retorno', () => {
+        const pares = lerFaq(FAQ_INVESTIDOR)
+        const retorno = pares.find((p) => /retorno/i.test(p.question))!
+        expect(retorno.answer).not.toMatch(/simples nacional|impost/i)
+        const imposto = pares.find((p) => /imposto/i.test(p.question))!
+        expect(imposto.answer).toContain('antes dos impostos')
+    })
 })
 
 describe('hashTexto', () => {
@@ -191,8 +199,8 @@ describe('montarUsinasCotas', () => {
 })
 
 describe('FAQ de Cotas', () => {
-    it('tem as 14 perguntas aprovadas e respeita as proibições', () => {
-        expect(lerFaq(FAQ_COTAS)).toHaveLength(14)
+    it('tem as 15 perguntas aprovadas e respeita as proibições', () => {
+        expect(lerFaq(FAQ_COTAS)).toHaveLength(15)
         const tudo = FAQ_COTAS.toLowerCase()
         for (const proibido of ['garantid', 'risco zero', 'blindad', '100% segur', 'parcel', 'financiamento', 'multa']) {
             expect(tudo, proibido).not.toContain(proibido)
@@ -200,6 +208,13 @@ describe('FAQ de Cotas', () => {
         expect(tudo).toContain('somente à vista')
         expect(tudo).toContain('a mesma da usina inteira: cerca de 2% ao mês')
         expect(tudo).toContain('título de propriedade')
+    })
+    it('imposto só na resposta sobre imposto, não na do retorno', () => {
+        const pares = lerFaq(FAQ_COTAS)
+        const retorno = pares.find((p) => /retorno/i.test(p.question))!
+        expect(retorno.answer).not.toMatch(/simples nacional|impost/i)
+        const imposto = pares.find((p) => /imposto/i.test(p.question))!
+        expect(imposto.answer).toContain('antes dos impostos')
     })
     it('o FAQ do Investidor não cita mais R$ 35.000', () => {
         expect(FAQ_INVESTIDOR).not.toContain('35.000')
