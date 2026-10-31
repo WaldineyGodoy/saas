@@ -10,6 +10,20 @@ export const TIPOS_ALERTA = [
     { id: 'robo_parado', titulo: 'Monitoramento parado', detalhe: 'O robô ficou 40 min ou mais sem trazer dados das usinas.' }
 ];
 
+/** SN como o banco guarda: maiúsculo, sem espaços. */
+export const normalizarSn = (sn) => (sn || '').replace(/\s/g, '').toUpperCase();
+
+/**
+ * SN de datalogger (módulo de comunicação, aba Module do Elekeeper) começa com
+ * M5. A API identifica o equipamento pelo SN do INVERSOR (deviceSn); o do
+ * datalogger não acha nada. O banco também recusa (fn_usina_inversores_validar).
+ */
+export const ehSnDatalogger = (sn) => /^M5/.test(normalizarSn(sn));
+
+/** Inversores que vão ao banco: normalizados, sem vazios nem repetição. */
+export const inversoresParaGravar = (sns) =>
+    [...new Set((sns || []).map(normalizarSn).filter(Boolean))];
+
 /** O que vai ao banco: só números completos (DDD + celular), em dígitos, sem repetição. */
 export const alertasParaGravar = (numeros) =>
     [...new Set((numeros || []).map(cleanDigits).filter(validatePhone))];

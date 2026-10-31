@@ -5,7 +5,7 @@ import { ucEncerrada } from '../lib/ucStatus';
 import { calcularCapacidade, ocupacaoDaGeracao } from '../lib/capacidade';
 import CronogramaObraUsina from './CronogramaObraUsina';
 import AlertasWhatsappUsina from './AlertasWhatsappUsina';
-import { alertasParaGravar } from '../lib/alertasUsina';
+import { alertasParaGravar, inversoresParaGravar, ehSnDatalogger } from '../lib/alertasUsina';
 import { etapasParaPagina } from '../lib/cronogramaObra';
 import { fetchAddressByCep, fetchOfferData, sendWhatsapp, shortenLink, salvarSenhaPortal, semSenha, createAutentiqueDocument, cancelAutentiqueDocument } from '../lib/api';
 import IrradianceChart from './IrradianceChart';
@@ -400,6 +400,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete, init
         name: '',
         status: 'pre_operacao',
         cronograma_obra: {},
+        inversores_sn: [],
         alertas_whatsapp: [],
         alertas_tipos: ['offline'],
         compra_venda_assinada_em: '',
@@ -446,6 +447,25 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete, init
     const [previewUC, setPreviewUC] = useState(null);
     const [showPreviewModal, setShowPreviewModal] = useState(false);
     const [activeTab, setActiveTab] = useState(initialTab); // 'geral' | 'endereco' | 'tecnico' | 'financeiro' | 'ucs' | 'portal' | 'comunicacao'
+
+    // Último dado do robô de monitoramento para cada SN digitado no bloco Alertas
+    // (aba Técnico): confirma que o inversor é o certo. null = consultando.
+    const [statusInversores, setStatusInversores] = useState(null);
+    const chaveInversores = (formData.inversores_sn || []).join(',');
+    useEffect(() => {
+        if (activeTab !== 'tecnico') return undefined;
+        const sns = inversoresParaGravar(chaveInversores.split(',')).filter(sn => !ehSnDatalogger(sn));
+        if (!sns.length) { setStatusInversores({}); return undefined; }
+        let vivo = true;
+        setStatusInversores(null);
+        const espera = setTimeout(async () => {
+            const { data } = await supabase.from('monitor_dispositivos')
+                .select('device_sn, modelo, plant_nome, online, visto_em').in('device_sn', sns);
+            if (vivo) setStatusInversores(Object.fromEntries((data || []).map(d => [d.device_sn, d])));
+        }, 400);
+        return () => { vivo = false; clearTimeout(espera); };
+    }, [activeTab, chaveInversores]);
+
     const [manualMessage, setManualMessage] = useState('');
     const [manualFile, setManualFile] = useState(null);
     const [isSendingManualWA, setIsSendingManualWA] = useState(false);
@@ -1127,6 +1147,7 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                 name: usina.name || '',
                 status: usina.status || 'pre_operacao',
                 cronograma_obra: usina.cronograma_obra || {},
+                inversores_sn: usina.inversores_sn || [],
                 alertas_whatsapp: usina.alertas_whatsapp || [],
                 alertas_tipos: usina.alertas_tipos || ['offline'],
                 compra_venda_assinada_em: usina.compra_venda_assinada_em
@@ -3337,6 +3358,7 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
             concessionaria: formData.concessionaria,
             status: formData.status,
             cronograma_obra: formData.cronograma_obra || {},
+            inversores_sn: inversoresParaGravar(formData.inversores_sn),
             alertas_whatsapp: alertasParaGravar(formData.alertas_whatsapp),
             alertas_tipos: formData.alertas_tipos || [],
             // Só grava a data se ela mudou: a da Autentique tem hora, e
@@ -4292,6 +4314,9 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                 <AlertasWhatsappUsina
                                     marca={formData.fabricante_inversor}
                                     apiConectada={!!inverterBrands.find(b => b.name === formData.fabricante_inversor)?.api_monitoramento}
+                                    inversores={formData.inversores_sn}
+                                    statusInversores={statusInversores}
+                                    onChangeInversores={sns => setFormData(prev => ({ ...prev, inversores_sn: sns }))}
                                     numeros={formData.alertas_whatsapp}
                                     tipos={formData.alertas_tipos}
                                     onChangeNumeros={numeros => setFormData(prev => ({ ...prev, alertas_whatsapp: numeros }))}

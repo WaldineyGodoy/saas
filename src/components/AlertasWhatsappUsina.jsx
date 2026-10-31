@@ -1,15 +1,16 @@
 import React from 'react';
 import { BellRing, Plus, Minus } from 'lucide-react';
 import { cleanDigits, maskPhone, validatePhone } from '../lib/validators';
-import { TIPOS_ALERTA } from '../lib/alertasUsina';
+import { TIPOS_ALERTA, normalizarSn, ehSnDatalogger } from '../lib/alertasUsina';
 
 // Bloco "Alertas" da aba Técnico do modal da usina. Edita, salvos junto com a
-// usina, os números (usinas.alertas_whatsapp) e os tipos ligados
-// (usinas.alertas_tipos) dos avisos do monitoramento dos inversores, que
-// fn_monitor_avaliar_alertas dispara. Números ficam só em dígitos com DDD; o
-// send-whatsapp põe o 55 na frente.
-
-
+// usina:
+//   - usinas.inversores_sn: SN dos INVERSORES (deviceSn da API), que liga o
+//     dado do fabricante a esta usina. Um inversor só pode estar numa usina;
+//   - usinas.alertas_tipos: quais alertas fn_monitor_avaliar_alertas dispara;
+//   - usinas.alertas_whatsapp: quem recebe (só dígitos com DDD; o
+//     send-whatsapp põe o 55 na frente).
+// `statusInversores` (SN -> último dado do robô) vem do modal; null = carregando.
 const campo = {
     flex: 1, minWidth: 0, padding: '0.6rem 0.75rem', border: '1px solid #e2e8f0', borderRadius: '8px',
     fontSize: '0.9rem', background: 'white', outline: 'none'
@@ -22,10 +23,32 @@ const botaoIcone = (cor, fundo) => ({
 
 const subtitulo = { fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.5rem' };
 
-export default function AlertasWhatsappUsina({ marca, apiConectada, numeros: valor, tipos, onChangeNumeros, onChangeTipos }) {
+function situacaoInversor(sn, status) {
+    if (!sn) return null;
+    if (ehSnDatalogger(sn)) {
+        return { erro: true, texto: 'Este é o SN do datalogger. Informe o do inversor (etiqueta do equipamento ou Elekeeper → Devices → Inverter).' };
+    }
+    if (status === null) return { texto: 'Consultando…' };
+    const d = status?.[sn];
+    if (!d) {
+        return { aviso: true, texto: 'Ainda não visto na SAJ: confirme se o proprietário autorizou o acesso ao desenvolvedor B2W.' };
+    }
+    const visto = d.visto_em ? new Date(d.visto_em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '';
+    return { ok: true, online: d.online, texto: `${d.modelo || 'Inversor'} · ${d.plant_nome || ''} · ${d.online ? 'online' : 'offline'}${visto ? ` (lido ${visto})` : ''}` };
+}
+
+export default function AlertasWhatsappUsina({
+    marca, apiConectada, inversores: valorInversores, statusInversores, onChangeInversores,
+    numeros: valor, tipos, onChangeNumeros, onChangeTipos
+}) {
     // sempre ao menos uma linha, para o campo aparecer vazio pronto para digitar
     const numeros = valor?.length ? valor : [''];
+    const inversores = valorInversores?.length ? valorInversores : [''];
     const marcados = tipos || [];
+
+    const alterarSn = (i, texto) => onChangeInversores(inversores.map((s, j) => (j === i ? normalizarSn(texto) : s)));
+    const adicionarSn = () => onChangeInversores([...inversores, '']);
+    const removerSn = (i) => onChangeInversores(inversores.filter((_, j) => j !== i));
 
     const alterar = (i, texto) => onChangeNumeros(numeros.map((n, j) => (j === i ? cleanDigits(texto).slice(0, 11) : n)));
     const adicionar = () => onChangeNumeros([...numeros, '']);
@@ -58,6 +81,50 @@ export default function AlertasWhatsappUsina({ marca, apiConectada, numeros: val
     return (
         <div style={{ marginTop: '1.5rem', border: '1px solid #f1f5f9', borderRadius: '16px', padding: '1.5rem', background: '#fff' }}>
             {cabecalho}
+
+            <div style={{ marginBottom: '1.5rem', paddingBottom: '1.25rem', borderBottom: '1px solid #f1f5f9' }}>
+                <div style={subtitulo}>Inversores da usina (SN)</div>
+                <p style={{ margin: '0 0 0.6rem', fontSize: '0.75rem', color: '#64748b' }}>
+                    É pelo SN do inversor que o alerta chega a esta usina e a nenhuma outra. Não use o SN do datalogger.
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxWidth: '640px' }}>
+                    {inversores.map((sn, i) => {
+                        const s = situacaoInversor(sn, statusInversores);
+                        return (
+                            <div key={i}>
+                                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                    <input
+                                        type="text"
+                                        placeholder="Ex.: C6V6753J2512E00528"
+                                        value={sn}
+                                        onChange={e => alterarSn(i, e.target.value)}
+                                        style={{ ...campo, fontFamily: 'ui-monospace, monospace', borderColor: s?.erro ? '#fca5a5' : '#e2e8f0' }}
+                                        aria-label={`SN do inversor ${i + 1}`}
+                                    />
+                                    {(inversores.length > 1 || sn) && (
+                                        <button type="button" onClick={() => removerSn(i)} title="Remover inversor"
+                                            style={botaoIcone('#b91c1c', '#fef2f2')}>
+                                            <Minus size={16} />
+                                        </button>
+                                    )}
+                                </div>
+                                {s && (
+                                    <span style={{
+                                        fontSize: '0.75rem',
+                                        color: s.erro ? '#b91c1c' : s.aviso ? '#b45309' : s.ok ? (s.online ? '#166534' : '#475569') : '#64748b'
+                                    }}>
+                                        {s.texto}
+                                    </span>
+                                )}
+                            </div>
+                        );
+                    })}
+                    <button type="button" onClick={adicionarSn}
+                        style={{ ...botaoIcone('#1d4ed8', '#eff6ff'), width: 'auto', padding: '0 0.9rem', gap: '0.35rem', fontSize: '0.8rem', fontWeight: 700, alignSelf: 'flex-start' }}>
+                        <Plus size={16} /> Adicionar inversor
+                    </button>
+                </div>
+            </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1.5rem' }}>
                 <div>

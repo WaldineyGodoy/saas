@@ -2,7 +2,7 @@ import React from 'react';
 import { describe, it, expect } from 'vitest';
 import { renderToString } from 'react-dom/server';
 import AlertasWhatsappUsina from '../src/components/AlertasWhatsappUsina';
-import { alertasParaGravar, TIPOS_ALERTA } from '../src/lib/alertasUsina';
+import { alertasParaGravar, inversoresParaGravar, ehSnDatalogger, TIPOS_ALERTA } from '../src/lib/alertasUsina';
 
 // React 19 SSR emite <!-- --> entre textos adjacentes.
 const render = (ui) => renderToString(ui).replace(/<!-- -->/g, '');
@@ -52,5 +52,28 @@ describe('AlertasWhatsappUsina (aba Técnico do modal da usina)', () => {
     expect(alertasParaGravar(['(84) 99999-0000', '', '8499', '84999990000', '84 98888 7777']))
       .toEqual(['84999990000', '84988887777']);
     expect(alertasParaGravar(undefined)).toEqual([]);
+  });
+
+  it('inversor visto pela SAJ mostra modelo, usina e status', () => {
+    const status = { C6V6753J2512E00528: { modelo: 'C6', plant_nome: 'UFV Bom Jesus', online: true, visto_em: '2026-10-31T12:00:00Z' } };
+    const html = render(<AlertasWhatsappUsina marca="Saj" apiConectada inversores={['C6V6753J2512E00528']} statusInversores={status}
+      numeros={[]} tipos={[]} onChangeInversores={nada} onChangeNumeros={nada} onChangeTipos={nada} />);
+    expect(html).toContain('value="C6V6753J2512E00528"');
+    expect(html).toContain('UFV Bom Jesus');
+    expect(html).toContain('online');
+  });
+
+  it('SN de datalogger é recusado na tela; SN desconhecido pede a autorização do proprietário', () => {
+    const html = render(<AlertasWhatsappUsina marca="Saj" apiConectada inversores={['M5380J2510015660', 'R6X0000000000']} statusInversores={{}}
+      numeros={[]} tipos={[]} onChangeInversores={nada} onChangeNumeros={nada} onChangeTipos={nada} />);
+    expect(html).toContain('SN do datalogger');
+    expect(html).toContain('Ainda não visto na SAJ');
+    expect(html).toContain('Adicionar inversor');
+  });
+
+  it('SN normalizado e sem repetir; datalogger reconhecido pelo prefixo M5', () => {
+    expect(inversoresParaGravar([' c6v6753j2512e00528 ', 'C6V6753J2512E00528', ''])).toEqual(['C6V6753J2512E00528']);
+    expect(ehSnDatalogger('m5380J2510015660')).toBe(true);
+    expect(ehSnDatalogger('C6V6753J2512E00528')).toBe(false);
   });
 });
