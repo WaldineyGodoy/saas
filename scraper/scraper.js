@@ -514,7 +514,16 @@ async function run() {
                                         // A conta baixou normalmente; parcelada é
                                         // etiqueta da forma de pagamento imposta pela
                                         // concessionária, não impedimento de leitura.
-                                        ...(r.parcelada ? { energy_bill_status: 'parcelada' } : {}),
+                                        //
+                                        // Sem parcelamento, a conta é a pagar: 'a_vencer'.
+                                        // O robô nunca gravava nada aqui, a linha ficava
+                                        // 'pendente' e a tela INVENTAVA o rótulo ("Baixada")
+                                        // ao ver PDF e valor -- a Santa Maria ficou 14 dias
+                                        // vencida exibida como resolvida. Vencida é derivado
+                                        // da data pela tela; 'pago' e 'contestada' só mudam
+                                        // por decisão de gente, e esta gravação só ocorre na
+                                        // primeira baixa (conta com PDF é pulada depois).
+                                        energy_bill_status: r.parcelada ? 'parcelada' : await statusInicialDaConta(uc, r.ref),
                                         ...extraidos,
                                     });
                                     await updateUCStatus(uc.id, 'success');
@@ -674,6 +683,24 @@ async function guardarContasExtras(uc, r, invoiceId) {
         .update({ reading_status: 'error', reading_error: aviso.substring(0, 1000) })
         .eq('id', invoiceId);
     if (error) console.error(`   [Faturista] Falha ao registrar aviso de conta extra: ${error.message}`);
+}
+
+/**
+ * Status da conta de energia na primeira baixa: 'a_vencer', a menos que alguém
+ * já tenha decidido outra coisa na mão (pago, contestada, inconsistente).
+ * Reler o valor evita que uma nova baixa desfaça um "pago" e leve a uma
+ * segunda quitação.
+ */
+async function statusInicialDaConta(uc, ref) {
+    const [month, year] = ref.split('/').map(Number);
+    const { data } = await supabase
+        .from('invoices')
+        .select('energy_bill_status')
+        .eq('uc_id', uc.id)
+        .eq('mes_referencia', `${year}-${String(month).padStart(2, '0')}-01`)
+        .maybeSingle();
+    const atual = data?.energy_bill_status;
+    return ['pago', 'contestada', 'inconsistente', 'parcelada'].includes(atual) ? atual : 'a_vencer';
 }
 
 async function upsertInvoice(uc, ref, campos) {

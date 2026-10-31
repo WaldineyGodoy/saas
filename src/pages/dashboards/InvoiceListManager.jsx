@@ -41,6 +41,21 @@ let pageSessionState = {
     activeTab: null
 };
 
+// O cadastro guarda o numero da UC so com digitos (a Neoenergia passou ao formato
+// de 12 digitos em 2026), mas quem pesquisa digita com pontos e traco, como no
+// portal. Casa pelos digitos quando o termo tem algum, senao pelo texto.
+const ucCasaComBusca = (numeroUc, termo) => {
+    const numero = String(numeroUc || '');
+    const t = String(termo || '').trim();
+    if (!t) return true;
+    if (numero.toLowerCase().includes(t.toLowerCase())) return true;
+    // So termos que parecem numero de UC (digitos, pontos, tracos): "rua 12" nao
+    // pode virar busca por "12" em todas as UCs.
+    if (!/^[\d.\-\s]+$/.test(t)) return false;
+    const digitosTermo = t.replace(/\D/g, '');
+    return digitosTermo.length > 0 && numero.replace(/\D/g, '').includes(digitosTermo);
+};
+
 export const resolveEnergyStatus = (inv) => {
     let ebStatus = (inv.energy_bill_status || 'pendente').toLowerCase().trim();
     
@@ -345,9 +360,9 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
             const lower = searchTerm.toLowerCase();
             const titular = inv.consumer_units?.titular_conta?.toLowerCase() || '';
             const assinante = (getDisplayName(inv) || '').toLowerCase();
-            const uc = inv.consumer_units?.numero_uc?.toLowerCase() || '';
+            const ucNumero = inv.consumer_units?.numero_uc || '';
             const invoiceId = inv.id?.toLowerCase() || '';
-            if (!titular.includes(lower) && !assinante.includes(lower) && !uc.includes(lower) && !invoiceId.includes(lower)) {
+            if (!titular.includes(lower) && !assinante.includes(lower) && !ucCasaComBusca(ucNumero, searchTerm) && !invoiceId.includes(lower)) {
                 return false;
             }
         }
@@ -788,9 +803,9 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
             const lower = searchTerm.toLowerCase();
             const titular = inv.consumer_units?.titular_conta?.toLowerCase() || '';
             const assinante = (getDisplayName(inv) || '').toLowerCase();
-            const uc = inv.consumer_units?.numero_uc?.toLowerCase() || '';
+            const ucNumero = inv.consumer_units?.numero_uc || '';
             const invoiceId = inv.id?.toLowerCase() || '';
-            if (!titular.includes(lower) && !assinante.includes(lower) && !uc.includes(lower) && !invoiceId.includes(lower)) {
+            if (!titular.includes(lower) && !assinante.includes(lower) && !ucCasaComBusca(ucNumero, searchTerm) && !invoiceId.includes(lower)) {
                 return false;
             }
         }
@@ -853,6 +868,17 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                 const endDate = `${year}-${month}-${lastDay}`;
                 if (filterCriterion === 'mes_referencia') {
                     query = query.gte('mes_referencia', startDate).lte('mes_referencia', endDate);
+                } else if (activeTab === 'contas_energia') {
+                    // Na aba de contas de energia o vencimento que importa e o da
+                    // CONCESSIONARIA -- e o que o card mostra. `vencimento` e o da
+                    // fatura ao assinante e fica NULO na UG (nao ha cobranca): filtrando
+                    // por ele, a conta da UG nao caia em mes nenhum e sumia da tela
+                    // (Santa Maria 09/2026, R$ 113,50, vencida e invisivel).
+                    // Sem data da concessionaria, vale a do assinante.
+                    query = query.or(
+                        `and(vencimento_concessionaria.gte.${startDate},vencimento_concessionaria.lte.${endDate}),` +
+                        `and(vencimento_concessionaria.is.null,vencimento.gte.${startDate},vencimento.lte.${endDate})`
+                    );
                 } else {
                     if (activeTab === 'contas_energia') {
                         query = query.or(`and(vencimento_concessionaria.gte.${startDate},vencimento_concessionaria.lte.${endDate}),and(vencimento_concessionaria.is.null,vencimento.gte.${startDate},vencimento.lte.${endDate})`);
@@ -3251,7 +3277,7 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
         if (searchTerm) {
             const lower = searchTerm.toLowerCase();
             const matchesSearch = 
-                unit.numero_uc?.toLowerCase().includes(lower) ||
+                ucCasaComBusca(unit.numero_uc, searchTerm) ||
                 (unit.tipo_unidade === 'geradora' ? (unit.usinas?.name || unit.suppliers?.name || '') : (unit.subscribers?.name || '')).toLowerCase().includes(lower) ||
                 unit.titular_fatura?.name?.toLowerCase().includes(lower) ||
                 unit.concessionaria?.toLowerCase().includes(lower);
