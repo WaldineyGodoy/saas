@@ -1,0 +1,13 @@
+{
+  "name": "saj-monitor",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Robô de monitoramento dos inversores SAJ (Elekeeper Open Platform) das usinas B2W",
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node src/main.js",
+    "uma-vez": "node src/main.js --uma-vez",
+    "test": "node --test test/*.test.js"
+  }
+}
