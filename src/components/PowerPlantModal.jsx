@@ -4,6 +4,8 @@ import { supabase } from '../lib/supabase';
 import { ucEncerrada } from '../lib/ucStatus';
 import { calcularCapacidade, ocupacaoDaGeracao } from '../lib/capacidade';
 import CronogramaObraUsina from './CronogramaObraUsina';
+import AlertasWhatsappUsina from './AlertasWhatsappUsina';
+import { alertasParaGravar } from '../lib/alertasUsina';
 import { etapasParaPagina } from '../lib/cronogramaObra';
 import { fetchAddressByCep, fetchOfferData, sendWhatsapp, shortenLink, salvarSenhaPortal, semSenha, createAutentiqueDocument, cancelAutentiqueDocument } from '../lib/api';
 import IrradianceChart from './IrradianceChart';
@@ -398,6 +400,8 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete, init
         name: '',
         status: 'pre_operacao',
         cronograma_obra: {},
+        alertas_whatsapp: [],
+        alertas_tipos: ['offline'],
         compra_venda_assinada_em: '',
         // Venda ao investidor: alimenta "Usinas à venda" na base do Agente
         // Investidor do Deskcomm (supabase/functions/deskcomm-base).
@@ -1123,6 +1127,8 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                 name: usina.name || '',
                 status: usina.status || 'pre_operacao',
                 cronograma_obra: usina.cronograma_obra || {},
+                alertas_whatsapp: usina.alertas_whatsapp || [],
+                alertas_tipos: usina.alertas_tipos || ['offline'],
                 compra_venda_assinada_em: usina.compra_venda_assinada_em
                     ? usina.compra_venda_assinada_em.slice(0, 10) : '',
                 a_venda: !!usina.a_venda,
@@ -1860,7 +1866,7 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
     };
 
     const fetchInverterBrands = async () => {
-        const { data } = await supabase.from('inverter_brands').select('name').order('name');
+        const { data } = await supabase.from('inverter_brands').select('name, api_monitoramento').order('name');
         setInverterBrands(data || []);
     };
 
@@ -3331,6 +3337,8 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
             concessionaria: formData.concessionaria,
             status: formData.status,
             cronograma_obra: formData.cronograma_obra || {},
+            alertas_whatsapp: alertasParaGravar(formData.alertas_whatsapp),
+            alertas_tipos: formData.alertas_tipos || [],
             // Só grava a data se ela mudou: a da Autentique tem hora, e
             // regravar o dia puro a truncaria a cada salvamento.
             ...((formData.compra_venda_assinada_em || '') !== (usina?.compra_venda_assinada_em?.slice(0, 10) || '')
@@ -4280,6 +4288,15 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                         onCalculate={handleChartCalculation}
                                     />
                                 </div>
+
+                                <AlertasWhatsappUsina
+                                    marca={formData.fabricante_inversor}
+                                    apiConectada={!!inverterBrands.find(b => b.name === formData.fabricante_inversor)?.api_monitoramento}
+                                    numeros={formData.alertas_whatsapp}
+                                    tipos={formData.alertas_tipos}
+                                    onChangeNumeros={numeros => setFormData(prev => ({ ...prev, alertas_whatsapp: numeros }))}
+                                    onChangeTipos={tipos => setFormData(prev => ({ ...prev, alertas_tipos: tipos }))}
+                                />
                             </div>
                         )}
 
