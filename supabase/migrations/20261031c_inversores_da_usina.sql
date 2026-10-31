@@ -80,8 +80,9 @@ begin
     ) x
     where p.fabricante = x.fabricante and p.plant_id = x.plant_id
       and p.usina_id is distinct from x.usina_id
-      -- sem nenhum inversor cadastrado ainda, preserva o vinculo que ja existe
-      and (x.usina_id is not null or not exists (
+      -- planta sem nenhum inversor visto ainda (robo nao rodou): preserva o vinculo que ja existe;
+      -- so desfaz quando ha inversores e nenhum deles esta em usina alguma
+      and (x.usina_id is not null or exists (
               select 1 from monitor_dispositivos d where d.fabricante = p.fabricante and d.plant_id = p.plant_id));
     get diagnostics v_n = row_count;
     return v_n;
@@ -362,3 +363,8 @@ begin
 end $$;
 
 revoke all on function public.fn_monitor_avaliar_alertas(timestamptz) from public, anon, authenticated;
+
+-- A primeira versao aplicada em producao tinha a condicao acima invertida e
+-- apagou o vinculo planta 161369 -> Bom Jesus I antes do robo rodar. Restaura.
+update public.monitor_plantas set usina_id = '9bf1349b-6c79-4f68-a8e4-bc00f00850f5'
+where fabricante = 'SAJ' and plant_id = '161369' and usina_id is null;
