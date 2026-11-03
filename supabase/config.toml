@@ -122,3 +122,8 @@ verify_jwt = true
 
 [functions.resolver-link-indicacao]
 verify_jwt = true
+
+# Servidor MCP dos agentes do Deskcomm: autentica pelo Bearer proprio (B2W_MCP_TOKEN),
+# que nao e JWT. Com verify_jwt = true o gateway barra tudo com Invalid JWT (29/10/2026).
+[functions.b2w-mcp]
+verify_jwt = false
