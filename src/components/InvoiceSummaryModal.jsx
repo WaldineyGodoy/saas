@@ -81,7 +81,10 @@ const decomporFatura = (dados, descontoPadrao = 0) => {
     const compensadaComDesconto = Math.max(0, consumoReais - tarifaMinima);
     const compensadaBruta = compensadaComDesconto + desconto;
 
-    const total = compensadaBruta - desconto + tarifaMinima + ip + outros + parcelamento;
+    // A parcela fica na conta (e na `sobra` acima), mas so vai ao boleto
+    // quando repassada -- mesma regra da fn_calcular_fatura (20261103d).
+    const parcelamentoBoleto = dados.parcelamento_repassado === false ? 0 : parcelamento;
+    const total = compensadaBruta - desconto + tarifaMinima + ip + outros + parcelamentoBoleto;
 
     // Confere a composicao -- mas so onde existe invariante.
     //
@@ -850,6 +853,10 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                 iluminacao_publica: invoice.iluminacao_publica || 0,
                 tarifa_minima: invoice.tarifa_minima || 0,
                 outros_lancamentos: invoice.outros_lancamentos || 0,
+                // Faltava aqui: o campo abria vazio com o valor gravado e
+                // somado ao boleto (UC 130179303270, 08/2026).
+                parcelamento: invoice.parcelamento || 0,
+                parcelamento_repassado: invoice.parcelamento_repassado !== false,
                 valor_concessionaria: invoice.valor_concessionaria || 0,
                 valor_a_pagar: invoice.valor_a_pagar || 0
             });
@@ -877,7 +884,7 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
         }
 
         // Recalcular Valor do Assinante (Boleto)
-        if (['consumo_reais', 'iluminacao_publica', 'tarifa_minima', 'outros_lancamentos', 'parcelamento', 'consumo_compensado', 'valor_concessionaria', 'consumo_kwh'].includes(field)) {
+        if (['consumo_reais', 'iluminacao_publica', 'tarifa_minima', 'outros_lancamentos', 'parcelamento', 'parcelamento_repassado', 'consumo_compensado', 'valor_concessionaria', 'consumo_kwh'].includes(field)) {
             const discount = invoice.desconto_aplicado !== undefined ? invoice.desconto_aplicado : (consumerUnit?.desconto_assinante || 0);
             // consumo_reais ja vem liquido de desconto -- ver decomporFatura.
             const d = decomporFatura(newData, discount);
@@ -1061,7 +1068,8 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
         const ip = Number(inv.iluminacao_publica) || 0;
         const tarifaMinimaExcedentes = Math.max(0, (rawConsumo - rawCompensado) * rawTarifa);
         const outros = Number(inv.outros_lancamentos) || 0;
-        const parcelamento = Number(inv.parcelamento) || 0;
+        // Parcela nao repassada fica com a B2W: fora do PDF do assinante.
+        const parcelamento = inv.parcelamento_repassado === false ? 0 : (Number(inv.parcelamento) || 0);
         const outrosTotal = tarifaMinimaExcedentes + outros + parcelamento;
         const totalCalculado = energiaCompensadaReais + ip + outrosTotal;
 
@@ -1734,6 +1742,12 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                     <span>Parcelamento:</span>
                                     <input type="number" step="0.01" value={editData.parcelamento} onChange={e => handleEditChange('parcelamento', e.target.value)} style={{ width: '100px', border: '1px solid #cbd5e1', borderRadius: '4px', textAlign: 'right', padding: '0.2rem' }} />
                                 </div>
+                                {Number(editData.parcelamento) > 0 && (
+                                    <label style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.4rem', fontSize: '0.8rem', color: '#64748b', alignItems: 'center', cursor: 'pointer' }}>
+                                        <input type="checkbox" checked={editData.parcelamento_repassado} onChange={e => handleEditChange('parcelamento_repassado', e.target.checked)} />
+                                        Repassar parcelamento ao assinante
+                                    </label>
+                                )}
                             </div>
                         ) : (() => {
                             const discount = invoice.desconto_aplicado !== undefined ? invoice.desconto_aplicado : (consumerUnit?.desconto_assinante || 0);
@@ -1820,7 +1834,7 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                                 <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#64748b', textAlign: 'center', verticalAlign: 'middle' }}>—</td>
                                                 <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#1e293b', fontWeight: '700', textAlign: 'right', verticalAlign: 'middle' }}>{formatCurrency(finalOutros)}</td>
                                             </tr>
-                                            {parcelamentoVal > 0 && (
+                                            {parcelamentoVal > 0 && invoice.parcelamento_repassado !== false && (
                                                 <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
                                                     <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#64748b', fontWeight: '500', verticalAlign: 'middle' }}>Parcelamento</td>
                                                     <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#64748b', textAlign: 'center', verticalAlign: 'middle' }}>—</td>
