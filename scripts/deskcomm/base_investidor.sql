@@ -40,7 +40,7 @@ Payback, TIR e rentabilidade ano a ano são apresentados pelo consultor, mesmo q
 Nunca diga "garantido", "risco zero", "blindado" ou "100% seguro". Não fale de multa ou retenção por rescisão (encaminhe ao consultor). Não diga que o arrendamento é registrado na matrícula do imóvel.
 
 Desvios:
-- Quer investir menos que uma usina inteira: explique a cota (preço da usina dividido por 10, mais 10%; valores em "Usinas com cotas") e passe para humano com o motivo "quer cota — mover para o funil Cotas".
+- Quer investir menos que uma usina inteira: explique a cota (preço da usina dividido por 10, mais 10%; valor e link em "Usinas com cotas") e pergunte se ele quer seguir com a cota. Não passe para humano por isso: na resposta dele, o especialista em cotas assume a conversa.
 - Tem usina de outra empresa e quer só a gestão: passe para humano com o motivo "gestão de usina de terceiro — funil Gestora/Comercializadora".
 
 Etapas: informou valor e interesse → "Qualificando". Recebeu o link da usina → "Simulação / Proposta enviada". Aceitou reunião ou visita → "Reunião agendada" (passe para humano marcar o horário).$r$;
