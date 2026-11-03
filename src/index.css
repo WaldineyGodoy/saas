@@ -1129,3 +1129,12 @@ textarea {
   background: #16a34a;
   color: #fff;
 }
+
+/* Rotacao do indicador de carregamento.
+ *
+ * Existia so dentro de InvoicesModal.css, que nao e carregado fora daquele
+ * modal: qualquer outra tela usando `animation: spin` ficava com um icone
+ * parado e ninguem percebia, porque o icone aparece de qualquer forma. */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

@@ -7,6 +7,7 @@ import { ehPapelInterno } from '../lib/papeis';
 // Dashboards Existing
 import AdminDashboard from './dashboards/AdminDashboard';
 import SubscriberDashboard from './dashboards/SubscriberDashboard';
+import SubscriberBillingDashboard from './dashboards/SubscriberBillingDashboard';
 import OriginatorDashboard from './dashboards/OriginatorDashboard';
 import SupplierDashboard from './dashboards/SupplierDashboard';
 
@@ -127,6 +128,9 @@ export default function Dashboard() {
         if (ehPapelInterno(role)) {
             items.push({ id: 'energy_bills', label: 'Contas de Energia', icon: 'bi-file-earmark-text' });
             items.push({ id: 'invoices', label: 'Faturas', icon: 'bi-receipt' });
+            // Posicao de cobranca do assinante: doze ciclos por UC, so leitura.
+            // Nao substitui "Meu Painel", que e a tela do proprio assinante.
+            items.push({ id: 'subscriber_billing', label: 'Posição do Assinante', icon: 'bi-table' });
         }
 
         // 6. Fornecedores
@@ -177,7 +181,7 @@ export default function Dashboard() {
         // `activeView` vem do localStorage: quem ja tinha a tela Faturas aberta
         // continuaria caindo nela depois do logout/login, mesmo sem o item no
         // menu. Aqui o caminho tambem fecha.
-        if ((activeView === 'invoices' || activeView === 'energy_bills') && !ehPapelInterno(profile.role)) {
+        if (['invoices', 'energy_bills', 'subscriber_billing'].includes(activeView) && !ehPapelInterno(profile.role)) {
             return (
                 <div style={{ padding: '2rem' }}>
                     <h2>Bem-vindo, {profile?.name}</h2>
@@ -189,6 +193,7 @@ export default function Dashboard() {
         switch (activeView) {
             case 'admin': return <AdminDashboard />;
             case 'subscriber_dashboard': return <SubscriberDashboard />;
+            case 'subscriber_billing': return <SubscriberBillingDashboard />;
             case 'originator_dashboard': return <OriginatorDashboard />;
             case 'supplier_dashboard': return <SupplierDashboard />;
             case 'graph_node_view': return <GraphNodeView />;
