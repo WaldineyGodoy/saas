@@ -156,6 +156,18 @@ serve(async (req) => {
         parcelamento += parseValue(match[2]);
     }
 
+    // Crédito que a concessionária devolve na conta (cobrança indevida
+    // anterior). Abate a conta que a B2W paga, mas não muda o que o assinante
+    // deve -- por isso fica fora de outros_lancamentos e não vai ao boleto.
+    //   Devolução de Crédito 147,19-
+    // Guardado positivo: é quanto a conta veio menor por causa dele.
+    let credito_concessionaria = 0;
+    const creditoRegex = /Devolu[çc][ãa]o\s+de\s+Cr[ée]dito[\s\S]{0,20}?((?:\d{1,3}(?:\.\d{3})+|\d+),\d{2})-/gi;
+    for (const match of fullText.matchAll(creditoRegex)) {
+        credito_concessionaria += Math.abs(parseValue(match[1]));
+    }
+    credito_concessionaria = Number(credito_concessionaria.toFixed(2));
+
     // Consumo Reais: Pega especificamente o VALOR (R$) que é a 3ª coluna de números após "kWh"
     // Ex: Consumo-TUSD kWh 753,00 0,57337503 431,75
     let consumo_reais = 0;
@@ -264,6 +276,7 @@ serve(async (req) => {
         outros_lancamentos: outros_lancamentos,
         parcelamento: parcelamento,
         parcelamento_descricao: parcelamento_descricao,
+        credito_concessionaria: credito_concessionaria,
         linha_digitavel: linha_digitavel,
         energia_injetada: energia_injetada,
         consumo_compensado: consumo_compensado,

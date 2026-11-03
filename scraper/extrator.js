@@ -121,7 +121,12 @@ function conferir(campos, { valorPortal, refAlvo }) {
     const avisos = [];
     const totalPdf = Number(campos.valor_a_pagar) || 0;
 
-    if (totalPdf <= 0) {
+    // Conta zerada por credito da concessionaria (devolucao de cobranca
+    // indevida) e legitima: o zero e o total impresso, nao falha de leitura.
+    const credito = Number(campos.credito_concessionaria) || 0;
+    if (totalPdf <= 0 && credito > 0) {
+        avisos.push(`conta zerada por credito da concessionaria de R$ ${credito.toFixed(2)}`);
+    } else if (totalPdf <= 0) {
         problemas.push('total nao encontrado no PDF');
     }
 
@@ -189,6 +194,8 @@ function paraInvoice(campos) {
         iluminacao_publica: numero(campos.iluminacao_publica),
         outros_lancamentos: numero(campos.outros_lancamentos),
         parcelamento: numero(campos.parcelamento),
+        // Abate a conta, nao o boleto: a auditoria soma de volta ao conferir.
+        credito_concessionaria: numero(campos.credito_concessionaria),
         data_leitura: campos.data_leitura || null,
         data_leitura_anterior: campos.data_leitura_anterior || null,
         vencimento_concessionaria: campos.vencimento || null,
