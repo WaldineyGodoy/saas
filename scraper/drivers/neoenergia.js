@@ -31,6 +31,10 @@ const ROTAS = {
     consultarDebitos: '#/home/servicos/consultar-debitos',
 };
 
+// Status do CRM em que a UC ja saiu da concessionaria: e o card DESLIGADA do
+// portal que tem a conta final. Mesma lista de STATUS_ENCERRADOS do scraper.js.
+const STATUS_UC_ENCERRADA = ['cancelado', 'cancelado_inadimplente', 'desconectado', 'desligado_por_tt'];
+
 const UF_TO_ESTADO = {
     RN: 'Rio Grande do Norte',
     BA: 'Bahia',
@@ -541,6 +545,13 @@ module.exports = {
             const itens = page.locator('li');
             totalItens = await itens.count();
 
+            // Depois de uma TT no padrao novo o numero NAO muda: o portal lista
+            // dois cards com o mesmo codigo, o contrato encerrado (DESLIGADA) e o
+            // novo (LIGADA). Parar no primeiro abria o desligado, e a tela de
+            // debitos vinha vazia para a UC ativa -- "fatura nao postada" todo dia
+            // (2.157.563.032-89 e 2.100.615.032-02, 10/2026). Juntar todos e
+            // escolher pela situacao que o CRM espera.
+            const achados = [];
             for (let i = 0; i < totalItens; i++) {
                 const item = itens.nth(i);
                 const digitosDoItem = (await item.innerText().catch(() => '')).replace(/\D/g, '');
@@ -549,9 +560,22 @@ module.exports = {
                 // preenchimento ate 12 ("049765303253") nunca casava, embora o
                 // portal tivesse achado a UC (03/10/2026, 6 UCs da Guanabara).
                 if (digitosDoItem.includes(paddedUC) || digitosDoItem.includes(digitosUC)) {
-                    ucCardRow = item.locator('div.row').first();
-                    break;
+                    // A situacao vem colada ao CEP no texto; ler pela classe.
+                    const situacoes = await item.locator('span.btn-status-imovel').allInnerTexts().catch(() => []);
+                    // Um <li> com mais de um card e o conteiner da lista, nao um card.
+                    if (situacoes.length > 1) continue;
+                    achados.push({ item, situacao: (situacoes[0] || '').trim().toUpperCase() });
                 }
+            }
+            if (achados.length > 0) {
+                const querDesligada = STATUS_UC_ENCERRADA.includes(uc.status);
+                const escolhido = achados.find(a => (a.situacao === 'DESLIGADA') === querDesligada) || achados[0];
+                // O conteiner de um card so tambem casa (mesma situacao): log so
+                // quando ha situacoes diferentes, que e o caso da TT.
+                if (new Set(achados.map(a => a.situacao)).size > 1) {
+                    log(`   [Faturista] ${achados.length} cards com ${paddedUC} (${achados.map(a => a.situacao || '?').join(', ')}). UC ${uc.status} no CRM -> abrindo o ${escolhido.situacao || 'primeiro'}.`);
+                }
+                ucCardRow = escolhido.item.locator('div.row').first();
             }
             if (ucCardRow && await ucCardRow.count() > 0) break;
             ucCardRow = null;
