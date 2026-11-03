@@ -64,10 +64,12 @@ export const resolveEnergyStatus = (inv) => {
         const hasValorPagar = Number(inv.valor_a_pagar) > 0;
         const hasRealBill = Number(inv.valor_concessionaria) > 0 && !!inv.concessionaria_pdf_url;
         
-        if (hasValorPagar) {
+        // Conta real (valor + PDF) e conta a pagar, com ou sem cobranca ao assinante.
+        // Antes, sem valor_a_pagar, virava "Baixada" e nunca olhava a data -- e toda
+        // conta de UG tem valor_a_pagar = 0 por desenho: as UGs ficavam vencidas
+        // exibidas como Baixada (Santa Maria, Bom Jesus II e Sao Jose, 10/2026).
+        if (hasValorPagar || hasRealBill) {
             ebStatus = 'a_vencer';
-        } else if (hasRealBill) {
-            ebStatus = 'baixada';
         } else {
             return 'pendente';
         }

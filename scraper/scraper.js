@@ -700,7 +700,11 @@ async function statusInicialDaConta(uc, ref) {
         .eq('mes_referencia', `${year}-${String(month).padStart(2, '0')}-01`)
         .maybeSingle();
     const atual = data?.energy_bill_status;
-    return ['pago', 'contestada', 'inconsistente', 'parcelada'].includes(atual) ? atual : 'a_vencer';
+    // Inclui os status "pago + divergencia" (17/10/2026): uma nova baixa nao pode
+    // transformar uma conta ja paga em 'a_vencer' e convidar a pagar de novo.
+    return ['pago', 'contestada', 'inconsistente', 'parcelada', 'inconsistente_pago', 'contestada_pago'].includes(atual)
+        ? atual
+        : 'a_vencer';
 }
 
 async function upsertInvoice(uc, ref, campos) {
