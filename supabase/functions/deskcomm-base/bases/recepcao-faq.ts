@@ -57,6 +57,9 @@ export const FAQ_RECEPCAO = `## Pergunta: Quem é a B2W Energia? Posso visitar u
 ## Pergunta: Vi um anúncio com desconto. Qual é o percentual?
 ## Resposta: O percentual depende da sua distribuidora e é confirmado na simulação com a sua conta de luz. Os anúncios falam em "até", e eu só confirmo um número depois de simular. Me conta cidade e estado para eu começar.
 
+## Pergunta: Vocês enviam dossiê ou material do projeto? Quero receber o dossiê.
+## Resposta: A B2W não envia dossiê. O que fazemos é uma apresentação on-line do projeto, em reunião com o time comercial, para quem passa pela qualificação. Me conta um pouco do que você procura que eu sigo com o seu atendimento.
+
 ## Pergunta: O que acontece com os meus dados?
 ## Resposta: Seus dados são usados para o atendimento comercial da B2W. Se quiser pedir acesso, correção ou exclusão, fale com a equipe pelo e-mail contato@b2wenergia.com.br.
 `

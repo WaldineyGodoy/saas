@@ -223,9 +223,9 @@ describe('FAQ de Cotas', () => {
 })
 
 describe('FAQ da Recepção', () => {
-    it('tem as 18 perguntas aprovadas, com os fatos do dono e sem número comercial', () => {
+    it('tem as 19 perguntas aprovadas, com os fatos do dono e sem número comercial', () => {
         const pares = lerFaq(FAQ_RECEPCAO)
-        expect(pares).toHaveLength(18)
+        expect(pares).toHaveLength(19)
         const tudo = FAQ_RECEPCAO.toLowerCase()
 
         // fatos informados pelo dono em 24/10/2026
@@ -237,6 +237,9 @@ describe('FAQ da Recepção', () => {
         expect(tudo).toContain('(31) 99536-7744')
         expect(tudo).toContain('contato@b2wenergia.com.br')
         expect(tudo).toContain('donos de usina')
+        // decisão do dono em 04/11/2026: não há dossiê, há apresentação on-line para lead qualificado
+        expect(tudo).toContain('a b2w não envia dossiê')
+        expect(tudo).toContain('apresentação on-line')
 
         // nenhum percentual, preço ou lista de estados do site
         expect(tudo).not.toMatch(/\d\s?%/)
