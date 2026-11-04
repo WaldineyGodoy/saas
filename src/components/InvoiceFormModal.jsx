@@ -623,7 +623,8 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
         const ip = Number(inv.iluminacao_publica) || 0;
         const tarifaMinimaExcedentes = Math.max(0, (rawConsumo - rawCompensado) * rawTarifa);
         const outros = Number(inv.outros_lancamentos) || 0;
-        const parcelamento = Number(inv.parcelamento) || 0;
+        // Parcela nao repassada fica com a B2W: fora do PDF do assinante.
+        const parcelamento = inv.parcelamento_repassado === false ? 0 : (Number(inv.parcelamento) || 0);
         const outrosTotal = tarifaMinimaExcedentes + outros + parcelamento;
         const totalCalculado = energiaCompensadaReais + ip + outrosTotal;
 

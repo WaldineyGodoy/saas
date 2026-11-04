@@ -127,7 +127,8 @@ function montarHtml({ demonstrativos, assinante, referencia, vencimento, total, 
                 ? ['Iluminação pública', '—', moeda(d.iluminacao_publica)] : null,
             Number(d.outros_lancamentos) > 0
                 ? ['Outros lançamentos', '—', moeda(d.outros_lancamentos)] : null,
-            Number(d.parcelamento) > 0
+            // Parcela nao repassada fica com a B2W e nao aparece ao assinante.
+            Number(d.parcelamento) > 0 && d.parcelamento_repassado !== false
                 ? ['Parcelamento', '—', moeda(d.parcelamento)] : null,
         ].filter(Boolean);
 
