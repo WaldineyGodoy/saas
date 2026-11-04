@@ -31,9 +31,11 @@ import { CSS } from '@dnd-kit/utilities';
 const KANBAN_STATUSES = [
     { status: 'sem_interacao', label: 'Sem Interação', color: '#a8a29e' },
     { status: 'indicado', label: 'Indicado', color: '#0ea5e9' },
+    // Mesmos nomes das etapas do Deskcomm (padronização de 03/11/2026).
+    { status: 'qualificando', label: 'Qualificando', color: '#14b8a6' },
     { status: 'simulacao', label: 'Simulação', color: '#64748b' },
     { status: 'negociacao', label: 'Negociação', color: '#eab308' },
-    { status: 'reuniao_agendada', label: 'Reunião Agendada/Apresentação', color: '#f97316' },
+    { status: 'reuniao_agendada', label: 'Reunião Agendada', color: '#f97316' },
     { status: 'contrato_enviado', label: 'Contrato Enviado', color: '#8b5cf6' },
     { status: 'ativacao', label: 'Ativação', color: '#7c3aed' },
     { status: 'ativo', label: 'Ativo', color: '#22c55e' },

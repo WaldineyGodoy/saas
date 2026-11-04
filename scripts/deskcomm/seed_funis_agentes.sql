@@ -80,7 +80,7 @@ O que você precisa colher, nesta ordem:
 3. A conta de luz (foto ou PDF) — é o que permite a simulação exata.
 4. Se é pessoa física (CPF) ou empresa (CNPJ), e quantas unidades consumidoras (UCs).
 
-Etapas: com cidade e consumo → "Qualificando". Com a conta enviada e a simulação feita → "Simulação / Proposta enviada". Cliente quer seguir → "Contrato enviado" (passe para humano ou envie o link do simulador b2wenergia.com.br).
+Etapas: com cidade e consumo → "Qualificando". Com a conta enviada e a simulação feita → "Simulação". Cliente quer seguir → "Contrato Enviado" (passe para humano ou envie o link do simulador b2wenergia.com.br).
 
 Como explicar:
 - A energia compensada pela geração compartilhada não é cobrada (Lei 14.300). O assinante continua pagando à distribuidora só o que a lei mantém: Fio B não compensável, iluminação pública e custo de disponibilidade.
@@ -104,7 +104,7 @@ O que colher:
 3. Pessoa física ou jurídica; se já investe em energia ou já tem usina.
 4. Cidade/estado e melhor horário para falar com o consultor.
 
-Etapas: com valor e objetivo → "Qualificando". Pediu números/projeção → "Simulação / Proposta enviada" e passe para humano (projeção de retorno é feita pelo consultor). Aceitou conversar → "Reunião agendada" (passe para humano marcar o horário).
+Etapas: com valor e objetivo → "Qualificando". Pediu números/projeção → "Simulação" e passe para humano (projeção de retorno é feita pelo consultor). Aceitou conversar → "Reunião Agendada" (passe para humano marcar o horário).
 
 Nunca prometa rentabilidade, payback ou percentual de retorno. Diga que a projeção depende da usina, do local e do modelo de contrato e que o consultor apresenta os números.$p$),
 
@@ -121,7 +121,7 @@ Para o público B, colha:
 3. Se tem vagas disponíveis e energia trifásica no local (se souber).
 4. Interesse: hospedar o carregador em parceria ou comprar.
 
-Etapas: com tipo e local → "Qualificando". Dados completos → "Reunião agendada" (passe para humano marcar visita técnica).
+Etapas: com tipo e local → "Qualificando". Dados completos → "Reunião Agendada" (passe para humano marcar visita técnica).
 Não informe preço de equipamento nem valor de kWh de recarga sem estar na base de conhecimento.$p$),
 
       ('cotas', 'Cotas', 'cotas', 'Agente Cotas',
@@ -135,7 +135,7 @@ O que colher:
 3. Se for para abater a conta: cidade, distribuidora e consumo médio (kWh) — peça a conta de luz.
 4. Pessoa física ou jurídica.
 
-Etapas: com objetivo e valor → "Qualificando". Com dados para simular → "Simulação / Proposta enviada" (passe para humano preparar a proposta). Aceitou → "Contrato enviado" (passe para humano).
+Etapas: com objetivo e valor → "Qualificando". Com dados para simular → "Simulação" (passe para humano preparar a proposta). Aceitou → "Contrato Enviado" (passe para humano).
 Não informe preço da cota nem retorno sem estar na base de conhecimento.$p$),
 
       ('arrendamento', 'Áreas de Arrendamento', 'areas-de-arrendamento', 'Agente Arrendamento',
@@ -150,7 +150,7 @@ O que colher:
 4. Situação do imóvel: proprietário, matrícula/escritura em dia, se há outros donos.
 5. Uso atual do terreno.
 
-Etapas: com local e tamanho → "Qualificando". Dados completos → "Reunião agendada" (passe para humano: a equipe técnica avalia e retorna).
+Etapas: com local e tamanho → "Qualificando". Dados completos → "Reunião Agendada" (passe para humano: a equipe técnica avalia e retorna).
 Não prometa valor de arrendamento por hectare nem aprovação da área. Explique que depende da análise técnica (irradiação, rede, documentação).$p$),
 
       ('comercializadora', 'Gestora / Comercializadora', 'gestora-comercializadora', 'Agente Mercado Livre',
@@ -167,7 +167,7 @@ O que colher:
 5. Quanta energia pretende fornecer e se já tem contrato com outra comercializadora ou cliente.
 6. Melhor contato e horário para falar com o especialista.
 
-Etapas: com os dados da usina → "Qualificando". Dados completos → "Reunião agendada" (passe para humano marcar com o especialista).
+Etapas: com os dados da usina → "Qualificando". Dados completos → "Reunião Agendada" (passe para humano marcar com o especialista).
 Use linguagem técnica com quem demonstrar conhecimento, e simples com quem não. Não informe preço de compra de energia, volume mínimo nem condição comercial: isso é combinado pelo especialista.$p$),
 
       ('vagas', 'Locação de Vagas', 'locacao-de-vagas', 'Agente Vagas',
@@ -183,7 +183,7 @@ Para quem quer oferecer vagas:
 1. Endereço e quantidade de vagas.
 2. Se é coberta e se tem energia disponível para recarga.
 
-Etapas: com local e necessidade → "Qualificando". Dados completos → "Simulação / Proposta enviada" (passe para humano com a proposta).
+Etapas: com local e necessidade → "Qualificando". Dados completos → "Simulação" (passe para humano com a proposta).
 Não informe valores de locação sem estar na base de conhecimento.$p$)
     ) t(slug_cat, nome, slug, agente, descricao, roteiro)
   loop
@@ -203,15 +203,15 @@ Não informe valores de locação sem estar na base de conhecimento.$p$)
         -- (CHECK crm_stages_agent_stage_hint_check), no maximo UMA etapa por dica
         -- em cada funil (uniq_crm_stages_pipeline_hint). O texto vai em description.
         select * from (values
-          (1, 'Novo contato',                 'novo-contato',     false, false,   5, 'new',         'Cliente acabou de chegar neste produto.'),
+          (1, 'Sem Interação',                 'novo-contato',     false, false,   5, 'new',         'Cliente acabou de chegar neste produto.'),
           (2, 'Qualificando',                 'qualificando',     false, false,  15, 'qualifying',  'Cliente respondeu e está informando os dados básicos do produto.'),
-          (3, 'Simulação / Proposta enviada', 'simulacao',        false, false,  30, 'qualified',   'Já há dados suficientes e a simulação ou proposta foi apresentada.'),
+          (3, 'Simulação', 'simulacao',        false, false,  30, 'qualified',   'Já há dados suficientes e a simulação ou proposta foi apresentada.'),
           (4, 'Negociação',                   'negociacao',       false, false,  50, 'negotiating', 'Cliente discute condições, prazos ou objeções sobre a proposta.'),
-          (5, 'Reunião agendada',             'reuniao-agendada', false, false,  60, null,          'Reunião, visita técnica ou apresentação combinada com o consultor.'),
-          (6, 'Contrato enviado',             'contrato-enviado', false, false,  80, null,          'Cliente aceitou e o contrato foi enviado para assinatura.'),
+          (5, 'Reunião Agendada',             'reuniao-agendada', false, false,  60, null,          'Reunião, visita técnica ou apresentação combinada com o consultor.'),
+          (6, 'Contrato Enviado',             'contrato-enviado', false, false,  80, null,          'Cliente aceitou e o contrato foi enviado para assinatura.'),
           (7, 'Fechou',                       'fechou',           true,  false, 100, 'won',         'Contrato assinado.'),
-          (8, 'Não fechou',                   'nao-fechou',       false, true,    0, 'lost',        'Cliente desistiu ou não tem perfil.'),
-          (9, 'Sem resposta',                 'sem-resposta',     false, false,   5, 'contacted',   'Cliente parou de responder.')
+          (8, 'Negócio Perdido',                   'nao-fechou',       false, true,    0, 'lost',        'Cliente desistiu ou não tem perfil.'),
+          (9, 'Aguardando resposta',                 'sem-resposta',     false, false,   5, 'contacted',   'Cliente parou de responder.')
         ) s(ord, nome, slug, ganho, perda, prob, dica, descricao)
       loop
         insert into crm_stages (organization_id, pipeline_id, name, slug, description, position, is_won, is_lost, win_probability, agent_stage_hint)

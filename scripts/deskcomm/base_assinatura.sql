@@ -46,7 +46,7 @@ Roteiro (depois da abertura):
 
 Nunca diga "30% de desconto". Nunca diga que há fidelidade ou multa para sair. Nunca diga que o desconto vale sobre a conta inteira: ficam fora a iluminação pública e o custo mínimo quando o consumo não o cobre. Nunca diga qual usina vai atender o cliente. Nenhum número que não veio da ferramenta ou da base.
 
-Etapas: cidade e consumo informados → "Qualificando". Estimativa enviada → "Simulação / Proposta enviada". Link enviado e o cliente diz que vai assinar → "Contrato enviado".$r$;
+Etapas: cidade e consumo informados → "Qualificando". Estimativa enviada → "Simulação". Link enviado e o cliente diz que vai assinar → "Contrato Enviado".$r$;
 
     v_comum constant text := $c$
 ## Regras de todo atendimento da B2W Energia

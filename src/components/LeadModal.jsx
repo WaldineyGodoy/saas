@@ -43,9 +43,10 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
     const statusOptions = [
         { value: 'sem_interacao', label: 'Sem Interação' },
         { value: 'indicado', label: 'Indicado' },
+        { value: 'qualificando', label: 'Qualificando' },
         { value: 'simulacao', label: 'Simulação' },
         { value: 'negociacao', label: 'Negociação' },
-        { value: 'reuniao_agendada', label: 'Reunião Agendada/Apresentação' },
+        { value: 'reuniao_agendada', label: 'Reunião Agendada' },
         { value: 'contrato_enviado', label: 'Contrato Enviado' },
         { value: 'ativacao', label: 'Ativação' },
         { value: 'ativo', label: 'Ativo' },
@@ -59,6 +60,8 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
                 return { label: 'Sem Interação', color: '#475569', bg: '#f1f5f9', border: '#cbd5e1', dot: '#64748b' };
             case 'indicado':
                 return { label: 'Indicado', color: '#b45309', bg: '#fffbeb', border: '#fde68a', dot: '#f59e0b' };
+            case 'qualificando':
+                return { label: 'Qualificando', color: '#0f766e', bg: '#f0fdfa', border: '#99f6e4', dot: '#14b8a6' };
             case 'simulacao':
                 return { label: 'Simulação', color: '#0369a1', bg: '#f0f9ff', border: '#bae6fd', dot: '#0ea5e9' };
             case 'negociacao':
