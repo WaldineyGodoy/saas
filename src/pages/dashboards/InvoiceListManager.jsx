@@ -1160,24 +1160,42 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
     const getEnergyStatusBadge = (inv) => {
         const resolved = resolveEnergyStatus(inv);
         const map = {
-            'pendente': { color: '#f97316', bg: '#fff7ed', label: 'Pendente', icon: Clock },
-            'indisponivel': { color: '#ef4444', bg: '#fef2f2', label: 'Indisponível', icon: AlertCircle },
-            'baixada': { color: '#3b82f6', bg: '#eff6ff', label: 'Baixada', icon: CheckCircle },
-            'processada': { color: '#22c55e', bg: '#f0fdf4', label: 'Processada', icon: CheckCircle2 },
-            'a_vencer': { color: '#2563eb', bg: '#eff6ff', label: 'A Vencer', icon: Clock },
-            'inconsistente': { color: '#ea580c', bg: '#ffedd5', label: 'Inconsistente', icon: AlertCircle },
-            'contestada': { color: '#7c3aed', bg: '#f3e8ff', label: 'Contestado', icon: Ban },
-            'inconsistente_pago': { ...ENERGY_PAID_DIVERGENT.inconsistente_pago, icon: CheckCircle },
-            'contestada_pago': { ...ENERGY_PAID_DIVERGENT.contestada_pago, icon: CheckCircle },
-            'parcelada': { color: '#ca8a04', bg: '#fef9c3', label: 'Parcelado', icon: Info },
-            'atrasada': { color: '#dc2626', bg: '#fee2e2', label: 'Atrasado', icon: AlertCircle },
-            'pago': { color: '#166534', bg: '#dcfce7', label: 'Pago', icon: CheckCircle }
+            'pendente': { color: '#c2410c', dot: '#f97316', bg: '#fff7ed', border: '#fed7aa', label: 'Pendente', icon: Clock },
+            'indisponivel': { color: '#b91c1c', dot: '#ef4444', bg: '#fef2f2', border: '#fecaca', label: 'Indisponível', icon: AlertCircle },
+            'baixada': { color: '#1d4ed8', dot: '#3b82f6', bg: '#eff6ff', border: '#bfdbfe', label: 'Baixada', icon: CheckCircle },
+            'processada': { color: '#15803d', dot: '#22c55e', bg: '#f0fdf4', border: '#bbf7d0', label: 'Processada', icon: CheckCircle2 },
+            'a_vencer': { color: '#1d4ed8', dot: '#2563eb', bg: '#eff6ff', border: '#bfdbfe', label: 'A Vencer', icon: Clock },
+            'inconsistente': { color: '#c2410c', dot: '#ea580c', bg: '#ffedd5', border: '#fdba74', label: 'Inconsistente', icon: AlertCircle },
+            'contestada': { color: '#6d28d9', dot: '#7c3aed', bg: '#f3e8ff', border: '#ddd6fe', label: 'Contestado', icon: Ban },
+            'inconsistente_pago': { ...ENERGY_PAID_DIVERGENT.inconsistente_pago, dot: ENERGY_PAID_DIVERGENT.inconsistente_pago.color, border: `${ENERGY_PAID_DIVERGENT.inconsistente_pago.color}35`, icon: CheckCircle },
+            'contestada_pago': { ...ENERGY_PAID_DIVERGENT.contestada_pago, dot: ENERGY_PAID_DIVERGENT.contestada_pago.color, border: `${ENERGY_PAID_DIVERGENT.contestada_pago.color}35`, icon: CheckCircle },
+            'parcelada': { color: '#854d0e', dot: '#ca8a04', bg: '#fef9c3', border: '#fde047', label: 'Parcelado', icon: Info },
+            'atrasada': { color: '#b91c1c', dot: '#dc2626', bg: '#fee2e2', border: '#fecaca', label: 'Atrasado', icon: AlertCircle },
+            'pago': { color: '#166534', dot: '#16a34a', bg: '#dcfce7', border: '#bbf7d0', label: 'Pago', icon: CheckCircle }
         };
         const s = map[resolved] || map['pendente'];
         const Icon = s.icon;
         return (
-            <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.2rem 0.6rem', background: s.bg, color: s.color, borderRadius: '99px', fontSize: '0.8rem', width: 'fit-content', fontWeight: 'bold' }}>
-                <Icon size={12} /> {s.label}
+            <span style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                padding: '0.22rem 0.65rem',
+                background: s.bg,
+                color: s.color,
+                border: `1px solid ${s.border || `${s.color}30`}`,
+                borderRadius: '999px',
+                fontSize: '0.73rem',
+                width: 'fit-content',
+                fontWeight: 700,
+                letterSpacing: '0.01em',
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
+                lineHeight: 1.2
+            }}>
+                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: s.dot || s.color, flexShrink: 0 }} />
+                <Icon size={11} style={{ flexShrink: 0 }} />
+                {s.label}
             </span>
         );
     };
@@ -1208,193 +1226,338 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
 
     const getStatusBadge = (status) => {
         const map = {
-            'sem_faturamento': { color: '#2563eb', bg: '#eff6ff', label: 'Sem Faturamento', icon: FileText },
-            'ag_emissao_boleto': { color: '#2563eb', bg: '#eff6ff', label: 'Sem Faturamento', icon: FileText },
-            'a_vencer': { color: '#854d0e', bg: '#fef9c3', label: 'A Vencer', icon: Clock },
-            'atrasado': { color: '#dc2626', bg: '#fee2e2', label: 'Atrasado', icon: AlertCircle },
-            'confirmado': { color: '#0891b2', bg: '#ecfeff', label: 'Pagamento Confirmado', icon: CheckCircle2 },
-            'pago': { color: '#166534', bg: '#dcfce7', label: 'Pago', icon: CheckCircle },
-            'cancelado': { color: '#475569', bg: '#f1f5f9', label: 'Cancelada', icon: Ban },
+            'sem_faturamento': { color: '#1d4ed8', dot: '#2563eb', bg: '#eff6ff', border: '#bfdbfe', label: 'Sem Faturamento', icon: FileText },
+            'ag_emissao_boleto': { color: '#1d4ed8', dot: '#2563eb', bg: '#eff6ff', border: '#bfdbfe', label: 'Sem Faturamento', icon: FileText },
+            'a_vencer': { color: '#854d0e', dot: '#ca8a04', bg: '#fef9c3', border: '#fde047', label: 'A Vencer', icon: Clock },
+            'atrasado': { color: '#b91c1c', dot: '#dc2626', bg: '#fee2e2', border: '#fecaca', label: 'Atrasado', icon: AlertCircle },
+            'confirmado': { color: '#0e7490', dot: '#0891b2', bg: '#ecfeff', border: '#a5f3fc', label: 'Confirmado', icon: CheckCircle2 },
+            'pago': { color: '#166534', dot: '#16a34a', bg: '#dcfce7', border: '#bbf7d0', label: 'Pago', icon: CheckCircle },
+            'cancelado': { color: '#475569', dot: '#64748b', bg: '#f1f5f9', border: '#cbd5e1', label: 'Cancelada', icon: Ban },
         };
         const s = map[status] || map['a_vencer'];
         const Icon = s.icon;
         return (
-            <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.2rem 0.6rem', background: s.bg, color: s.color, borderRadius: '99px', fontSize: '0.8rem', width: 'fit-content' }}>
-                <Icon size={12} /> {s.label}
+            <span style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                padding: '0.22rem 0.65rem',
+                background: s.bg,
+                color: s.color,
+                border: `1px solid ${s.border}`,
+                borderRadius: '999px',
+                fontSize: '0.73rem',
+                fontWeight: 700,
+                letterSpacing: '0.01em',
+                width: 'fit-content',
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
+                lineHeight: 1.2
+            }}>
+                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: s.dot, flexShrink: 0 }} />
+                <Icon size={11} style={{ flexShrink: 0 }} />
+                {s.label}
             </span>
         );
     };
 
     const InvoiceCalendarView = ({ invoices, onEdit }) => {
+        const now = new Date();
         const [year, month] = monthFilter === 'all' 
-            ? [new Date().getFullYear(), new Date().getMonth() + 1] 
+            ? [now.getFullYear(), now.getMonth() + 1] 
             : monthFilter.split('-').map(Number);
+        const isCurrentMonthView = year === now.getFullYear() && month === (now.getMonth() + 1);
+        const todayNum = now.getDate();
+
         const firstDay = new Date(year, month - 1, 1).getDay();
         const startOffset = (firstDay + 6) % 7; // Segunda = 0
         const daysInMonth = new Date(year, month, 0).getDate();
         const calendarDays = Array.from({ length: daysInMonth }, (_, i) => i + 1);
 
-        const groupedInvoices = invoices.reduce((acc, inv) => {
-            if (inv.vencimento && !['cancelado', 'cancelada'].includes(inv.status)) {
-                const date = new Date(inv.vencimento);
-                const day = date.getUTCDate();
-                if (!acc[day]) acc[day] = [];
-                acc[day].push(inv);
-            }
+        const validCalendarInvoices = invoices.filter(inv => inv.vencimento && !['cancelado', 'cancelada'].includes(inv.status));
+
+        const groupedInvoices = validCalendarInvoices.reduce((acc, inv) => {
+            const date = new Date(inv.vencimento);
+            const day = date.getUTCDate();
+            if (!acc[day]) acc[day] = [];
+            acc[day].push(inv);
             return acc;
         }, {});
 
+        const summary = validCalendarInvoices.reduce((acc, inv) => {
+            const val = Number(inv.valor_a_pagar) || 0;
+            acc.totalCount++;
+            acc.totalVal += val;
+            if (inv.status === 'pago') {
+                acc.pagoCount++;
+                acc.pagoVal += val;
+            } else if (inv.status === 'atrasado') {
+                acc.atrasadoCount++;
+                acc.atrasadoVal += val;
+            } else {
+                acc.aVencerCount++;
+                acc.aVencerVal += val;
+            }
+            return acc;
+        }, { totalCount: 0, totalVal: 0, pagoCount: 0, pagoVal: 0, aVencerCount: 0, aVencerVal: 0, atrasadoCount: 0, atrasadoVal: 0 });
+
         return (
-            <div style={{ 
-                display: 'grid', 
-                gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', 
-                gap: '1rem', 
-                padding: '1rem' 
-            }}>
+            <div style={{ padding: '1.15rem', display: 'flex', flexDirection: 'column', gap: '1rem', fontVariantNumeric: 'tabular-nums' }}>
+                {/* Resumo Executivo de Vencimentos */}
                 <div style={{
-                    gridColumn: '1 / -1',
                     display: 'grid',
-                    gridTemplateColumns: 'repeat(7, 1fr)',
-                    gap: '1rem',
-                    position: 'sticky',
-                    top: 'calc(var(--sticky-header-height, 120px) + 2rem)',
-                    zIndex: 10,
-                    background: '#f8fafc',
-                    padding: '0.5rem 0',
-                    margin: '-0.5rem 0 0.5rem 0'
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
+                    gap: '0.85rem'
                 }}>
-                    {['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SAB', 'DOM'].map(d => (
-                        <div key={d} style={{ 
-                            fontWeight: '800', 
-                            textAlign: 'center', 
-                            padding: '0.5rem', 
-                            color: '#64748b', 
-                            fontSize: '0.75rem', 
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.05em'
-                        }}>
-                            {d}
+                    <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0', padding: '0.85rem 1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 1px 2px rgba(15,23,42,0.03)' }}>
+                        <div>
+                            <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Total Programado</div>
+                            <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#0f172a', marginTop: '0.15rem' }}>{formatCurrency(summary.totalVal)}</div>
                         </div>
-                    ))}
+                        <span style={{ background: '#f1f5f9', color: '#334155', fontWeight: 800, fontSize: '0.75rem', padding: '0.25rem 0.6rem', borderRadius: '999px', border: '1px solid #e2e8f0' }}>
+                            {summary.totalCount} {summary.totalCount === 1 ? 'fatura' : 'faturas'}
+                        </span>
+                    </div>
+                    <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #bbf7d0', borderLeft: '4px solid #16a34a', padding: '0.85rem 1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 1px 2px rgba(15,23,42,0.03)' }}>
+                        <div>
+                            <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#166534', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Liquidado / Pago</div>
+                            <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#166534', marginTop: '0.15rem' }}>{formatCurrency(summary.pagoVal)}</div>
+                        </div>
+                        <span style={{ background: '#dcfce7', color: '#166534', fontWeight: 800, fontSize: '0.75rem', padding: '0.25rem 0.6rem', borderRadius: '999px' }}>
+                            {summary.pagoCount}
+                        </span>
+                    </div>
+                    <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #fde047', borderLeft: '4px solid #ca8a04', padding: '0.85rem 1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 1px 2px rgba(15,23,42,0.03)' }}>
+                        <div>
+                            <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#854d0e', textTransform: 'uppercase', letterSpacing: '0.04em' }}>A Vencer / Em Aberto</div>
+                            <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#854d0e', marginTop: '0.15rem' }}>{formatCurrency(summary.aVencerVal)}</div>
+                        </div>
+                        <span style={{ background: '#fef9c3', color: '#854d0e', fontWeight: 800, fontSize: '0.75rem', padding: '0.25rem 0.6rem', borderRadius: '999px' }}>
+                            {summary.aVencerCount}
+                        </span>
+                    </div>
+                    <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #fecaca', borderLeft: '4px solid #dc2626', padding: '0.85rem 1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 1px 2px rgba(15,23,42,0.03)' }}>
+                        <div>
+                            <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#b91c1c', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Em Atraso</div>
+                            <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#dc2626', marginTop: '0.15rem' }}>{formatCurrency(summary.atrasadoVal)}</div>
+                        </div>
+                        <span style={{ background: '#fee2e2', color: '#b91c1c', fontWeight: 800, fontSize: '0.75rem', padding: '0.25rem 0.6rem', borderRadius: '999px' }}>
+                            {summary.atrasadoCount}
+                        </span>
+                    </div>
                 </div>
-                {Array.from({ length: startOffset }).map((_, i) => (
-                    <div key={`pad-${i}`} style={{ background: '#f8fafc50', borderRadius: '14px', border: '1px dashed #e2e8f0', minHeight: '260px' }} />
-                ))}
-                {calendarDays.map(day => {
-                    const dayInvoices = groupedInvoices[day] || [];
-                    const totalAmount = dayInvoices.reduce((sum, inv) => sum + (Number(inv.valor_a_pagar) || 0), 0);
 
-                    const counts = dayInvoices.reduce((acc, inv) => {
-                        acc[inv.status] = (acc[inv.status] || 0) + 1;
-                        return acc;
-                    }, {});
+                {/* Grade do Calendário */}
+                <div style={{ 
+                    display: 'grid', 
+                    gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', 
+                    gap: '0.85rem'
+                }}>
+                    <div style={{
+                        gridColumn: '1 / -1',
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(7, 1fr)',
+                        gap: '0.85rem',
+                        position: 'sticky',
+                        top: 'calc(var(--sticky-header-height, 120px) + 1.5rem)',
+                        zIndex: 10,
+                        background: 'rgba(248, 250, 252, 0.95)',
+                        backdropFilter: 'blur(8px)',
+                        padding: '0.4rem 0',
+                        borderBottom: '1px solid #e2e8f0'
+                    }}>
+                        {['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB', 'DOM'].map((d, idx) => (
+                            <div key={d} style={{ 
+                                fontWeight: 800, 
+                                textAlign: 'center', 
+                                padding: '0.4rem', 
+                                color: idx >= 5 ? '#94a3b8' : '#475569', 
+                                fontSize: '0.72rem', 
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.06em',
+                                background: 'white',
+                                borderRadius: '8px',
+                                border: '1px solid #e2e8f0'
+                            }}>
+                                {d}
+                            </div>
+                        ))}
+                    </div>
+                    {Array.from({ length: startOffset }).map((_, i) => (
+                        <div key={`pad-${i}`} style={{ background: 'rgba(241, 245, 249, 0.45)', borderRadius: '14px', border: '1px dashed #cbd5e1', minHeight: '220px' }} />
+                    ))}
+                    {calendarDays.map(day => {
+                        const dayInvoices = groupedInvoices[day] || [];
+                        const hasItems = dayInvoices.length > 0;
+                        const isToday = isCurrentMonthView && day === todayNum;
+                        const totalAmount = dayInvoices.reduce((sum, inv) => sum + (Number(inv.valor_a_pagar) || 0), 0);
 
-                    return (
-                        <div key={day} style={{ background: 'white', borderRadius: '14px', border: '1px solid #e2e8f0', minHeight: '260px', height: '260px', display: 'flex', flexDirection: 'column', boxShadow: 'var(--shadow-sm)', transition: 'all 0.2s', overflow: 'hidden' }}>
-                            <div style={{ padding: '0.75rem 0.75rem', borderBottom: '1px solid #f1f5f9', background: '#f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                                    <span style={{ fontWeight: '800', color: 'var(--color-blue)', fontSize: '0.85rem', marginRight: '0.4rem' }}>D{day}</span>
-                                    {counts.pago > 0 && <span title={`Pagos: ${counts.pago}`} style={{ background: '#10b981', color: 'white', width: '18px', height: '18px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', fontWeight: 'bold' }}>{counts.pago}</span>}
-                                    {counts.a_vencer > 0 && <span title={`A Vencer: ${counts.a_vencer}`} style={{ background: '#f59e0b', color: 'white', width: '18px', height: '18px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', fontWeight: 'bold' }}>{counts.a_vencer}</span>}
-                                    {counts.atrasado > 0 && <span title={`Vencidos: ${counts.atrasado}`} style={{ background: '#ef4444', color: 'white', width: '18px', height: '18px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', fontWeight: 'bold' }}>{counts.atrasado}</span>}
+                        const counts = dayInvoices.reduce((acc, inv) => {
+                            acc[inv.status] = (acc[inv.status] || 0) + 1;
+                            return acc;
+                        }, {});
+
+                        const hasAtrasado = (counts.atrasado || 0) > 0;
+                        const allPago = hasItems && (counts.pago === dayInvoices.length);
+                        const headerBg = !hasItems ? '#f8fafc' : hasAtrasado ? '#fef2f2' : allPago ? '#f0fdf4' : '#fffbeb';
+                        const headerBorder = !hasItems ? '#f1f5f9' : hasAtrasado ? '#fecaca' : allPago ? '#bbf7d0' : '#fde68a';
+                        const amountColor = hasAtrasado ? '#b91c1c' : allPago ? '#166534' : '#0f172a';
+                        const amountBg = hasAtrasado ? '#fee2e2' : allPago ? '#dcfce7' : '#f1f5f9';
+
+                        return (
+                            <div key={day} style={{
+                                background: hasItems ? 'white' : '#f8fafc',
+                                borderRadius: '14px',
+                                border: isToday ? '2px solid #2563eb' : hasItems ? '1px solid #cbd5e1' : '1px dashed #e2e8f0',
+                                minHeight: '250px',
+                                height: '265px',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                boxShadow: hasItems ? '0 2px 8px -2px rgba(15, 23, 42, 0.06)' : 'none',
+                                transition: 'all 0.2s',
+                                overflow: 'hidden'
+                            }}>
+                                <div style={{
+                                    padding: '0.6rem 0.75rem',
+                                    borderBottom: `1px solid ${headerBorder}`,
+                                    background: headerBg,
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    gap: '0.35rem'
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', minWidth: 0 }}>
+                                        <span style={{
+                                            fontWeight: 800,
+                                            color: isToday ? '#1d4ed8' : hasItems ? '#0f172a' : '#94a3b8',
+                                            fontSize: '0.8rem',
+                                            whiteSpace: 'nowrap'
+                                        }}>
+                                            Dia {String(day).padStart(2, '0')}
+                                        </span>
+                                        {isToday && (
+                                            <span style={{ fontSize: '0.6rem', fontWeight: 800, background: '#2563eb', color: 'white', padding: '0.08rem 0.35rem', borderRadius: '4px', textTransform: 'uppercase' }}>
+                                                Hoje
+                                            </span>
+                                        )}
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                                            {counts.pago > 0 && <span title={`Pagas: ${counts.pago}`} style={{ background: '#dcfce7', color: '#166534', border: '1px solid #86efac', padding: '0.05rem 0.35rem', borderRadius: '999px', fontSize: '0.65rem', fontWeight: 800 }}>{counts.pago}</span>}
+                                            {counts.a_vencer > 0 && <span title={`A Vencer: ${counts.a_vencer}`} style={{ background: '#fef9c3', color: '#854d0e', border: '1px solid #fde047', padding: '0.05rem 0.35rem', borderRadius: '999px', fontSize: '0.65rem', fontWeight: 800 }}>{counts.a_vencer}</span>}
+                                            {counts.atrasado > 0 && <span title={`Vencidas: ${counts.atrasado}`} style={{ background: '#fee2e2', color: '#b91c1c', border: '1px solid #fca5a5', padding: '0.05rem 0.35rem', borderRadius: '999px', fontSize: '0.65rem', fontWeight: 800 }}>{counts.atrasado}</span>}
+                                        </div>
+                                    </div>
+                                    {totalAmount > 0 && (
+                                        <span style={{
+                                            fontSize: '0.68rem',
+                                            color: amountColor,
+                                            background: amountBg,
+                                            padding: '0.15rem 0.45rem',
+                                            borderRadius: '6px',
+                                            fontWeight: 800,
+                                            whiteSpace: 'nowrap'
+                                        }}>
+                                            {formatCurrency(totalAmount)}
+                                        </span>
+                                    )}
                                 </div>
-                                {totalAmount > 0 && (
-                                    <span style={{ fontSize: '0.7rem', color: '#166534', background: '#dcfce7', padding: '0.15rem 0.5rem', borderRadius: '99px', fontWeight: '800' }}>
-                                        {formatCurrency(totalAmount)}
-                                    </span>
-                                )}
-                            </div>
-                            <div style={{ padding: '0.75rem', flex: 1, display: 'flex', flexDirection: 'column', gap: '0.75rem', overflowY: 'auto', scrollbarWidth: 'thin' }}>
-                                {dayInvoices.length === 0 ? (
-                                    <div style={{ fontSize: '0.8rem', color: '#94a3b8', textAlign: 'center', marginTop: '3.5rem', fontStyle: 'italic', opacity: 0.6 }}>Sem faturas</div>
-                                ) : (
-                                    dayInvoices.map(inv => {
-                                        const statusData = {
-                                            'sem_faturamento': { color: '#2563eb', label: 'Sem Faturamento', bg: '#eff6ff' },
-                                            'pago': { color: '#166534', label: 'Pago', bg: '#dcfce7' },
-                                            'atrasado': { color: '#dc2626', label: 'Atrasado', bg: '#fee2e2' },
-                                            'a_vencer': { color: '#854d0e', label: 'A Vencer', bg: '#fef9c3' }
-                                        };
-                                        const s = statusData[inv.status] || statusData['a_vencer'];
-                                        const isBoletoEmitido = !!inv.asaas_boleto_url;
+                                <div style={{ padding: '0.65rem', flex: 1, display: 'flex', flexDirection: 'column', gap: '0.55rem', overflowY: 'auto', scrollbarWidth: 'thin' }}>
+                                    {!hasItems ? (
+                                        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', color: '#94a3b8', fontWeight: 500 }}>
+                                            Sem vencimentos
+                                        </div>
+                                    ) : (
+                                        dayInvoices.map(inv => {
+                                            const statusData = {
+                                                'sem_faturamento': { color: '#1d4ed8', dot: '#2563eb', label: 'Sem Fat.', bg: '#eff6ff' },
+                                                'confirmado': { color: '#0e7490', dot: '#0891b2', label: 'Confirmado', bg: '#ecfeff' },
+                                                'pago': { color: '#166534', dot: '#16a34a', label: 'Pago', bg: '#dcfce7' },
+                                                'atrasado': { color: '#b91c1c', dot: '#dc2626', label: 'Atrasado', bg: '#fee2e2' },
+                                                'a_vencer': { color: '#854d0e', dot: '#ca8a04', label: 'A Vencer', bg: '#fef9c3' }
+                                            };
+                                            const s = statusData[inv.status] || statusData['a_vencer'];
+                                            const isBoletoEmitido = !!inv.asaas_boleto_url;
 
-                                        return (
-                                            <div
-                                                key={inv.id}
-                                                onClick={() => onEdit(inv)}
-                                                style={{
-                                                    padding: '0.75rem',
-                                                    borderRadius: '10px',
-                                                    background: 'white',
-                                                    border: '1px solid #e2e8f0',
-                                                    borderLeft: `5px solid ${s.color}`,
-                                                    cursor: 'pointer',
-                                                    transition: 'all 0.2s',
-                                                    position: 'relative',
-                                                    flexShrink: 0,
-                                                    height: 'fit-content'
-                                                }}
-                                                onMouseOver={e => {
-                                                    e.currentTarget.style.transform = 'translateY(-2px)';
-                                                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.05)';
-                                                    e.currentTarget.style.borderColor = 'var(--color-blue)';
-                                                }}
-                                                onMouseOut={e => {
-                                                    e.currentTarget.style.transform = 'translateY(0)';
-                                                    e.currentTarget.style.boxShadow = 'none';
-                                                    e.currentTarget.style.borderColor = '#e2e8f0';
-                                                }}
-                                            >
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.4rem' }}>
-                                                    <div style={{ fontWeight: '800', color: '#1e293b', fontSize: '0.8rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>
-                                                        {getDisplayName(inv) !== '-' ? getDisplayName(inv) : 'S/ Assinante'}
-                                                    </div>
-                                                </div>
-
-                                                <div style={{ fontSize: '0.7rem', color: '#64748b', marginBottom: '0.5rem' }}>
-                                                    UC: {inv.consumer_units?.numero_uc}
-                                                </div>
-
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem', borderTop: '1px solid #f1f5f9', paddingTop: '0.5rem' }}>
-                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
-                                                        <span style={{ fontSize: '0.6rem', fontWeight: '800', color: s.color, background: s.bg, padding: '0.1rem 0.4rem', borderRadius: '4px', textTransform: 'uppercase' }}>
-                                                            {s.label}
-                                                        </span>
-                                                        <span style={{
-                                                            fontSize: '0.6rem',
-                                                            fontWeight: '800',
-                                                            color: isBoletoEmitido ? '#0369a1' : '#c2410c',
-                                                            background: isBoletoEmitido ? '#e0f2fe' : '#fff7ed',
-                                                            padding: '0.1rem 0.4rem',
-                                                            borderRadius: '4px',
-                                                            display: 'flex',
-                                                            alignItems: 'center',
-                                                            gap: '0.2rem'
-                                                        }}>
-                                                            {isBoletoEmitido ? <TicketCheck size={10} /> : <TicketMinus size={10} />}
-                                                            {isBoletoEmitido ? 'Emitido' : 'Gerar'}
+                                            return (
+                                                <div
+                                                    key={inv.id}
+                                                    onClick={() => onEdit(inv)}
+                                                    style={{
+                                                        padding: '0.65rem 0.7rem',
+                                                        borderRadius: '10px',
+                                                        background: 'white',
+                                                        border: '1px solid #e2e8f0',
+                                                        borderLeft: `3.5px solid ${s.dot}`,
+                                                        cursor: 'pointer',
+                                                        transition: 'all 0.18s ease',
+                                                        position: 'relative',
+                                                        flexShrink: 0,
+                                                        boxShadow: '0 1px 2px rgba(15, 23, 42, 0.03)'
+                                                    }}
+                                                    onMouseOver={e => {
+                                                        e.currentTarget.style.transform = 'translateY(-1px)';
+                                                        e.currentTarget.style.boxShadow = '0 6px 12px -2px rgba(15, 23, 42, 0.08)';
+                                                        e.currentTarget.style.borderColor = '#93c5fd';
+                                                    }}
+                                                    onMouseOut={e => {
+                                                        e.currentTarget.style.transform = 'translateY(0)';
+                                                        e.currentTarget.style.boxShadow = '0 1px 2px rgba(15, 23, 42, 0.03)';
+                                                        e.currentTarget.style.borderColor = '#e2e8f0';
+                                                    }}
+                                                >
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.35rem', marginBottom: '0.25rem' }}>
+                                                        <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.78rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>
+                                                            {getDisplayName(inv) !== '-' ? getDisplayName(inv) : 'S/ Assinante'}
+                                                        </div>
+                                                        <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#1d4ed8', background: '#eff6ff', padding: '0.08rem 0.38rem', borderRadius: '4px', border: '1px solid #bfdbfe', flexShrink: 0 }}>
+                                                            {inv.consumer_units?.numero_uc || '-'}
                                                         </span>
                                                     </div>
-                                                    <span style={{ fontWeight: '900', fontSize: '0.8rem', color: 'var(--color-blue)' }}>
-                                                        {formatCurrency(inv.valor_a_pagar)}
-                                                    </span>
+
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.45rem', borderTop: '1px solid #f1f5f9', paddingTop: '0.45rem', gap: '0.25rem' }}>
+                                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem', alignItems: 'center' }}>
+                                                            <span style={{ fontSize: '0.6rem', fontWeight: 800, color: s.color, background: s.bg, padding: '0.1rem 0.38rem', borderRadius: '4px' }}>
+                                                                {s.label}
+                                                            </span>
+                                                            <span style={{
+                                                                fontSize: '0.6rem',
+                                                                fontWeight: 700,
+                                                                color: isBoletoEmitido ? '#0369a1' : '#c2410c',
+                                                                background: isBoletoEmitido ? '#e0f2fe' : '#fff7ed',
+                                                                padding: '0.1rem 0.38rem',
+                                                                borderRadius: '4px',
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '0.18rem'
+                                                            }}>
+                                                                {isBoletoEmitido ? <TicketCheck size={10} /> : <TicketMinus size={10} />}
+                                                                {isBoletoEmitido ? 'Emitido' : 'Gerar'}
+                                                            </span>
+                                                        </div>
+                                                        <span style={{ fontWeight: 800, fontSize: '0.8rem', color: '#0f172a', whiteSpace: 'nowrap' }}>
+                                                            {formatCurrency(inv.valor_a_pagar)}
+                                                        </span>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        );
-                                    })
-                                )}
+                                            );
+                                        })
+                                    )}
+                                </div>
                             </div>
-                        </div>
-                    );
-                })}
+                        );
+                    })}
+                </div>
             </div>
         );
     };
 
     const EnergyCalendarView = ({ invoices, onInvoiceClick }) => {
+        const now = new Date();
         const [year, month] = monthFilter === 'all' 
-            ? [new Date().getFullYear(), new Date().getMonth() + 1] 
+            ? [now.getFullYear(), now.getMonth() + 1] 
             : monthFilter.split('-').map(Number);
+        const isCurrentMonthView = year === now.getFullYear() && month === (now.getMonth() + 1);
+        const todayNum = now.getDate();
+
         const firstDay = new Date(year, month - 1, 1).getDay();
         const startOffset = (firstDay + 6) % 7; // Segunda = 0
         const daysInMonth = new Date(year, month, 0).getDate();
@@ -1418,264 +1581,283 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
             }
             return acc;
         }, {});
-        
-        const stats = filteredEnergyInvoices.reduce((acc, inv) => {
-            const ebStatus = resolveEnergyStatus(inv);
-            if (ebStatus === 'pago') acc.pago++;
-            else if (ebStatus === 'atrasada') acc.atrasado++;
-            else if (ebStatus === 'a_vencer') acc.a_vencer++;
-            return acc;
-        }, { pago: 0, atrasado: 0, a_vencer: 0 });
-
 
         return (
-            <div style={{ padding: '1rem' }}>
-                {/* Legenda de Status */}
-
-
+            <div style={{ padding: '1.15rem', fontVariantNumeric: 'tabular-nums' }}>
                 <div style={{ 
                     display: 'grid', 
                     gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', 
-                    gap: '1rem' 
+                    gap: '0.85rem' 
                 }}>
                     <div style={{
                         gridColumn: '1 / -1',
                         display: 'grid',
                         gridTemplateColumns: 'repeat(7, 1fr)',
-                        gap: '1rem',
+                        gap: '0.85rem',
                         position: 'sticky',
-                        top: 'calc(var(--sticky-header-height, 120px) + 2rem)',
+                        top: 'calc(var(--sticky-header-height, 120px) + 1.5rem)',
                         zIndex: 10,
-                        background: '#f8fafc',
-                        padding: '0.5rem 0',
-                        margin: '-0.5rem 0 0.5rem 0'
+                        background: 'rgba(248, 250, 252, 0.95)',
+                        backdropFilter: 'blur(8px)',
+                        padding: '0.4rem 0',
+                        borderBottom: '1px solid #e2e8f0'
                     }}>
-                        {['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SAB', 'DOM'].map(d => (
+                        {['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB', 'DOM'].map((d, idx) => (
                             <div key={d} style={{ 
-                                fontWeight: '800', 
+                                fontWeight: 800, 
                                 textAlign: 'center', 
-                                padding: '0.5rem', 
-                                color: '#64748b', 
-                                fontSize: '0.75rem', 
+                                padding: '0.4rem', 
+                                color: idx >= 5 ? '#94a3b8' : '#475569', 
+                                fontSize: '0.72rem', 
                                 textTransform: 'uppercase',
-                                letterSpacing: '0.05em'
+                                letterSpacing: '0.06em',
+                                background: 'white',
+                                borderRadius: '8px',
+                                border: '1px solid #e2e8f0'
                             }}>
                                 {d}
                             </div>
                         ))}
                     </div>
                     {Array.from({ length: startOffset }).map((_, i) => (
-                        <div key={`pad-${i}`} style={{ background: '#f8fafc50', borderRadius: '14px', border: '1px dashed #e2e8f0', minHeight: '280px' }} />
+                        <div key={`pad-${i}`} style={{ background: 'rgba(241, 245, 249, 0.45)', borderRadius: '14px', border: '1px dashed #cbd5e1', minHeight: '250px' }} />
                     ))}
                     {calendarDays.map(day => {
-                    const dayInvoices = groupedInvoices[day] || [];
-                    
-                    const hasAtrasado = dayInvoices.some(inv => inv.status === 'atrasado');
-                    const allPago = dayInvoices.length > 0 && dayInvoices.every(inv => inv.status === 'pago');
-                    const hasAVencer = dayInvoices.some(inv => inv.status === 'a_vencer');
+                        const dayInvoices = groupedInvoices[day] || [];
+                        const hasItems = dayInvoices.length > 0;
+                        const isToday = isCurrentMonthView && day === todayNum;
+                        
+                        const hasAtrasado = dayInvoices.some(inv => resolveEnergyStatus(inv) === 'atrasada' || inv.status === 'atrasado');
+                        const allPago = hasItems && dayInvoices.every(inv => isEnergyBillPaid(resolveEnergyStatus(inv)) || inv.status === 'pago');
+                        const hasAVencer = dayInvoices.some(inv => resolveEnergyStatus(inv) === 'a_vencer' || inv.status === 'a_vencer');
 
-                    const headerBg = dayInvoices.length === 0 ? '#f8fafc' : 
-                                    hasAtrasado ? '#fef2f2' : 
-                                    allPago ? '#f0fdf4' : 
-                                    hasAVencer ? '#fffbeb' : '#f8fafc';
-                    
-                    const headerBorder = dayInvoices.length === 0 ? '#e2e8f0' : 
-                                       hasAtrasado ? '#fecaca' : 
-                                       allPago ? '#bbf7d0' : 
-                                       hasAVencer ? '#fef08a' : '#e2e8f0';
+                        const headerBg = !hasItems ? '#f8fafc' : 
+                                        hasAtrasado ? '#fef2f2' : 
+                                        allPago ? '#f0fdf4' : 
+                                        hasAVencer ? '#fffbeb' : '#f8fafc';
+                        
+                        const headerBorder = !hasItems ? '#f1f5f9' : 
+                                           hasAtrasado ? '#fecaca' : 
+                                           allPago ? '#bbf7d0' : 
+                                           hasAVencer ? '#fef08a' : '#e2e8f0';
 
-                    const headerTextColor = dayInvoices.length === 0 ? '#64748b' : 
-                                          hasAtrasado ? '#991b1b' : 
-                                          allPago ? '#166534' : 
-                                          hasAVencer ? '#92400e' : '#1e293b';
+                        const headerTextColor = !hasItems ? '#94a3b8' : 
+                                              hasAtrasado ? '#991b1b' : 
+                                              allPago ? '#166534' : 
+                                              hasAVencer ? '#92400e' : '#0f172a';
 
-                    return (
-                        <div key={day} style={{ background: 'white', borderRadius: '14px', border: '1px solid #e2e8f0', minHeight: '280px', display: 'flex', flexDirection: 'column', boxShadow: 'var(--shadow-sm)', transition: 'all 0.2s', overflow: 'hidden' }}>
-                            <div style={{ 
-                                padding: '0.75rem 0.75rem', 
-                                borderBottom: `1px solid ${headerBorder}`, 
-                                background: headerBg, 
-                                display: 'flex', 
-                                justifyContent: 'space-between', 
-                                alignItems: 'center' 
+                        return (
+                            <div key={day} style={{
+                                background: hasItems ? 'white' : '#f8fafc',
+                                borderRadius: '14px',
+                                border: isToday ? '2px solid #2563eb' : hasItems ? '1px solid #cbd5e1' : '1px dashed #e2e8f0',
+                                minHeight: '280px',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                boxShadow: hasItems ? '0 2px 8px -2px rgba(15, 23, 42, 0.06)' : 'none',
+                                transition: 'all 0.2s',
+                                overflow: 'hidden'
                             }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', minWidth: 0 }}>
-                                    <span style={{ 
-                                        fontWeight: '800', 
-                                        color: headerTextColor, 
-                                        fontSize: '0.75rem',
-                                        whiteSpace: 'nowrap'
-                                    }}>
-                                        Venc. {day}
-                                    </span>
-                                </div>
-                                <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center' }}>
-                                    {[
-                                        { key: 'pago', bg: '#dcfce7', color: '#166534' },
-                                        { key: 'a_vencer', bg: '#fef9c3', color: '#92400e' },
-                                        { key: 'atrasado', bg: '#fee2e2', color: '#991b1b' }
-                                    ].map(s => {
-                                        const count = dayInvoices.filter(inv => inv.status === s.key).length;
-                                        if (count === 0) return null;
-                                        return (
-                                            <span key={s.key} style={{ 
-                                                fontSize: '0.7rem', color: s.color, background: s.bg, 
-                                                padding: '0.15rem 0.4rem', borderRadius: '6px', fontWeight: '800',
-                                                border: `1px solid ${s.color}20`
-                                            }}>
-                                                {count}
+                                <div style={{ 
+                                    padding: '0.6rem 0.75rem', 
+                                    borderBottom: `1px solid ${headerBorder}`, 
+                                    background: headerBg, 
+                                    display: 'flex', 
+                                    justifyContent: 'space-between', 
+                                    alignItems: 'center' 
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', minWidth: 0 }}>
+                                        <span style={{ 
+                                            fontWeight: 800, 
+                                            color: isToday ? '#1d4ed8' : headerTextColor, 
+                                            fontSize: '0.78rem',
+                                            whiteSpace: 'nowrap'
+                                        }}>
+                                            Venc. {String(day).padStart(2, '0')}
+                                        </span>
+                                        {isToday && (
+                                            <span style={{ fontSize: '0.6rem', fontWeight: 800, background: '#2563eb', color: 'white', padding: '0.08rem 0.35rem', borderRadius: '4px', textTransform: 'uppercase' }}>
+                                                Hoje
                                             </span>
-                                        );
-                                    })}
+                                        )}
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>
+                                        {[
+                                            { key: 'pago', bg: '#dcfce7', color: '#166534' },
+                                            { key: 'a_vencer', bg: '#fef9c3', color: '#92400e' },
+                                            { key: 'atrasado', bg: '#fee2e2', color: '#991b1b' }
+                                        ].map(s => {
+                                            const count = dayInvoices.filter(inv => inv.status === s.key).length;
+                                            if (count === 0) return null;
+                                            return (
+                                                <span key={s.key} style={{ 
+                                                    fontSize: '0.68rem', color: s.color, background: s.bg, 
+                                                    padding: '0.1rem 0.38rem', borderRadius: '999px', fontWeight: 800,
+                                                    border: `1px solid ${s.color}25`
+                                                }}>
+                                                    {count}
+                                                </span>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
-                            </div>
-                            <div style={{ padding: '0.75rem', flex: 1, display: 'flex', flexDirection: 'column', gap: '0.75rem', overflowY: 'auto', scrollbarWidth: 'thin' }}>
-                                {dayInvoices.length === 0 ? (
-                                    <div style={{ fontSize: '0.8rem', color: '#94a3b8', textAlign: 'center', marginTop: '3.5rem', fontStyle: 'italic', opacity: 0.6 }}>Sem vencimentos</div>
-                                ) : (
-                                    dayInvoices.map(inv => {
-                                        const today = new Date();
-                                        today.setHours(0, 0, 0, 0);
-                                        const dueStr = inv.vencimento_concessionaria || inv.vencimento;
-                                        const dueDate = dueStr ? new Date(dueStr.split('T')[0] + 'T12:00:00') : null;
-                                        const isPastDue = dueDate && dueDate < today;
-                                        
-                                        const ebStatus = resolveEnergyStatus(inv);
-                                        
-                                        const statusData = {
-                                            'pago': { color: '#166534', label: 'PAGA', bg: '#dcfce7' },
-                                            'pendente': isPastDue 
-                                                ? { color: '#dc2626', label: 'ATRASADA', bg: '#fee2e2' }
-                                                : { color: '#2563eb', label: 'A VENCER', bg: '#eff6ff' },
-                                            'erro': { color: '#991b1b', label: 'INDISPONÍVEL', bg: '#fef2f2' },
-                                            'parcelada': { color: '#ca8a04', label: 'PARCELADA', bg: '#fef9c3' },
-                                            'contestada': { color: '#7c3aed', label: 'CONTESTADA', bg: '#f3e8ff' },
-                                            'inconsistente_pago': { color: ENERGY_PAID_DIVERGENT.inconsistente_pago.color, label: 'INCONSISTENTE PAGO', bg: ENERGY_PAID_DIVERGENT.inconsistente_pago.bg },
-                                            'contestada_pago': { color: ENERGY_PAID_DIVERGENT.contestada_pago.color, label: 'CONTESTADO PAGO', bg: ENERGY_PAID_DIVERGENT.contestada_pago.bg }
-                                        };
-                                        
-                                        const s = statusData[ebStatus] || { color: '#64748b', label: ebStatus.toUpperCase(), bg: '#f1f5f9' };
-                                        const formatCurrencyValue = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
+                                <div style={{ padding: '0.65rem', flex: 1, display: 'flex', flexDirection: 'column', gap: '0.6rem', overflowY: 'auto', scrollbarWidth: 'thin' }}>
+                                    {!hasItems ? (
+                                        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', color: '#94a3b8', fontWeight: 500 }}>
+                                            Sem vencimentos
+                                        </div>
+                                    ) : (
+                                        dayInvoices.map(inv => {
+                                            const today = new Date();
+                                            today.setHours(0, 0, 0, 0);
+                                            const dueStr = inv.vencimento_concessionaria || inv.vencimento;
+                                            const dueDate = dueStr ? new Date(dueStr.split('T')[0] + 'T12:00:00') : null;
+                                            const isPastDue = dueDate && dueDate < today;
+                                            
+                                            const ebStatus = resolveEnergyStatus(inv);
+                                            
+                                            const statusData = {
+                                                'pago': { color: '#166534', label: 'PAGA', bg: '#dcfce7' },
+                                                'pendente': isPastDue 
+                                                    ? { color: '#dc2626', label: 'ATRASADA', bg: '#fee2e2' }
+                                                    : { color: '#2563eb', label: 'A VENCER', bg: '#eff6ff' },
+                                                'a_vencer': { color: '#2563eb', label: 'A VENCER', bg: '#eff6ff' },
+                                                'atrasada': { color: '#dc2626', label: 'ATRASADA', bg: '#fee2e2' },
+                                                'erro': { color: '#991b1b', label: 'INDISPONÍVEL', bg: '#fef2f2' },
+                                                'parcelada': { color: '#ca8a04', label: 'PARCELADA', bg: '#fef9c3' },
+                                                'contestada': { color: '#7c3aed', label: 'CONTESTADA', bg: '#f3e8ff' },
+                                                'inconsistente_pago': { color: ENERGY_PAID_DIVERGENT.inconsistente_pago.color, label: 'INCONSISTENTE PAGO', bg: ENERGY_PAID_DIVERGENT.inconsistente_pago.bg },
+                                                'contestada_pago': { color: ENERGY_PAID_DIVERGENT.contestada_pago.color, label: 'CONTESTADO PAGO', bg: ENERGY_PAID_DIVERGENT.contestada_pago.bg }
+                                            };
+                                            
+                                            const s = statusData[ebStatus] || { color: '#64748b', label: ebStatus.toUpperCase(), bg: '#f1f5f9' };
+                                            const formatCurrencyValue = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
 
-                                        // Valores da Concessionária
-                                        const ip = Number(inv.iluminacao_publica) || 0;
-                                        const outros = (Number(inv.tarifa_minima || inv.tarifa_minima_excedentes) || 0) + (Number(inv.outros_lancamentos) || 0) + (Number(inv.parcelamento) || 0);
-                                        const valorConcessionaria = Number(inv.valor_concessionaria) || (ip + outros + (Number(inv.consumo_reais) || 0));
+                                            // Valores da Concessionária
+                                            const ip = Number(inv.iluminacao_publica) || 0;
+                                            const outros = (Number(inv.tarifa_minima || inv.tarifa_minima_excedentes) || 0) + (Number(inv.outros_lancamentos) || 0) + (Number(inv.parcelamento) || 0);
+                                            const valorConcessionaria = Number(inv.valor_concessionaria) || (ip + outros + (Number(inv.consumo_reais) || 0));
 
-                                        return (
-                                            <div
-                                                key={inv.id}
-                                                onClick={() => onInvoiceClick(inv)}
-                                                style={{
-                                                    padding: '0.6rem',
-                                                    borderRadius: '10px',
-                                                    background: 'white',
-                                                    border: '1px solid #e2e8f0',
-                                                    cursor: 'pointer', 
-                                                    transition: 'all 0.2s',
-                                                    display: 'flex', 
-                                                    flexDirection: 'column', 
-                                                    gap: '0.35rem', 
-                                                    boxShadow: '0 2px 4px rgba(0,0,0,0.04)',
-                                                    position: 'relative',
-                                                    borderLeft: `5px solid ${s.color}`
-                                                }}
-                                                onMouseOver={e => {
-                                                    e.currentTarget.style.borderColor = '#3b82f6';
-                                                    e.currentTarget.style.transform = 'translateY(-2px)';
-                                                }}
-                                                onMouseOut={e => {
-                                                    e.currentTarget.style.borderColor = '#e2e8f0';
-                                                    e.currentTarget.style.transform = 'translateY(0)';
-                                                }}
-                                            >
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                                    <div style={{ fontWeight: '800', color: '#1e293b', fontSize: '0.8rem', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                        {getDisplayName(inv) !== '-' ? getDisplayName(inv) : 'Assinante'}
-                                                    </div>
-                                                    <span style={{ padding: '0.1rem 0.3rem', borderRadius: '4px', fontSize: '0.55rem', fontWeight: 900, background: s.bg, color: s.color }}>
-                                                        {s.label}
-                                                    </span>
-                                                </div>
-
-                                                <div style={{ fontSize: '0.65rem', color: '#64748b', display: 'flex', justifyContent: 'space-between' }}>
-                                                    <span>UC: {inv.consumer_units?.numero_uc}</span>
-                                                    <span style={{ fontWeight: 'bold' }}>{inv.consumo_kwh} kWh</span>
-                                                </div>
-
-                                                <div style={{ height: '1px', background: '#f1f5f9', margin: '1px 0' }}></div>
-
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.6rem', color: '#94a3b8' }}>
-                                                        <span>IP + Taxas + Outros:</span>
-                                                        <span style={{ fontWeight: 600 }}>{formatCurrencyValue(ip + outros)}</span>
-                                                    </div>
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2px' }}>
-                                                        <span style={{ fontSize: '0.7rem', fontWeight: 'bold', color: '#475569' }}>Vr. A Pagar:</span>
-                                                        <span style={{ fontWeight: 900, color: '#0f172a', fontSize: '0.9rem' }}>
-                                                            {formatCurrencyValue(valorConcessionaria)}
+                                            return (
+                                                <div
+                                                    key={inv.id}
+                                                    onClick={() => onInvoiceClick(inv)}
+                                                    style={{
+                                                        padding: '0.65rem',
+                                                        borderRadius: '10px',
+                                                        background: 'white',
+                                                        border: '1px solid #e2e8f0',
+                                                        cursor: 'pointer', 
+                                                        transition: 'all 0.18s ease',
+                                                        display: 'flex', 
+                                                        flexDirection: 'column', 
+                                                        gap: '0.35rem', 
+                                                        boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04)',
+                                                        position: 'relative',
+                                                        borderLeft: `3.5px solid ${s.color}`
+                                                    }}
+                                                    onMouseOver={e => {
+                                                        e.currentTarget.style.borderColor = '#93c5fd';
+                                                        e.currentTarget.style.transform = 'translateY(-1px)';
+                                                        e.currentTarget.style.boxShadow = '0 6px 12px -2px rgba(15, 23, 42, 0.08)';
+                                                    }}
+                                                    onMouseOut={e => {
+                                                        e.currentTarget.style.borderColor = '#e2e8f0';
+                                                        e.currentTarget.style.transform = 'translateY(0)';
+                                                        e.currentTarget.style.boxShadow = '0 1px 3px rgba(15, 23, 42, 0.04)';
+                                                    }}
+                                                >
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.35rem' }}>
+                                                        <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.78rem', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                            {getDisplayName(inv) !== '-' ? getDisplayName(inv) : 'Assinante'}
+                                                        </div>
+                                                        <span style={{ padding: '0.1rem 0.35rem', borderRadius: '4px', fontSize: '0.55rem', fontWeight: 800, background: s.bg, color: s.color, flexShrink: 0 }}>
+                                                            {s.label}
                                                         </span>
                                                     </div>
-                                                </div>
 
-                                                {/* Botão de Pagamento Concessionária */}
-                                                {!isEnergyBillPaid(ebStatus) && inv.linha_digitavel && (
-                                                    <button 
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            handlePayBill(inv);
-                                                        }}
-                                                        disabled={payingId === inv.id}
-                                                        style={{
-                                                            marginTop: '0.3rem',
-                                                            padding: '0.4rem',
-                                                            background: '#10b981',
-                                                            color: 'white',
-                                                            border: 'none',
-                                                            borderRadius: '6px',
-                                                            fontSize: '0.7rem',
-                                                            fontWeight: 'bold',
-                                                            cursor: payingId === inv.id ? 'default' : 'pointer',
-                                                            display: 'flex',
-                                                            alignItems: 'center',
-                                                            justifyContent: 'center',
-                                                            gap: '0.3rem',
-                                                            boxShadow: '0 2px 4px rgba(16, 185, 129, 0.2)'
-                                                        }}
-                                                    >
-                                                        <CreditCard size={12} /> {payingId === inv.id ? 'PROCESSANDO...' : 'PAGAR CONTA'}
-                                                    </button>
-                                                )}
-                                                
-                                                {isEnergyBillPaid(ebStatus) && (
-                                                    <div style={{ 
-                                                        marginTop: '0.5rem', 
-                                                        padding: '0.4rem', 
-                                                        textAlign: 'center', 
-                                                        background: '#f0fdf4', 
-                                                        color: '#166534', 
-                                                        borderRadius: '6px', 
-                                                        fontSize: '0.7rem', 
-                                                        fontWeight: 'bold',
-                                                        border: '1px solid #bbf7d0'
-                                                    }}>
-                                                        CONTA PAGA
+                                                    <div style={{ fontSize: '0.68rem', color: '#64748b', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                        <span style={{ background: '#eff6ff', color: '#1d4ed8', padding: '0.06rem 0.35rem', borderRadius: '4px', fontWeight: 700, fontSize: '0.65rem' }}>
+                                                            UC {inv.consumer_units?.numero_uc}
+                                                        </span>
+                                                        <span style={{ fontWeight: 700, color: '#475569' }}>{inv.consumo_kwh || 0} kWh</span>
                                                     </div>
-                                                )}
-                                            </div>
-                                        );
-                                    })
-                                )}
+
+                                                    <div style={{ height: '1px', background: '#f1f5f9', margin: '2px 0' }}></div>
+
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.62rem', color: '#64748b' }}>
+                                                            <span>IP + Taxas:</span>
+                                                            <span style={{ fontWeight: 600 }}>{formatCurrencyValue(ip + outros)}</span>
+                                                        </div>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2px' }}>
+                                                            <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#475569' }}>Vr. Conta:</span>
+                                                            <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.88rem' }}>
+                                                                {formatCurrencyValue(valorConcessionaria)}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Botão de Pagamento Concessionária */}
+                                                    {!isEnergyBillPaid(ebStatus) && inv.linha_digitavel && (
+                                                        <button 
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handlePayBill(inv);
+                                                            }}
+                                                            disabled={payingId === inv.id}
+                                                            style={{
+                                                                marginTop: '0.25rem',
+                                                                padding: '0.38rem',
+                                                                background: '#10b981',
+                                                                color: 'white',
+                                                                border: 'none',
+                                                                borderRadius: '6px',
+                                                                fontSize: '0.68rem',
+                                                                fontWeight: 700,
+                                                                cursor: payingId === inv.id ? 'default' : 'pointer',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                gap: '0.3rem',
+                                                                boxShadow: '0 1px 2px rgba(16, 185, 129, 0.2)'
+                                                            }}
+                                                        >
+                                                            <CreditCard size={12} /> {payingId === inv.id ? 'PROCESSANDO...' : 'PAGAR CONTA'}
+                                                        </button>
+                                                    )}
+                                                    
+                                                    {isEnergyBillPaid(ebStatus) && (
+                                                        <div style={{ 
+                                                            marginTop: '0.25rem', 
+                                                            padding: '0.32rem', 
+                                                            textAlign: 'center', 
+                                                            background: '#f0fdf4', 
+                                                            color: '#166534', 
+                                                            borderRadius: '6px', 
+                                                            fontSize: '0.66rem', 
+                                                            fontWeight: 800,
+                                                            border: '1px solid #bbf7d0'
+                                                        }}>
+                                                            CONTA PAGA
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })
+                                    )}
+                                </div>
                             </div>
-                        </div>
-                    );
-                })}
+                        );
+                    })}
+                </div>
             </div>
-        </div>
-    );
-};
+        );
+    };
 
-
+    const currentTotalAmount = activeTab === 'faturas'
+        ? sortedInvoices.reduce((sum, inv) => sum + (inv.parent_invoice_id ? 0 : (Number(inv.valor_a_pagar) || 0)), 0)
+        : sortedInvoices.reduce((sum, inv) => sum + getEnergyBillValue(inv), 0);
 
     return (
         <div style={{ padding: '0 2rem 2rem 2rem', maxWidth: '1600px', margin: '0 auto', width: '100%' }}>
@@ -1746,31 +1928,27 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                             </p>
                         </>
                     )}
-
-
                 </div>
             )}
 
-            {/* Cabeçalho Fixo (Filtros + Modos + Ações) */}
+            {/* Cabeçalho Fixo (Abas + Barra de Controles + Filtro de Status Reorganizado) */}
             <div style={{
                 position: 'sticky',
                 top: '-2rem',
                 zIndex: 100,
-                background: 'rgba(255, 255, 255, 0.85)',
-                backdropFilter: 'blur(10px)',
-                WebkitBackdropFilter: 'blur(10px)',
-                padding: '0.75rem 0',
+                background: 'rgba(255, 255, 255, 0.92)',
+                backdropFilter: 'blur(12px)',
+                WebkitBackdropFilter: 'blur(12px)',
+                padding: '0.75rem 2rem 0.85rem 2rem',
                 margin: '-2rem -2rem 1rem -2rem',
-                paddingLeft: '2rem',
-                paddingRight: '2rem',
-                borderBottom: '1px solid rgba(226, 232, 240, 0.5)',
+                borderBottom: '1px solid #e2e8f0',
+                boxShadow: '0 4px 20px -4px rgba(15, 23, 42, 0.04)',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '0.75rem'
+                gap: '0.65rem'
             }}>
                 {!hideTabs ? (
-                    <div style={{ display: 'flex', gap: '2rem', borderBottom: '2px solid #e2e8f0', paddingBottom: '0.2rem', marginBottom: '0.2rem', alignItems: 'center' }}>
-                        
+                    <div style={{ display: 'flex', gap: '1.75rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.15rem', alignItems: 'center' }}>
                         {/* Aba Faturas */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                             <button
@@ -1778,17 +1956,17 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                 style={{
                                     background: 'none',
                                     border: 'none',
-                                    padding: '0.5rem 0.2rem',
-                                    fontSize: '1rem',
-                                    fontWeight: '800',
+                                    padding: '0.45rem 0.2rem',
+                                    fontSize: '0.92rem',
+                                    fontWeight: 800,
                                     color: activeTab === 'faturas' ? 'var(--color-blue)' : '#64748b',
-                                    borderBottom: activeTab === 'faturas' ? '3px solid var(--color-blue)' : '3px solid transparent',
+                                    borderBottom: activeTab === 'faturas' ? '2.5px solid var(--color-blue)' : '2.5px solid transparent',
                                     cursor: 'pointer',
                                     transition: 'all 0.2s',
-                                    marginBottom: '-4px',
+                                    marginBottom: '-3px',
                                     outline: 'none',
                                     textTransform: 'uppercase',
-                                    letterSpacing: '0.05em'
+                                    letterSpacing: '0.04em'
                                 }}
                             >
                                 Faturas
@@ -1799,22 +1977,20 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                     setActiveInfoTab(activeInfoTab === 'faturas' ? null : 'faturas');
                                 }}
                                 style={{
-                                    background: activeInfoTab === 'faturas' ? 'var(--color-blue)' : 'rgba(37, 99, 235, 0.08)',
+                                    background: activeInfoTab === 'faturas' ? 'var(--color-blue)' : '#eff6ff',
                                     color: activeInfoTab === 'faturas' ? 'white' : 'var(--color-blue)',
-                                    border: '1px solid rgba(37, 99, 235, 0.25)',
+                                    border: '1px solid #bfdbfe',
                                     borderRadius: '50%',
                                     width: '18px',
                                     height: '18px',
                                     display: 'inline-flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
-                                    fontWeight: '900',
-                                    fontSize: '0.7rem',
+                                    fontWeight: 800,
+                                    fontSize: '0.68rem',
                                     cursor: 'pointer',
                                     transition: 'all 0.2s ease',
-                                    outline: 'none',
-                                    boxShadow: activeInfoTab === 'faturas' ? '0 0 8px rgba(37, 99, 235, 0.4)' : 'none',
-                                    transform: 'translateY(-2px)'
+                                    outline: 'none'
                                 }}
                                 title="Exibir informações da página de Faturas"
                             >
@@ -1829,17 +2005,17 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                 style={{
                                     background: 'none',
                                     border: 'none',
-                                    padding: '0.5rem 0.2rem',
-                                    fontSize: '1rem',
-                                    fontWeight: '800',
+                                    padding: '0.45rem 0.2rem',
+                                    fontSize: '0.92rem',
+                                    fontWeight: 800,
                                     color: activeTab === 'contas_energia' ? 'var(--color-blue)' : '#64748b',
-                                    borderBottom: activeTab === 'contas_energia' ? '3px solid var(--color-blue)' : '3px solid transparent',
+                                    borderBottom: activeTab === 'contas_energia' ? '2.5px solid var(--color-blue)' : '2.5px solid transparent',
                                     cursor: 'pointer',
                                     transition: 'all 0.2s',
-                                    marginBottom: '-4px',
+                                    marginBottom: '-3px',
                                     outline: 'none',
                                     textTransform: 'uppercase',
-                                    letterSpacing: '0.05em'
+                                    letterSpacing: '0.04em'
                                 }}
                             >
                                 Contas de Energia
@@ -1850,82 +2026,109 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                     setActiveInfoTab(activeInfoTab === 'contas_energia' ? null : 'contas_energia');
                                 }}
                                 style={{
-                                    background: activeInfoTab === 'contas_energia' ? 'var(--color-blue)' : 'rgba(37, 99, 235, 0.08)',
+                                    background: activeInfoTab === 'contas_energia' ? 'var(--color-blue)' : '#eff6ff',
                                     color: activeInfoTab === 'contas_energia' ? 'white' : 'var(--color-blue)',
-                                    border: '1px solid rgba(37, 99, 235, 0.25)',
+                                    border: '1px solid #bfdbfe',
                                     borderRadius: '50%',
                                     width: '18px',
                                     height: '18px',
                                     display: 'inline-flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
-                                    fontWeight: '900',
-                                    fontSize: '0.7rem',
+                                    fontWeight: 800,
+                                    fontSize: '0.68rem',
                                     cursor: 'pointer',
                                     transition: 'all 0.2s ease',
-                                    outline: 'none',
-                                    boxShadow: activeInfoTab === 'contas_energia' ? '0 0 8px rgba(37, 99, 235, 0.4)' : 'none',
-                                    transform: 'translateY(-2px)'
+                                    outline: 'none'
                                 }}
                                 title="Exibir informações da página de Contas de Energia"
                             >
                                 !
                             </button>
                         </div>
-
                     </div>
                 ) : (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem', borderBottom: '2px solid #e2e8f0', paddingBottom: '0.4rem' }}>
-                        <h2 style={{ color: '#1e293b', fontSize: '1.25rem', fontWeight: '800', letterSpacing: '-0.02em', margin: 0, textTransform: 'uppercase' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.4rem' }}>
+                        <h2 style={{ color: '#0f172a', fontSize: '1.15rem', fontWeight: 800, letterSpacing: '-0.02em', margin: 0, textTransform: 'uppercase' }}>
                             {activeTab === 'faturas' ? 'Gestão de Faturas' : 'Contas de Energia Concessionária'}
                         </h2>
                     </div>
                 )}
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-                    <div style={{ background: 'white', padding: '0.4rem 0.8rem', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#64748b' }}>
-                            <CalendarIcon size={16} />
-                            <span style={{ fontWeight: 'bold', fontSize: '0.85rem' }}>Mês:</span>
+                {/* Linha 1: Controles de Período, Ordenação, Busca, Visualização e Ações */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.65rem' }}>
+                    <div style={{
+                        background: 'white',
+                        padding: '0.3rem 0.65rem',
+                        borderRadius: '10px',
+                        border: '1px solid #e2e8f0',
+                        boxShadow: '0 1px 2px rgba(15, 23, 42, 0.03)',
+                        display: 'flex',
+                        gap: '0.65rem',
+                        alignItems: 'center',
+                        flexWrap: 'wrap'
+                    }}>
+                        {/* Seletor de Mês */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                            <CalendarIcon size={15} color="#64748b" />
+                            <div style={{ position: 'relative' }}>
+                                <button
+                                    onClick={() => setShowMonthPicker(!showMonthPicker)}
+                                    style={{
+                                        padding: '0.32rem 0.65rem',
+                                        border: '1px solid #e2e8f0',
+                                        borderRadius: '6px',
+                                        cursor: 'pointer',
+                                        background: '#f8fafc',
+                                        color: '#0f172a',
+                                        fontWeight: 700,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '0.35rem',
+                                        minWidth: '128px',
+                                        fontSize: '0.8rem',
+                                        textTransform: 'capitalize'
+                                    }}
+                                >
+                                    <span>{monthFilter === 'all' ? 'Qualquer Data' : new Date(`${monthFilter}-01T00:00:00`).toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}</span>
+                                </button>
+                                {showMonthPicker && (
+                                    <div style={{ position: 'absolute', top: '112%', left: 0, background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px', boxShadow: '0 12px 28px rgba(15,23,42,0.12)', zIndex: 120, padding: '1rem', width: '280px' }}>
+                                        <div style={{ marginBottom: '0.85rem' }}>
+                                            <button onClick={() => { setMonthFilter('all'); setShowMonthPicker(false); }} style={{ width: '100%', padding: '0.55rem', border: '1px solid #e2e8f0', borderRadius: '8px', background: monthFilter === 'all' ? 'var(--color-blue)' : 'white', color: monthFilter === 'all' ? 'white' : '#475569', cursor: 'pointer', fontWeight: 700, fontSize: '0.82rem' }}>Qualquer Data</button>
+                                        </div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem', borderTop: '1px solid #f1f5f9', paddingTop: '0.85rem' }}>
+                                            <button onClick={() => { const parts = monthFilter === 'all' ? [new Date().getFullYear(), '01'] : monthFilter.split('-'); setMonthFilter(`${Number(parts[0]) - 1}-${parts[1]}`); }} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', width: '28px', height: '28px', cursor: 'pointer', color: 'var(--color-blue)', fontWeight: 800 }}>&lt;</button>
+                                            <span style={{ fontWeight: 800, color: '#0f172a', fontVariantNumeric: 'tabular-nums' }}>{monthFilter === 'all' ? new Date().getFullYear() : monthFilter.split('-')[0]}</span>
+                                            <button onClick={() => { const parts = monthFilter === 'all' ? [new Date().getFullYear(), '01'] : monthFilter.split('-'); setMonthFilter(`${Number(parts[0]) + 1}-${parts[1]}`); }} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', width: '28px', height: '28px', cursor: 'pointer', color: 'var(--color-blue)', fontWeight: 800 }}>&gt;</button>
+                                        </div>
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.45rem' }}>
+                                            {['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'].map((m, idx) => {
+                                                const mVal = String(idx + 1).padStart(2, '0');
+                                                const currentYear = monthFilter === 'all' ? new Date().getFullYear() : monthFilter.split('-')[0];
+                                                const isSelected = monthFilter === `${currentYear}-${mVal}`;
+                                                return <button key={m} onClick={() => { setMonthFilter(`${currentYear}-${mVal}`); setShowMonthPicker(false); }} style={{ padding: '0.45rem', border: 'none', borderRadius: '6px', background: isSelected ? 'var(--color-blue)' : '#f8fafc', color: isSelected ? 'white' : '#475569', fontWeight: isSelected ? 700 : 600, cursor: 'pointer', fontSize: '0.8rem' }}>{m}</button>;
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
                         </div>
-                        <div style={{ position: 'relative' }}>
-                            <button onClick={() => setShowMonthPicker(!showMonthPicker)} style={{ padding: '0.4rem 0.8rem', border: '1px solid #e2e8f0', borderRadius: '4px', cursor: 'pointer', background: 'white', display: 'flex', alignItems: 'center', gap: '0.4rem', minWidth: '130px', fontSize: '0.85rem' }}>
-                                <span>{monthFilter === 'all' ? 'Qualquer Data' : new Date(`${monthFilter}-01T00:00:00`).toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}</span>
-                            </button>
-                            {showMonthPicker && (
-                                <div style={{ position: 'absolute', top: '110%', left: 0, background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', zIndex: 100, padding: '1rem', width: '280px' }}>
-                                    <div style={{ marginBottom: '1rem' }}>
-                                        <button onClick={() => { setMonthFilter('all'); setShowMonthPicker(false); }} style={{ width: '100%', padding: '0.6rem', border: '1px solid #e2e8f0', borderRadius: '8px', background: monthFilter === 'all' ? 'var(--color-blue)' : 'white', color: monthFilter === 'all' ? 'white' : '#475569', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' }}>Qualquer Data</button>
-                                    </div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
-                                        <button onClick={() => { const parts = monthFilter === 'all' ? [new Date().getFullYear(), '01'] : monthFilter.split('-'); setMonthFilter(`${Number(parts[0]) - 1}-${parts[1]}`); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-blue)', fontWeight: 'bold' }}>&lt;</button>
-                                        <span style={{ fontWeight: 'bold' }}>{monthFilter === 'all' ? new Date().getFullYear() : monthFilter.split('-')[0]}</span>
-                                        <button onClick={() => { const parts = monthFilter === 'all' ? [new Date().getFullYear(), '01'] : monthFilter.split('-'); setMonthFilter(`${Number(parts[0]) + 1}-${parts[1]}`); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-blue)', fontWeight: 'bold' }}>&gt;</button>
-                                    </div>
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.5rem' }}>
-                                        {['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'].map((m, idx) => {
-                                            const mVal = String(idx + 1).padStart(2, '0');
-                                            const currentYear = monthFilter === 'all' ? new Date().getFullYear() : monthFilter.split('-')[0];
-                                            const isSelected = monthFilter === `${currentYear}-${mVal}`;
-                                            return <button key={m} onClick={() => { setMonthFilter(`${currentYear}-${mVal}`); setShowMonthPicker(false); }} style={{ padding: '0.5rem', border: 'none', borderRadius: '6px', background: isSelected ? 'var(--color-blue)' : '#f8fafc', color: isSelected ? 'white' : '#475569', cursor: 'pointer', fontSize: '0.85rem' }}>{m}</button>;
-                                        })}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                        <div style={{ display: 'flex', background: '#f1f5f9', padding: '0.2rem', borderRadius: '8px', border: '1px solid #e2e8f0', marginLeft: '0.25rem' }}>
+
+                        {/* Critério: Mês Ref vs Vencimento */}
+                        <div style={{ display: 'flex', background: '#f1f5f9', padding: '0.18rem', borderRadius: '7px', border: '1px solid #e2e8f0' }}>
                             <button
                                 onClick={() => setFilterCriterion('mes_referencia')}
                                 style={{
                                     border: 'none',
-                                    borderRadius: '6px',
-                                    padding: '0.35rem 0.6rem',
-                                    fontSize: '0.75rem',
-                                    fontWeight: '800',
+                                    borderRadius: '5px',
+                                    padding: '0.28rem 0.55rem',
+                                    fontSize: '0.73rem',
+                                    fontWeight: 700,
                                     cursor: 'pointer',
                                     background: filterCriterion === 'mes_referencia' ? 'var(--color-blue)' : 'transparent',
                                     color: filterCriterion === 'mes_referencia' ? 'white' : '#64748b',
-                                    transition: 'all 0.2s',
+                                    transition: 'all 0.18s',
                                     outline: 'none',
                                     whiteSpace: 'nowrap'
                                 }}
@@ -1936,14 +2139,14 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                 onClick={() => setFilterCriterion('vencimento')}
                                 style={{
                                     border: 'none',
-                                    borderRadius: '6px',
-                                    padding: '0.35rem 0.6rem',
-                                    fontSize: '0.75rem',
-                                    fontWeight: '800',
+                                    borderRadius: '5px',
+                                    padding: '0.28rem 0.55rem',
+                                    fontSize: '0.73rem',
+                                    fontWeight: 700,
                                     cursor: 'pointer',
                                     background: filterCriterion === 'vencimento' ? 'var(--color-blue)' : 'transparent',
                                     color: filterCriterion === 'vencimento' ? 'white' : '#64748b',
-                                    transition: 'all 0.2s',
+                                    transition: 'all 0.18s',
                                     outline: 'none',
                                     whiteSpace: 'nowrap'
                                 }}
@@ -1951,184 +2154,215 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                 Vencimento
                             </button>
                         </div>
-                        <div style={{ width: '1px', height: '16px', background: '#e2e8f0' }}></div>
-                        {viewMode === 'energy_reading_calendar' ? (
-                            <select 
-                                value={readingStatusFilter} 
-                                onChange={e => setReadingStatusFilter(e.target.value)} 
-                                style={{ padding: '0.4rem', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '0.85rem', fontWeight: '600', color: '#334155', background: 'white', cursor: 'pointer' }}
-                            >
-                                <option value="">Status Leit.</option>
-                                <option value="success">Sucesso</option>
-                                <option value="pending">Pendente</option>
-                                <option value="error">Erro</option>
-                                <option value="processing">Processando</option>
-                            </select>
-                        ) : activeTab === 'faturas' ? (
-                            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ padding: '0.4rem', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '0.85rem' }}>
-                                <option value="">Todos os Status</option>
-                                <option value="sem_faturamento">Sem Faturamento</option>
-                                <option value="a_vencer">A Vencer</option>
-                                <option value="atrasado">Atrasado</option>
-                                <option value="confirmado">Confirmado</option>
-                                <option value="pago">Pago</option>
-                            </select>
-                        ) : (
-                            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ padding: '0.4rem', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '0.85rem' }}>
-                                <option value="">Todos os Status</option>
-                                <option value="a_vencer">A Vencer</option>
-                                <option value="atrasada">Atrasada</option>
-                                <option value="pago">Paga</option>
-                                <option value="contestada">Contestada</option>
-                                <option value="parcelada">Parcelada</option>
-                                <option value="inconsistente">Inconsistente</option>
-                                <option value="inconsistente_pago">Inconsistente Pago</option>
-                                <option value="contestada_pago">Contestado Pago</option>
-                            </select>
+
+                        {viewMode === 'energy_reading_calendar' && (
+                            <>
+                                <div style={{ width: '1px', height: '18px', background: '#e2e8f0' }}></div>
+                                <select 
+                                    value={readingStatusFilter} 
+                                    onChange={e => setReadingStatusFilter(e.target.value)} 
+                                    style={{ padding: '0.32rem 0.55rem', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '0.78rem', fontWeight: 600, color: '#334155', background: '#f8fafc', cursor: 'pointer', outline: 'none' }}
+                                >
+                                    <option value="">Status Leitura (Todos)</option>
+                                    <option value="success">Sucesso</option>
+                                    <option value="pending">Pendente</option>
+                                    <option value="error">Erro</option>
+                                    <option value="processing">Processando</option>
+                                </select>
+                            </>
                         )}
-                        <div style={{ width: '1px', height: '16px', background: '#e2e8f0' }}></div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                            <span style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#64748b' }}>Ordenar por:</span>
+
+                        <div style={{ width: '1px', height: '18px', background: '#e2e8f0' }}></div>
+
+                        {/* Ordenação */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', whiteSpace: 'nowrap' }}>Ordenar:</span>
                             <select 
                                 value={sortBy} 
                                 onChange={e => setSortBy(e.target.value)} 
-                                style={{ padding: '0.4rem 0.8rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.85rem', color: '#0f172a', background: 'white', fontWeight: '600', outline: 'none', cursor: 'pointer', transition: 'border-color 0.2s' }}
+                                style={{ padding: '0.32rem 0.55rem', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '0.78rem', color: '#0f172a', background: '#f8fafc', fontWeight: 600, outline: 'none', cursor: 'pointer' }}
                             >
-                                <option value="ref_desc">Ref. Mês/Ano: Mais Novo primeiro</option>
-                                <option value="ref_asc">Ref. Mês/Ano: Mais Antigo primeiro</option>
-                                <option value="venc_desc">Vencimento: Mais Novo primeiro</option>
-                                <option value="venc_asc">Vencimento: Mais Antigo primeiro</option>
-                                <option value="uc_asc">Código do Cliente (A-Z)</option>
-                                <option value="uc_desc">Código do Cliente (Z-A)</option>
-                                <option value="valor_desc">Valor a Pagar: Maior primeiro</option>
-                                <option value="valor_asc">Valor a Pagar: Menor primeiro</option>
-                                <option value="assinante_asc">Assinante: Ordem alfabética (A-Z)</option>
-                                <option value="assinante_desc">Assinante: Ordem alfabética (Z-A)</option>
+                                <option value="ref_desc">Ref. Mês/Ano (Mais Novo)</option>
+                                <option value="ref_asc">Ref. Mês/Ano (Mais Antigo)</option>
+                                <option value="venc_desc">Vencimento (Mais Novo)</option>
+                                <option value="venc_asc">Vencimento (Mais Antigo)</option>
+                                <option value="uc_asc">Código UC (A-Z)</option>
+                                <option value="uc_desc">Código UC (Z-A)</option>
+                                <option value="valor_desc">Valor (Maior primeiro)</option>
+                                <option value="valor_asc">Valor (Menor primeiro)</option>
+                                <option value="assinante_asc">Assinante (A-Z)</option>
+                                <option value="assinante_desc">Assinante (Z-A)</option>
                             </select>
                         </div>
 
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                            <Search size={16} color="#64748b" />
-                            <input placeholder="Buscar UC..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} style={{ padding: '0.4rem', border: 'none', outline: 'none', fontSize: '0.85rem', width: '120px' }} />
+                        <div style={{ width: '1px', height: '18px', background: '#e2e8f0' }}></div>
+
+                        {/* Busca Rápida */}
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.35rem',
+                            background: '#f8fafc',
+                            border: '1px solid #e2e8f0',
+                            borderRadius: '6px',
+                            padding: '0.22rem 0.5rem'
+                        }}>
+                            <Search size={14} color="#64748b" />
+                            <input
+                                placeholder="Buscar UC ou assinante..."
+                                value={searchTerm}
+                                onChange={e => setSearchTerm(e.target.value)}
+                                style={{ padding: '0.12rem 0', border: 'none', background: 'transparent', outline: 'none', fontSize: '0.8rem', width: '155px', color: '#0f172a' }}
+                            />
+                            {searchTerm && (
+                                <button
+                                    onClick={() => setSearchTerm('')}
+                                    style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0 }}
+                                    title="Limpar busca"
+                                >
+                                    <X size={13} />
+                                </button>
+                            )}
                         </div>
                     </div>
 
-                    <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-                        <div className="btn-group" style={{ display: 'flex', background: '#f1f5f9', padding: '0.2rem', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                    {/* Seletores de Visualização e Botões de Ação */}
+                    <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <div className="btn-group" style={{ display: 'flex', background: '#f1f5f9', padding: '0.2rem', borderRadius: '10px', border: '1px solid #e2e8f0', gap: '0.15rem' }}>
                             {activeTab === 'faturas' ? (
                                 <>
-                                    <button onClick={() => setViewMode('list')} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem', background: viewMode === 'list' ? 'white' : 'transparent', color: viewMode === 'list' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'list' ? '700' : '500', fontSize: '0.85rem' }}>
-                                        <List size={16} /> Lista
+                                    <button onClick={() => setViewMode('list')} style={{ borderRadius: '7px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.4rem 0.85rem', background: viewMode === 'list' ? 'white' : 'transparent', color: viewMode === 'list' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'list' ? 700 : 600, fontSize: '0.8rem', boxShadow: viewMode === 'list' ? '0 1px 3px rgba(15,23,42,0.08)' : 'none' }}>
+                                        <List size={15} /> Lista
                                     </button>
-                                    <button onClick={() => setViewMode('kanban')} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem', background: viewMode === 'kanban' ? 'white' : 'transparent', color: viewMode === 'kanban' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'kanban' ? '700' : '500', fontSize: '0.85rem' }}>
-                                        <Layout size={16} /> Kanban
+                                    <button onClick={() => setViewMode('kanban')} style={{ borderRadius: '7px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.4rem 0.85rem', background: viewMode === 'kanban' ? 'white' : 'transparent', color: viewMode === 'kanban' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'kanban' ? 700 : 600, fontSize: '0.8rem', boxShadow: viewMode === 'kanban' ? '0 1px 3px rgba(15,23,42,0.08)' : 'none' }}>
+                                        <Layout size={15} /> Kanban
                                     </button>
-                                    <button onClick={() => setViewMode('calendar')} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem', background: viewMode === 'calendar' ? 'white' : 'transparent', color: viewMode === 'calendar' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'calendar' ? '700' : '500', fontSize: '0.85rem' }}>
-                                        <CalendarIcon size={16} /> Venc. Faturas
+                                    <button onClick={() => setViewMode('calendar')} style={{ borderRadius: '7px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.4rem 0.85rem', background: viewMode === 'calendar' ? 'white' : 'transparent', color: viewMode === 'calendar' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'calendar' ? 700 : 600, fontSize: '0.8rem', boxShadow: viewMode === 'calendar' ? '0 1px 3px rgba(15,23,42,0.08)' : 'none' }}>
+                                        <CalendarIcon size={15} /> Venc. Faturas
                                     </button>
                                     {showAuditorTab && (
-                                        <button onClick={() => setViewMode('graph_node')} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem', background: viewMode === 'graph_node' ? 'white' : 'transparent', color: viewMode === 'graph_node' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'graph_node' ? '700' : '500', fontSize: '0.85rem' }}>
-                                            <Zap size={16} /> Graph Node View
+                                        <button onClick={() => setViewMode('graph_node')} style={{ borderRadius: '7px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.4rem 0.85rem', background: viewMode === 'graph_node' ? 'white' : 'transparent', color: viewMode === 'graph_node' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'graph_node' ? 700 : 600, fontSize: '0.8rem', boxShadow: viewMode === 'graph_node' ? '0 1px 3px rgba(15,23,42,0.08)' : 'none' }}>
+                                            <Zap size={15} /> Graph View
                                         </button>
                                     )}
                                 </>
                             ) : (
                                 <>
-                                    <button onClick={() => setViewMode('energy_list')} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem', background: viewMode === 'energy_list' ? 'white' : 'transparent', color: viewMode === 'energy_list' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'energy_list' ? '700' : '500', fontSize: '0.85rem' }}>
-                                        <List size={16} /> Lista
+                                    <button onClick={() => setViewMode('energy_list')} style={{ borderRadius: '7px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.4rem 0.85rem', background: viewMode === 'energy_list' ? 'white' : 'transparent', color: viewMode === 'energy_list' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'energy_list' ? 700 : 600, fontSize: '0.8rem', boxShadow: viewMode === 'energy_list' ? '0 1px 3px rgba(15,23,42,0.08)' : 'none' }}>
+                                        <List size={15} /> Lista
                                     </button>
-                                    <button onClick={() => setViewMode('energy_kanban')} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem', background: viewMode === 'energy_kanban' ? 'white' : 'transparent', color: viewMode === 'energy_kanban' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'energy_kanban' ? '700' : '500', fontSize: '0.85rem' }}>
-                                        <Layout size={16} /> Kanban
+                                    <button onClick={() => setViewMode('energy_kanban')} style={{ borderRadius: '7px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.4rem 0.85rem', background: viewMode === 'energy_kanban' ? 'white' : 'transparent', color: viewMode === 'energy_kanban' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'energy_kanban' ? 700 : 600, fontSize: '0.8rem', boxShadow: viewMode === 'energy_kanban' ? '0 1px 3px rgba(15,23,42,0.08)' : 'none' }}>
+                                        <Layout size={15} /> Kanban
                                     </button>
-                                    <button onClick={() => setViewMode('energy_calendar')} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem', background: viewMode === 'energy_calendar' ? 'white' : 'transparent', color: viewMode === 'energy_calendar' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'energy_calendar' ? '700' : '500', fontSize: '0.85rem' }}>
-                                        <CalendarIcon size={16} /> Venc. Conta de Energia
+                                    <button onClick={() => setViewMode('energy_calendar')} style={{ borderRadius: '7px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.4rem 0.85rem', background: viewMode === 'energy_calendar' ? 'white' : 'transparent', color: viewMode === 'energy_calendar' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'energy_calendar' ? 700 : 600, fontSize: '0.8rem', boxShadow: viewMode === 'energy_calendar' ? '0 1px 3px rgba(15,23,42,0.08)' : 'none' }}>
+                                        <CalendarIcon size={15} /> Venc. Conta
                                     </button>
-                                    <button onClick={() => setViewMode('energy_reading_calendar')} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem', background: viewMode === 'energy_reading_calendar' ? 'white' : 'transparent', color: viewMode === 'energy_reading_calendar' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'energy_reading_calendar' ? '700' : '500', fontSize: '0.85rem' }}>
-                                        Calendario de Leituras
+                                    <button onClick={() => setViewMode('energy_reading_calendar')} style={{ borderRadius: '7px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.4rem 0.85rem', background: viewMode === 'energy_reading_calendar' ? 'white' : 'transparent', color: viewMode === 'energy_reading_calendar' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'energy_reading_calendar' ? 700 : 600, fontSize: '0.8rem', boxShadow: viewMode === 'energy_reading_calendar' ? '0 1px 3px rgba(15,23,42,0.08)' : 'none' }}>
+                                        Leituras
                                     </button>
                                     {showAuditorTab && (
-                                        <button onClick={() => setViewMode('graph_node')} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem', background: viewMode === 'graph_node' ? 'white' : 'transparent', color: viewMode === 'graph_node' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'graph_node' ? '700' : '500', fontSize: '0.85rem' }}>
-                                            <Zap size={16} /> Graph Node View
+                                        <button onClick={() => setViewMode('graph_node')} style={{ borderRadius: '7px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.4rem 0.85rem', background: viewMode === 'graph_node' ? 'white' : 'transparent', color: viewMode === 'graph_node' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'graph_node' ? 700 : 600, fontSize: '0.8rem', boxShadow: viewMode === 'graph_node' ? '0 1px 3px rgba(15,23,42,0.08)' : 'none' }}>
+                                            <Zap size={15} /> Graph View
                                         </button>
                                     )}
                                 </>
                             )}
                         </div>
 
-                        <div style={{ display: 'flex', gap: '0.5rem' }}>
-                            <button onClick={handleGenerateExtrato} style={{ background: 'white', color: '#003366', padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid #bfdbfe', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                <Printer size={16} /> Extrato
+                        <div style={{ display: 'flex', gap: '0.45rem', alignItems: 'center' }}>
+                            <button onClick={handleGenerateExtrato} style={{ background: 'white', color: '#003366', padding: '0.42rem 0.85rem', borderRadius: '8px', border: '1px solid #bfdbfe', cursor: 'pointer', fontWeight: 700, fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                <Printer size={15} /> Extrato
                             </button>
-                            <button onClick={() => setIsHistoryModalOpen(true)} style={{ background: 'white', color: '#475569', padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid #e2e8f0', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                <History size={16} /> Histórico
+                            <button onClick={() => setIsHistoryModalOpen(true)} style={{ background: 'white', color: '#475569', padding: '0.42rem 0.85rem', borderRadius: '8px', border: '1px solid #e2e8f0', cursor: 'pointer', fontWeight: 700, fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                <History size={15} /> Histórico
                             </button>
                             {activeTab === 'faturas' ? (
-                                <button onClick={handleCreate} style={{ background: 'var(--color-orange)', color: 'white', padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                    <Plus size={16} /> Nova Fatura
+                                <button onClick={handleCreate} style={{ background: 'var(--color-orange)', color: 'white', padding: '0.42rem 0.95rem', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.35rem', boxShadow: '0 2px 6px rgba(255, 102, 0, 0.25)' }}>
+                                    <Plus size={15} /> Nova Fatura
                                 </button>
                             ) : (
                                 <>
-                                    <button onClick={() => setIsScraperQueueModalOpen(true)} style={{ background: '#3b82f6', color: 'white', padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                        <Download size={16} /> Fila da Automação
+                                    <button onClick={() => setIsScraperQueueModalOpen(true)} style={{ background: '#2563eb', color: 'white', padding: '0.42rem 0.85rem', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.35rem', boxShadow: '0 2px 6px rgba(37, 99, 235, 0.2)' }}>
+                                        <Download size={15} /> Fila Automação
                                     </button>
-                                    <button onClick={() => setIsAnalysisModalOpen(true)} style={{ background: 'var(--color-orange)', color: 'white', padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                        <Plus size={16} /> Nova Conta
+                                    <button onClick={() => setIsAnalysisModalOpen(true)} style={{ background: 'var(--color-orange)', color: 'white', padding: '0.42rem 0.95rem', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.35rem', boxShadow: '0 2px 6px rgba(255, 102, 0, 0.25)' }}>
+                                        <Plus size={15} /> Nova Conta
                                     </button>
                                 </>
                             )}
                         </div>
                     </div>
-
                 </div>
 
-                {/* Legenda de Status e Quantitativo (Totais) Abaixo do submenu */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem', width: '100%' }}>
+                {/* Linha 2: Barra de Filtro de Status Reorganizada (Pills Horizontais + Totais Integrados) */}
+                <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.4rem',
+                    width: '100%',
+                    fontVariantNumeric: 'tabular-nums'
+                }}>
                     {activeTab === 'faturas' ? (
                         <div style={{
                             display: 'flex',
                             alignItems: 'center',
+                            justifyContent: 'space-between',
                             gap: '0.75rem',
-                            padding: '0.6rem 1rem',
+                            padding: '0.45rem 0.85rem',
                             background: 'white',
                             borderRadius: '10px',
                             border: '1px solid #e2e8f0',
-                            boxShadow: '0 1px 3px rgba(0, 0, 0, 0.02)',
+                            boxShadow: '0 1px 2px rgba(15, 23, 42, 0.02)',
                             flexWrap: 'wrap'
                         }}>
-                            <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginRight: '0.25rem', flexShrink: 0 }}>STATUS FATURA:</span>
-                                {/* Botão Todos/Total */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap', flex: 1 }}>
+                                <span style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '0.3rem',
+                                    fontSize: '0.7rem',
+                                    fontWeight: 800,
+                                    color: '#64748b',
+                                    textTransform: 'uppercase',
+                                    letterSpacing: '0.05em',
+                                    marginRight: '0.2rem',
+                                    flexShrink: 0
+                                }}>
+                                    <Filter size={12} /> Status:
+                                </span>
+
+                                {/* Pill Todos */}
                                 <button
                                     onClick={() => setStatusFilter('')}
                                     style={{
                                         display: 'inline-flex',
                                         alignItems: 'center',
                                         gap: '0.4rem',
-                                        padding: '0.25rem 0.6rem',
-                                        borderRadius: '6px',
-                                        border: statusFilter === '' ? '1px solid #64748b' : '1px solid transparent',
-                                        background: statusFilter === '' ? '#f1f5f9' : 'transparent',
+                                        height: '30px',
+                                        padding: '0 0.65rem',
+                                        borderRadius: '999px',
+                                        border: statusFilter === '' ? '1.5px solid #0f172a' : '1px solid #e2e8f0',
+                                        background: statusFilter === '' ? '#0f172a' : '#f8fafc',
+                                        color: statusFilter === '' ? 'white' : '#475569',
                                         cursor: 'pointer',
-                                        transition: 'all 0.2s',
+                                        transition: 'all 0.18s ease',
                                         outline: 'none',
-                                        flexShrink: 0
-                                    }}
-                                    onMouseOver={e => {
-                                        e.currentTarget.style.background = '#f1f5f9';
-                                        e.currentTarget.style.borderColor = '#64748b';
-                                    }}
-                                    onMouseOut={e => {
-                                        if (statusFilter !== '') {
-                                            e.currentTarget.style.background = 'transparent';
-                                            e.currentTarget.style.borderColor = 'transparent';
-                                        }
+                                        flexShrink: 0,
+                                        whiteSpace: 'nowrap'
                                     }}
                                     title="Mostrar todos os registros"
                                 >
-                                    <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#64748b', flexShrink: 0 }}></span>
-                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: '1.2' }}>
-                                        <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: 'bold' }}>Todos</span>
-                                        <span style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 'bold' }}>{invoicesForTotals.length}</span>
-                                    </div>
+                                    <span style={{ fontSize: '0.74rem', fontWeight: statusFilter === '' ? 700 : 600 }}>Todos</span>
+                                    <span style={{
+                                        fontSize: '0.68rem',
+                                        fontWeight: 800,
+                                        padding: '0.05rem 0.4rem',
+                                        borderRadius: '999px',
+                                        background: statusFilter === '' ? 'rgba(255,255,255,0.2)' : '#e2e8f0',
+                                        color: statusFilter === '' ? 'white' : '#334155'
+                                    }}>
+                                        {invoicesForTotals.length}
+                                    </span>
                                 </button>
 
                                 {faturasStatuses.map(status => {
@@ -2142,175 +2376,198 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                                 display: 'inline-flex',
                                                 alignItems: 'center',
                                                 gap: '0.4rem',
-                                                padding: '0.25rem 0.6rem',
-                                                borderRadius: '6px',
-                                                border: isActive ? `1px solid ${status.color}` : '1px solid transparent',
-                                                background: isActive ? status.bg : 'transparent',
+                                                height: '30px',
+                                                padding: '0 0.65rem',
+                                                borderRadius: '999px',
+                                                border: isActive ? `1.5px solid ${status.color}` : '1px solid #e2e8f0',
+                                                background: isActive ? status.bg : 'white',
                                                 cursor: 'pointer',
-                                                transition: 'all 0.2s',
+                                                transition: 'all 0.18s ease',
                                                 outline: 'none',
-                                                flexShrink: 0
-                                            }}
-                                            onMouseOver={e => {
-                                                e.currentTarget.style.background = status.bg;
-                                                e.currentTarget.style.borderColor = status.color;
-                                            }}
-                                            onMouseOut={e => {
-                                                if (!isActive) {
-                                                    e.currentTarget.style.background = 'transparent';
-                                                    e.currentTarget.style.borderColor = 'transparent';
-                                                }
+                                                flexShrink: 0,
+                                                whiteSpace: 'nowrap',
+                                                opacity: (!isActive && count === 0) ? 0.55 : 1,
+                                                boxShadow: isActive ? `0 2px 6px ${status.color}20` : 'none'
                                             }}
                                             title={`Filtrar por ${status.label}`}
                                         >
-                                            <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: status.color, flexShrink: 0 }}></span>
-                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: '1.2' }}>
-                                                <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '600' }}>{status.label}</span>
-                                                <span style={{ fontSize: '0.7rem', color: status.color, fontWeight: 'bold' }}>{count}</span>
-                                            </div>
+                                            <span style={{ display: 'inline-block', width: '7px', height: '7px', borderRadius: '50%', backgroundColor: status.color, flexShrink: 0 }}></span>
+                                            <span style={{ fontSize: '0.74rem', color: isActive ? '#0f172a' : '#475569', fontWeight: isActive ? 700 : 600 }}>{status.label}</span>
+                                            <span style={{
+                                                fontSize: '0.68rem',
+                                                color: status.color,
+                                                background: isActive ? 'white' : status.bg,
+                                                padding: '0.05rem 0.4rem',
+                                                borderRadius: '999px',
+                                                fontWeight: 800
+                                            }}>
+                                                {count}
+                                            </span>
                                         </button>
                                     );
                                 })}
+
+                                {statusFilter !== '' && (
+                                    <button
+                                        onClick={() => setStatusFilter('')}
+                                        style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '0.25rem',
+                                            height: '28px',
+                                            padding: '0 0.55rem',
+                                            borderRadius: '999px',
+                                            border: '1px dashed #cbd5e1',
+                                            background: '#f8fafc',
+                                            color: '#64748b',
+                                            fontSize: '0.7rem',
+                                            fontWeight: 700,
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        <X size={11} /> Limpar
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* KPI Total Integrado */}
+                            <div style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.5rem',
+                                padding: '0.3rem 0.75rem',
+                                background: '#f8fafc',
+                                borderRadius: '8px',
+                                border: '1px solid #e2e8f0',
+                                flexShrink: 0
+                            }}>
+                                <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                    Total ({sortedInvoices.length}):
+                                </span>
+                                <span style={{ fontSize: '0.92rem', fontWeight: 800, color: '#0f172a' }}>
+                                    {formatCurrency(currentTotalAmount)}
+                                </span>
+                            </div>
                         </div>
                     ) : (
-                        <>
-                            <div style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '0.75rem',
-                                padding: '0.6rem 1rem',
-                                background: 'white',
-                                borderRadius: '10px',
-                                border: '1px solid #e2e8f0',
-                                boxShadow: '0 1px 3px rgba(0, 0, 0, 0.02)',
-                                flexWrap: 'wrap'
-                            }}>
-                                <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginRight: '0.25rem', flexShrink: 0 }}>STATUS DA CONTA:</span>
-                                {/* Botão Todos/Total */}
-                                <button
-                                    onClick={() => setStatusFilter('')}
-                                    style={{
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: '0.4rem',
-                                        padding: '0.25rem 0.6rem',
-                                        borderRadius: '6px',
-                                        border: statusFilter === '' ? '1px solid #64748b' : '1px solid transparent',
-                                        background: statusFilter === '' ? '#f1f5f9' : 'transparent',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.2s',
-                                        outline: 'none',
-                                        flexShrink: 0
-                                    }}
-                                    onMouseOver={e => {
-                                        e.currentTarget.style.background = '#f1f5f9';
-                                        e.currentTarget.style.borderColor = '#64748b';
-                                    }}
-                                    onMouseOut={e => {
-                                        if (statusFilter !== '') {
-                                            e.currentTarget.style.background = 'transparent';
-                                            e.currentTarget.style.borderColor = 'transparent';
-                                        }
-                                    }}
-                                    title="Mostrar todas as contas"
-                                >
-                                    <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#64748b', flexShrink: 0 }}></span>
-                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: '1.2' }}>
-                                        <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: 'bold' }}>Todos</span>
-                                        <span style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 'bold' }}>{invoicesForTotals.length}</span>
-                                    </div>
-                                </button>
+                        <div style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '0.4rem',
+                            padding: '0.5rem 0.85rem',
+                            background: 'white',
+                            borderRadius: '10px',
+                            border: '1px solid #e2e8f0',
+                            boxShadow: '0 1px 2px rgba(15, 23, 42, 0.02)'
+                        }}>
+                            {/* Sub-linha 1: Status da Conta + KPI Total */}
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.6rem', flexWrap: 'wrap' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap', flex: 1 }}>
+                                    <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '98px', flexShrink: 0 }}>
+                                        Status Conta:
+                                    </span>
+                                    <button
+                                        onClick={() => setStatusFilter('')}
+                                        style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '0.35rem',
+                                            height: '28px',
+                                            padding: '0 0.6rem',
+                                            borderRadius: '999px',
+                                            border: statusFilter === '' ? '1.5px solid #0f172a' : '1px solid #e2e8f0',
+                                            background: statusFilter === '' ? '#0f172a' : '#f8fafc',
+                                            color: statusFilter === '' ? 'white' : '#475569',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.18s',
+                                            outline: 'none',
+                                            flexShrink: 0,
+                                            whiteSpace: 'nowrap'
+                                        }}
+                                    >
+                                        <span style={{ fontSize: '0.72rem', fontWeight: statusFilter === '' ? 700 : 600 }}>Todas</span>
+                                        <span style={{ fontSize: '0.66rem', fontWeight: 800, padding: '0.04rem 0.35rem', borderRadius: '999px', background: statusFilter === '' ? 'rgba(255,255,255,0.2)' : '#e2e8f0', color: statusFilter === '' ? 'white' : '#334155' }}>
+                                            {invoicesForTotals.length}
+                                        </span>
+                                    </button>
+                                    {contasStatuses.map(status => {
+                                        const count = contasCounts[status.key] || 0;
+                                        const isActive = statusFilter === status.key;
+                                        return (
+                                            <button
+                                                key={status.key}
+                                                onClick={() => setStatusFilter(isActive ? '' : status.key)}
+                                                style={{
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '0.35rem',
+                                                    height: '28px',
+                                                    padding: '0 0.58rem',
+                                                    borderRadius: '999px',
+                                                    border: isActive ? `1.5px solid ${status.color}` : '1px solid #e2e8f0',
+                                                    background: isActive ? status.bg : 'white',
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.18s',
+                                                    outline: 'none',
+                                                    flexShrink: 0,
+                                                    whiteSpace: 'nowrap',
+                                                    opacity: (!isActive && count === 0) ? 0.5 : 1
+                                                }}
+                                            >
+                                                <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', backgroundColor: status.color, flexShrink: 0 }}></span>
+                                                <span style={{ fontSize: '0.72rem', color: isActive ? '#0f172a' : '#475569', fontWeight: isActive ? 700 : 600 }}>{status.label}</span>
+                                                <span style={{ fontSize: '0.66rem', color: status.color, background: isActive ? 'white' : status.bg, padding: '0.04rem 0.35rem', borderRadius: '999px', fontWeight: 800 }}>{count}</span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
 
-                                {contasStatuses.map(status => {
-                                    const count = contasCounts[status.key] || 0;
-                                    const isActive = statusFilter === status.key || (status.key === 'atrasada' && statusFilter === 'atrasada') || (status.key === 'a_vencer' && statusFilter === 'a_vencer');
-                                    return (
-                                        <button
-                                            key={status.key}
-                                            onClick={() => setStatusFilter(isActive ? '' : status.key)}
-                                            style={{
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: '0.4rem',
-                                                padding: '0.25rem 0.6rem',
-                                                borderRadius: '6px',
-                                                border: isActive ? `1px solid ${status.color}` : '1px solid transparent',
-                                                background: isActive ? status.bg : 'transparent',
-                                                cursor: 'pointer',
-                                                transition: 'all 0.2s',
-                                                outline: 'none',
-                                                flexShrink: 0
-                                            }}
-                                            onMouseOver={e => {
-                                                e.currentTarget.style.background = status.bg;
-                                                e.currentTarget.style.borderColor = status.color;
-                                            }}
-                                            onMouseOut={e => {
-                                                if (!isActive) {
-                                                    e.currentTarget.style.background = 'transparent';
-                                                    e.currentTarget.style.borderColor = 'transparent';
-                                                }
-                                            }}
-                                            title={`Filtrar por ${status.label}`}
-                                        >
-                                            <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: status.color, flexShrink: 0 }}></span>
-                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: '1.2' }}>
-                                                <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '600' }}>{status.label}</span>
-                                                <span style={{ fontSize: '0.7rem', color: status.color, fontWeight: 'bold' }}>{count}</span>
-                                            </div>
-                                        </button>
-                                    );
-                                })}
-                                
+                                <div style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.45rem',
+                                    padding: '0.25rem 0.7rem',
+                                    background: '#f8fafc',
+                                    borderRadius: '8px',
+                                    border: '1px solid #e2e8f0',
+                                    flexShrink: 0
+                                }}>
+                                    <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>
+                                        Total ({sortedInvoices.length}):
+                                    </span>
+                                    <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#0f172a' }}>
+                                        {formatCurrency(currentTotalAmount)}
+                                    </span>
+                                </div>
                             </div>
-                            
-                            <div style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '0.75rem',
-                                padding: '0.6rem 1rem',
-                                background: 'white',
-                                borderRadius: '10px',
-                                border: '1px solid #e2e8f0',
-                                boxShadow: '0 1px 3px rgba(0, 0, 0, 0.02)',
-                                flexWrap: 'wrap'
-                            }}>
-                                <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginRight: '0.25rem', flexShrink: 0 }}>STATUS DA FATURA:</span>
-                                
+
+                            {/* Sub-linha 2: Status da Fatura */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap', borderTop: '1px solid #f1f5f9', paddingTop: '0.38rem' }}>
+                                <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '98px', flexShrink: 0 }}>
+                                    Status Fatura:
+                                </span>
                                 <button
                                     onClick={() => setStatusFaturaFilter('')}
                                     style={{
                                         display: 'inline-flex',
                                         alignItems: 'center',
-                                        gap: '0.4rem',
-                                        padding: '0.25rem 0.6rem',
-                                        borderRadius: '6px',
-                                        border: statusFaturaFilter === '' ? '1px solid #64748b' : '1px solid transparent',
-                                        background: statusFaturaFilter === '' ? '#f1f5f9' : 'transparent',
+                                        gap: '0.35rem',
+                                        height: '26px',
+                                        padding: '0 0.55rem',
+                                        borderRadius: '999px',
+                                        border: statusFaturaFilter === '' ? '1.5px solid #475569' : '1px solid #e2e8f0',
+                                        background: statusFaturaFilter === '' ? '#f1f5f9' : 'white',
+                                        color: '#334155',
                                         cursor: 'pointer',
-                                        transition: 'all 0.2s',
+                                        transition: 'all 0.18s',
                                         outline: 'none',
-                                        flexShrink: 0
+                                        flexShrink: 0,
+                                        whiteSpace: 'nowrap'
                                     }}
-                                    onMouseOver={e => {
-                                        e.currentTarget.style.background = '#f1f5f9';
-                                        e.currentTarget.style.borderColor = '#64748b';
-                                    }}
-                                    onMouseOut={e => {
-                                        if (statusFaturaFilter !== '') {
-                                            e.currentTarget.style.background = 'transparent';
-                                            e.currentTarget.style.borderColor = 'transparent';
-                                        }
-                                    }}
-                                    title="Mostrar todas as faturas"
                                 >
-                                    <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#64748b', flexShrink: 0 }}></span>
-                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: '1.2' }}>
-                                        <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: 'bold' }}>Todas</span>
-                                        <span style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 'bold' }}>{invoicesForTotals.length}</span>
-                                    </div>
+                                    <span style={{ fontSize: '0.7rem', fontWeight: statusFaturaFilter === '' ? 700 : 600 }}>Todas</span>
+                                    <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#64748b' }}>{invoicesForTotals.length}</span>
                                 </button>
-
                                 {faturasStatuses.map(status => {
                                     const count = faturasCounts[status.key] || 0;
                                     const isActive = statusFaturaFilter === status.key;
@@ -2321,121 +2578,30 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                             style={{
                                                 display: 'inline-flex',
                                                 alignItems: 'center',
-                                                gap: '0.4rem',
-                                                padding: '0.25rem 0.6rem',
-                                                borderRadius: '6px',
-                                                border: isActive ? `1px solid ${status.color}` : '1px solid transparent',
-                                                background: isActive ? status.bg : 'transparent',
+                                                gap: '0.35rem',
+                                                height: '26px',
+                                                padding: '0 0.55rem',
+                                                borderRadius: '999px',
+                                                border: isActive ? `1.5px solid ${status.color}` : '1px solid #e2e8f0',
+                                                background: isActive ? status.bg : 'white',
                                                 cursor: 'pointer',
-                                                transition: 'all 0.2s',
+                                                transition: 'all 0.18s',
                                                 outline: 'none',
-                                                flexShrink: 0
+                                                flexShrink: 0,
+                                                whiteSpace: 'nowrap',
+                                                opacity: (!isActive && count === 0) ? 0.5 : 1
                                             }}
-                                            onMouseOver={e => {
-                                                e.currentTarget.style.background = status.bg;
-                                                e.currentTarget.style.borderColor = status.color;
-                                            }}
-                                            onMouseOut={e => {
-                                                if (!isActive) {
-                                                    e.currentTarget.style.background = 'transparent';
-                                                    e.currentTarget.style.borderColor = 'transparent';
-                                                }
-                                            }}
-                                            title={`Filtrar Fatura por ${status.label}`}
                                         >
-                                            <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: status.color, flexShrink: 0 }}></span>
-                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: '1.2' }}>
-                                                <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '600' }}>{status.label}</span>
-                                                <span style={{ fontSize: '0.7rem', color: status.color, fontWeight: 'bold' }}>{count}</span>
-                                            </div>
+                                            <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', backgroundColor: status.color, flexShrink: 0 }}></span>
+                                            <span style={{ fontSize: '0.7rem', color: isActive ? '#0f172a' : '#475569', fontWeight: isActive ? 700 : 600 }}>{status.label}</span>
+                                            <span style={{ fontSize: '0.65rem', color: status.color, fontWeight: 800 }}>{count}</span>
                                         </button>
                                     );
                                 })}
                             </div>
-                        </>
+                        </div>
                     )}
-                    {/* Bloco Totais abaixo das legendas, alinhado à direita da tela */}
-                    <div style={{
-                        display: 'flex',
-                        justifyContent: 'flex-end',
-                        alignItems: 'center',
-                        width: '100%',
-                        marginTop: '0.25rem'
-                    }}>
-                        <div style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            padding: '0.5rem 1.25rem',
-                            background: 'white',
-                            borderRadius: '10px',
-                            border: '1px solid #e2e8f0',
-                            boxShadow: '0 1px 3px rgba(0, 0, 0, 0.02)',
-                        }}>
-                            <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginRight: '0.5rem' }}>Totais:</span>
-                            <span style={{ fontSize: '1rem', fontWeight: '950', color: '#0f172a' }}>
-                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(activeTab === 'faturas' ? sortedInvoices.reduce((sum, inv) => sum + (inv.parent_invoice_id ? 0 : (Number(inv.valor_a_pagar) || 0)), 0) : sortedInvoices.reduce((sum, inv) => sum + (getEnergyBillValue(inv)), 0))}
-                            </span>
-                        </div>
-                    </div>
                 </div>
-
-                {/* Legenda de Status (Energia) integrada se necessário */}
-                {viewMode === 'energy_calendar' && (() => {
-                    const energyStats = filteredInvoices.filter(inv => 
-                        ['auto_consumo_remoto', 'geracao_compartilhada'].includes(inv.consumer_units?.modalidade)
-                    ).reduce((acc, inv) => {
-                        const today = new Date();
-                        today.setHours(0,0,0,0);
-                        const dueDate = new Date(inv.vencimento);
-                        const isPastDue = dueDate < today;
-                        const ebStatus = inv.energy_bill_status || 'pendente';
-                        
-                        if (ebStatus === 'inconsistente_pago') acc.pago++;
-                        else if (ebStatus === 'contestada_pago') { acc.pago++; acc.contestada++; }
-                        else if (ebStatus === 'pago') acc.pago++;
-                        else if (ebStatus === 'pendente' && isPastDue) acc.atrasado++;
-                        else if (ebStatus === 'parcelada') acc.parcelada++;
-                        else if (ebStatus === 'contestada') acc.contestada++;
-                        else acc.a_vencer++;
-                        
-                        return acc;
-                    }, { pago: 0, atrasado: 0, a_vencer: 0, parcelada: 0, contestada: 0 });
-
-                    return (
-                        <div style={{
-                            padding: '0.75rem 1rem',
-                            background: 'rgba(255, 255, 255, 0.4)',
-                            borderRadius: '12px',
-                            border: '1px solid rgba(226, 232, 240, 0.5)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '2.5rem',
-                            flexWrap: 'wrap'
-                        }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#22c55e' }}></div>
-                                <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '700' }}>Pagos: {energyStats.pago}</span>
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#ef4444' }}></div>
-                                <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '700' }}>Atrasadas: {energyStats.atrasado}</span>
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#3b82f6' }}></div>
-                                <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '700' }}>A Vencer: {energyStats.a_vencer}</span>
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#ca8a04' }}></div>
-                                <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '700' }}>Parceladas: {energyStats.parcelada}</span>
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#7c3aed' }}></div>
-                                <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '700' }}>Contestadas: {energyStats.contestada}</span>
-                            </div>
-                        </div>
-                    );
-                })()}
             </div>
 
             {viewMode === 'graph_node' ? (
@@ -2446,15 +2612,27 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                         setIsSummaryModalOpen(true);
                     }
                 }} />
-            ) : loading ? <p>Carregando...</p> : (filteredInvoices.length === 0 && viewMode !== 'energy_reading_calendar') ? (
-                <div style={{ padding: '3rem', textAlign: 'center', background: 'white', borderRadius: '12px', boxShadow: 'var(--shadow-sm)' }}>
-                    <div style={{ color: '#94a3b8', marginBottom: '1rem' }}><FileText size={48} /></div>
-                    <h3 style={{ color: '#475569', fontWeight: 'bold' }}>
+            ) : loading ? (
+                <div style={{ padding: '4rem 2rem', textAlign: 'center', background: 'white', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
+                    <div style={{ color: '#64748b', fontWeight: 600, fontSize: '0.92rem' }}>Carregando registros financeiros...</div>
+                </div>
+            ) : (filteredInvoices.length === 0 && viewMode !== 'energy_reading_calendar') ? (
+                <div style={{ padding: '3.5rem 2rem', textAlign: 'center', background: 'white', borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(15,23,42,0.03)' }}>
+                    <div style={{ color: '#94a3b8', marginBottom: '0.75rem', display: 'flex', justifyContent: 'center' }}><FileText size={42} /></div>
+                    <h3 style={{ color: '#334155', fontWeight: 700, fontSize: '1rem', margin: 0 }}>
                         {activeTab === 'contas_energia'
-                            ? (monthFilter === 'all' ? 'Nenhuma conta de energia encontrada' : 'Nenhuma conta de energia para o Mês selecionado')
-                            : (monthFilter === 'all' ? 'Nenhuma Fatura encontrada' : 'Nenhuma Fatura emitida para o Mês selecionado')
+                            ? (monthFilter === 'all' ? 'Nenhuma conta de energia encontrada' : 'Nenhuma conta de energia para o período selecionado')
+                            : (monthFilter === 'all' ? 'Nenhuma fatura encontrada' : 'Nenhuma fatura emitida para o período selecionado')
                         }
                     </h3>
+                    {(statusFilter || statusFaturaFilter || searchTerm) && (
+                        <button
+                            onClick={() => { setStatusFilter(''); setStatusFaturaFilter(''); setSearchTerm(''); }}
+                            style={{ marginTop: '0.85rem', padding: '0.45rem 0.9rem', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#f8fafc', color: '#334155', fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer' }}
+                        >
+                            Limpar filtros ativos
+                        </button>
+                    )}
                 </div>
             ) : (
                 <>
@@ -2462,22 +2640,28 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                         (() => {
                             const totalFactValue = sortedInvoices.reduce((sum, inv) => sum + (inv.parent_invoice_id ? 0 : (Number(inv.valor_a_pagar) || 0)), 0);
                             const totalEnergyBillValue = sortedInvoices.reduce((sum, inv) => sum + (inv.parent_invoice_id ? 0 : (Number(inv.valor_concessionaria) || ((Number(inv.tarifa_minima || inv.tarifa_minima_excedentes) || 0) + (Number(inv.iluminacao_publica) || 0) + (Number(inv.outros_lancamentos) || 0) + (Number(inv.parcelamento) || 0) + (Number(inv.consumo_reais) || 0)))), 0);
-                                            const totalBalance = totalFactValue - totalEnergyBillValue;
 
                             return (
-                                <div style={{ background: 'white', borderRadius: '8px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', overflowX: 'auto' }}>
+                                <div style={{
+                                    background: 'white',
+                                    borderRadius: '14px',
+                                    border: '1px solid #e2e8f0',
+                                    boxShadow: '0 4px 16px -4px rgba(15, 23, 42, 0.05)',
+                                    overflowX: 'auto',
+                                    fontVariantNumeric: 'tabular-nums'
+                                }}>
                                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                                        <thead style={{ background: '#f8fafc' }}>
-                                            <tr>
-                                                <th style={{ padding: '1rem', textAlign: 'left', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap', minWidth: '120px' }}>Unidade Consumidora</th>
-                                                <th style={{ padding: '1rem', textAlign: 'left', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap', minWidth: '80px' }}>Mês de ref.</th>
-                                                <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap', minWidth: '100px' }}>Energia Compensada</th>
-                                                <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap', minWidth: '120px' }}>Conta de Energia</th>
-                                                <th style={{ padding: '1rem', textAlign: 'left', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap', minWidth: '100px' }}>Vencimento</th>
-                                                <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap', minWidth: '100px' }}>Leitura Ant.</th>
-                                                <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap', minWidth: '100px' }}>Leitura Atual</th>
-                                                <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap', minWidth: '100px' }}>Vr. da Fatura</th>
-                                                <th style={{ padding: '1rem', textAlign: 'left', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap', minWidth: '80px' }}>Status</th>
+                                        <thead>
+                                            <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                                                <th style={{ padding: '0.85rem 1rem', textAlign: 'left', color: '#475569', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', minWidth: '190px' }}>Unidade Consumidora</th>
+                                                <th style={{ padding: '0.85rem 0.85rem', textAlign: 'center', color: '#475569', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', minWidth: '85px' }}>Mês Ref.</th>
+                                                <th style={{ padding: '0.85rem 0.85rem', textAlign: 'right', color: '#475569', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', minWidth: '110px' }}>Compensada</th>
+                                                <th style={{ padding: '0.85rem 1rem', textAlign: 'right', color: '#475569', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', minWidth: '165px' }}>Conta Concessionária</th>
+                                                <th style={{ padding: '0.85rem 0.85rem', textAlign: 'center', color: '#475569', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', minWidth: '100px' }}>Vencimento</th>
+                                                <th style={{ padding: '0.85rem 0.75rem', textAlign: 'center', color: '#475569', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', minWidth: '95px' }}>Leitura Ant.</th>
+                                                <th style={{ padding: '0.85rem 0.75rem', textAlign: 'center', color: '#475569', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', minWidth: '95px' }}>Leitura Atual</th>
+                                                <th style={{ padding: '0.85rem 1rem', textAlign: 'right', color: '#475569', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', minWidth: '150px' }}>Vr. da Fatura</th>
+                                                <th style={{ padding: '0.85rem 1rem', textAlign: 'left', color: '#475569', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', minWidth: '130px' }}>Status</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -2486,50 +2670,50 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                                 const energyBillValue = Number(inv.valor_concessionaria) || ((Number(inv.tarifa_minima || inv.tarifa_minima_excedentes) || 0) + (Number(inv.iluminacao_publica) || 0) + (Number(inv.outros_lancamentos) || 0) + (Number(inv.parcelamento) || 0) + (Number(inv.consumo_reais) || 0));
 
                                                 return (
-                                                    <tr key={inv.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                                        {/* 1. Unidade Consumidora clicável azul com borda + Assinante como sublinha */}
-                                                        <td style={{ padding: '1rem', whiteSpace: 'nowrap' }}>
-                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                                                                <span 
-                                                                    onClick={() => {
-                                                                        handleEdit(inv);
-                                                                    }}
-                                                                    style={{
-                                                                        display: 'inline-flex',
-                                                                        alignItems: 'center',
-                                                                        padding: '0.2rem 0.6rem',
-                                                                        background: '#eff6ff', 
-                                                                        color: '#2563eb', 
-                                                                        border: '1px solid #bfdbfe',
-                                                                        borderRadius: '99px',
-                                                                        fontSize: '0.8rem',
-                                                                        fontWeight: 'bold',
-                                                                        cursor: 'pointer',
-                                                                        transition: 'all 0.2s',
-                                                                        boxShadow: '0 1px 2px rgba(37, 99, 235, 0.05)',
-                                                                        width: 'fit-content',
-                                                                        maxWidth: '150px',
-                                                                        overflow: 'hidden',
-                                                                        textOverflow: 'ellipsis',
-                                                                        whiteSpace: 'nowrap'
-                                                                    }}
-                                                                    onMouseOver={(e) => {
-                                                                        e.currentTarget.style.background = '#dbeafe';
-                                                                        e.currentTarget.style.borderColor = '#93c5fd';
-                                                                    }}
-                                                                    onMouseOut={(e) => {
-                                                                        e.currentTarget.style.background = '#eff6ff';
-                                                                        e.currentTarget.style.borderColor = '#bfdbfe';
-                                                                    }}
-                                                                >
-                                                                    {inv.consumer_units?.numero_uc || '-'}
-                                                                </span>
-                                                                <span style={{ color: '#334155', fontSize: '0.8rem', fontWeight: '700', paddingLeft: '0.2rem', maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block' }}>
-                                                                        {abbreviateName(getDisplayName(inv), 20) || '-'}
+                                                    <tr
+                                                        key={inv.id}
+                                                        style={{ borderBottom: '1px solid #f1f5f9', transition: 'background-color 0.15s ease' }}
+                                                        onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#f8fafc'; }}
+                                                        onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                                                    >
+                                                        {/* 1. Unidade Consumidora + Assinante */}
+                                                        <td style={{ padding: '0.75rem 1rem', whiteSpace: 'nowrap' }}>
+                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                                                                    <span 
+                                                                        onClick={() => handleEdit(inv)}
+                                                                        style={{
+                                                                            display: 'inline-flex',
+                                                                            alignItems: 'center',
+                                                                            padding: '0.16rem 0.55rem',
+                                                                            background: '#eff6ff', 
+                                                                            color: '#1d4ed8', 
+                                                                            border: '1px solid #bfdbfe',
+                                                                            borderRadius: '6px',
+                                                                            fontSize: '0.76rem',
+                                                                            fontWeight: 700,
+                                                                            cursor: 'pointer',
+                                                                            transition: 'all 0.18s',
+                                                                            width: 'fit-content'
+                                                                        }}
+                                                                        onMouseOver={(e) => {
+                                                                            e.currentTarget.style.background = '#dbeafe';
+                                                                            e.currentTarget.style.borderColor = '#93c5fd';
+                                                                        }}
+                                                                        onMouseOut={(e) => {
+                                                                            e.currentTarget.style.background = '#eff6ff';
+                                                                            e.currentTarget.style.borderColor = '#bfdbfe';
+                                                                        }}
+                                                                    >
+                                                                        {inv.consumer_units?.numero_uc || '-'}
                                                                     </span>
+                                                                    <span style={{ color: '#0f172a', fontSize: '0.82rem', fontWeight: 700, maxWidth: '175px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                                        {abbreviateName(getDisplayName(inv), 22) || '-'}
+                                                                    </span>
+                                                                </div>
                                                                 {inv.consumer_units?.titular_conta && (
-                                                                    <div style={{ color: '#64748b', fontSize: '0.7rem', paddingLeft: '0.2rem' }}>
-                                                                        {inv.consumer_units?.titular_conta}
+                                                                    <div style={{ color: '#64748b', fontSize: '0.7rem', paddingLeft: '0.1rem', maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                                        Titular: {inv.consumer_units?.titular_conta}
                                                                     </div>
                                                                 )}
                                                             </div>
@@ -2542,161 +2726,92 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                                                 setIsSummaryModalOpen(true);
                                                             }}
                                                             style={{ 
-                                                                padding: '1rem', 
-                                                                color: '#475569', 
-                                                                fontSize: '0.85rem', 
+                                                                padding: '0.75rem 0.85rem', 
+                                                                textAlign: 'center',
                                                                 whiteSpace: 'nowrap', 
-                                                                fontWeight: '600', 
-                                                                minWidth: '80px',
-                                                                cursor: 'pointer',
-                                                                transition: 'color 0.2s'
+                                                                cursor: 'pointer'
                                                             }}
-                                                            onMouseEnter={(e) => { e.currentTarget.style.color = '#2563eb'; e.currentTarget.style.textDecoration = 'underline'; }}
-                                                            onMouseLeave={(e) => { e.currentTarget.style.color = '#475569'; e.currentTarget.style.textDecoration = 'none'; }}
+                                                            title="Ver resumo detalhado da fatura"
                                                         >
-                                                            {inv.mes_referencia ? (() => {
-                                                                const [year, month] = inv.mes_referencia.split('-');
-                                                                return `${month}/${year}`;
-                                                            })() : '-'}
+                                                            <span style={{
+                                                                display: 'inline-block',
+                                                                padding: '0.18rem 0.5rem',
+                                                                borderRadius: '6px',
+                                                                background: '#f1f5f9',
+                                                                color: '#334155',
+                                                                fontSize: '0.78rem',
+                                                                fontWeight: 700,
+                                                                border: '1px solid #e2e8f0'
+                                                            }}>
+                                                                {inv.mes_referencia ? (() => {
+                                                                    const [year, month] = inv.mes_referencia.split('-');
+                                                                    return `${month}/${year}`;
+                                                                })() : '-'}
+                                                            </span>
                                                         </td>
 
                                                         {/* 3. Energia Compensada */}
-                                                        <td style={{ padding: '1rem', textAlign: 'center', color: '#16a34a', fontWeight: 'bold', whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
-                                                            {inv.consumo_compensado ? `${inv.consumo_compensado} kWh` : '-'}
+                                                        <td style={{ padding: '0.75rem 0.85rem', textAlign: 'right', color: '#15803d', fontWeight: 700, whiteSpace: 'nowrap', fontSize: '0.82rem' }}>
+                                                            {inv.consumo_compensado ? `${Number(inv.consumo_compensado).toLocaleString('pt-BR')} kWh` : '-'}
                                                         </td>
 
                                                         {/* 4. Conta de Energia + Pagar */}
-                                                        <td style={{ padding: '1rem', textAlign: 'center', whiteSpace: 'nowrap', minWidth: '120px' }}>
-                                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem' }}>
-                                                                <div style={{ fontWeight: '800', color: '#ef4444', fontSize: '1.1rem' }}>{formatCurrency(energyBillValue)}</div>
-                                                                <div style={{ minWidth: '85px' }}>
+                                                        <td style={{ padding: '0.75rem 1rem', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                                                            <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.55rem' }}>
+                                                                <span style={{ fontWeight: 700, color: '#dc2626', fontSize: '0.9rem' }}>
+                                                                    {formatCurrency(energyBillValue)}
+                                                                </span>
+                                                                <div style={{ minWidth: '82px', textAlign: 'center' }}>
                                                                     {inv.energy_bill_status === 'pago' ? (
-                                                                        <span style={{ 
-                                                                            display: 'block',
-                                                                            textAlign: 'center',
-                                                                            color: '#166534', 
-                                                                            background: '#dcfce7', 
-                                                                            padding: '0.4rem 0.2rem', 
-                                                                            borderRadius: '4px', 
-                                                                            fontSize: '0.7rem', 
-                                                                            fontWeight: '800',
-                                                                            border: '1px solid #bbf7d0'
-                                                                        }}>PAGA</span>
+                                                                        <span style={{ display: 'inline-block', width: '100%', color: '#166534', background: '#dcfce7', padding: '0.22rem 0.4rem', borderRadius: '6px', fontSize: '0.65rem', fontWeight: 800, border: '1px solid #bbf7d0' }}>PAGA</span>
                                                                     ) : inv.energy_bill_status === 'inconsistente_pago' ? (
-                                                                        <span style={{ 
-                                                                            display: 'block',
-                                                                            textAlign: 'center',
-                                                                            color: ENERGY_PAID_DIVERGENT.inconsistente_pago.color, 
-                                                                            background: ENERGY_PAID_DIVERGENT.inconsistente_pago.bg, 
-                                                                            padding: '0.4rem 0.2rem', 
-                                                                            borderRadius: '4px', 
-                                                                            fontSize: '0.62rem', 
-                                                                            fontWeight: '800',
-                                                                            lineHeight: 1.15,
-                                                                            border: `1px solid ${ENERGY_PAID_DIVERGENT.inconsistente_pago.color}40`
-                                                                        }}>INCONSISTENTE PAGO</span>
+                                                                        <span style={{ display: 'inline-block', width: '100%', color: ENERGY_PAID_DIVERGENT.inconsistente_pago.color, background: ENERGY_PAID_DIVERGENT.inconsistente_pago.bg, padding: '0.22rem 0.4rem', borderRadius: '6px', fontSize: '0.6rem', fontWeight: 800, border: `1px solid ${ENERGY_PAID_DIVERGENT.inconsistente_pago.color}40` }}>INC. PAGO</span>
                                                                     ) : inv.energy_bill_status === 'contestada_pago' ? (
-                                                                        <span style={{ 
-                                                                            display: 'block',
-                                                                            textAlign: 'center',
-                                                                            color: ENERGY_PAID_DIVERGENT.contestada_pago.color, 
-                                                                            background: ENERGY_PAID_DIVERGENT.contestada_pago.bg, 
-                                                                            padding: '0.4rem 0.2rem', 
-                                                                            borderRadius: '4px', 
-                                                                            fontSize: '0.62rem', 
-                                                                            fontWeight: '800',
-                                                                            lineHeight: 1.15,
-                                                                            border: `1px solid ${ENERGY_PAID_DIVERGENT.contestada_pago.color}40`
-                                                                        }}>CONTESTADO PAGO</span>
+                                                                        <span style={{ display: 'inline-block', width: '100%', color: ENERGY_PAID_DIVERGENT.contestada_pago.color, background: ENERGY_PAID_DIVERGENT.contestada_pago.bg, padding: '0.22rem 0.4rem', borderRadius: '6px', fontSize: '0.6rem', fontWeight: 800, border: `1px solid ${ENERGY_PAID_DIVERGENT.contestada_pago.color}40` }}>CONT. PAGO</span>
                                                                     ) : inv.energy_bill_status === 'parcelada' ? (
-                                                                        <span style={{ 
-                                                                            display: 'block',
-                                                                            textAlign: 'center',
-                                                                            color: '#ca8a04', 
-                                                                            background: '#fef9c3', 
-                                                                            padding: '0.4rem 0.2rem', 
-                                                                            borderRadius: '4px', 
-                                                                            fontSize: '0.7rem', 
-                                                                            fontWeight: '800',
-                                                                            border: '1px solid #fef08a'
-                                                                        }}>PARCELADA</span>
+                                                                        <span style={{ display: 'inline-block', width: '100%', color: '#854d0e', background: '#fef9c3', padding: '0.22rem 0.4rem', borderRadius: '6px', fontSize: '0.65rem', fontWeight: 800, border: '1px solid #fde047' }}>PARCELADA</span>
                                                                     ) : inv.energy_bill_status === 'contestada' ? (
-                                                                        <span style={{ 
-                                                                            display: 'block',
-                                                                            textAlign: 'center',
-                                                                            color: '#7c3aed', 
-                                                                            background: '#f3e8ff', 
-                                                                            padding: '0.4rem 0.2rem', 
-                                                                            borderRadius: '4px', 
-                                                                            fontSize: '0.7rem', 
-                                                                            fontWeight: '800',
-                                                                            border: '1px solid #e9d5ff'
-                                                                        }}>CONTESTADA</span>
+                                                                        <span style={{ display: 'inline-block', width: '100%', color: '#6d28d9', background: '#f3e8ff', padding: '0.22rem 0.4rem', borderRadius: '6px', fontSize: '0.65rem', fontWeight: 800, border: '1px solid #ddd6fe' }}>CONTESTADA</span>
                                                                     ) : (inv.linha_digitavel && ['auto_consumo_remoto', 'geracao_compartilhada'].includes(inv.consumer_units?.modalidade)) ? (
                                                                         <button 
                                                                             onClick={() => handlePayBill(inv)}
                                                                             disabled={payingId === inv.id}
-                                                                            style={{ 
-                                                                                width: '100%',
-                                                                                background: '#ef4444', 
-                                                                                color: 'white', 
-                                                                                border: 'none', 
-                                                                                padding: '0.4rem 0.2rem', 
-                                                                                borderRadius: '4px', 
-                                                                                fontSize: '0.7rem', 
-                                                                                fontWeight: 'bold', 
-                                                                                cursor: 'pointer',
-                                                                                boxShadow: '0 2px 4px rgba(239, 68, 68, 0.2)'
-                                                                            }}
+                                                                            style={{ width: '100%', background: '#ef4444', color: 'white', border: 'none', padding: '0.26rem 0.45rem', borderRadius: '6px', fontSize: '0.66rem', fontWeight: 800, cursor: 'pointer', boxShadow: '0 1px 3px rgba(239, 68, 68, 0.25)' }}
                                                                         >
                                                                             {payingId === inv.id ? '...' : 'PAGAR'}
                                                                         </button>
                                                                     ) : ['auto_consumo_remoto', 'geracao_compartilhada'].includes(inv.consumer_units?.modalidade) ? (
-                                                                        <span style={{ 
-                                                                            display: 'block',
-                                                                            textAlign: 'center',
-                                                                            color: '#475569', 
-                                                                            background: '#f1f5f9', 
-                                                                            padding: '0.4rem 0.2rem', 
-                                                                            borderRadius: '4px', 
-                                                                            fontSize: '0.7rem', 
-                                                                            fontWeight: '800',
-                                                                            border: '1px solid #e2e8f0'
-                                                                        }}>SEM CÓDIGO</span>
+                                                                        <span style={{ display: 'inline-block', width: '100%', color: '#64748b', background: '#f1f5f9', padding: '0.22rem 0.4rem', borderRadius: '6px', fontSize: '0.64rem', fontWeight: 700, border: '1px solid #e2e8f0' }}>S/ CÓDIGO</span>
                                                                     ) : null}
                                                                 </div>
                                                             </div>
                                                         </td>
 
-                                                        {/* 5. Vencimento Corrigido */}
-                                                        <td style={{ padding: '1rem', color: '#334155', whiteSpace: 'nowrap', minWidth: '100px' }}>{inv.vencimento ? inv.vencimento.split('T')[0].split('-').reverse().join('/') : getInvoiceDueDate(inv)}</td>
+                                                        {/* 5. Vencimento */}
+                                                        <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center', color: '#334155', fontWeight: 600, fontSize: '0.82rem', whiteSpace: 'nowrap' }}>
+                                                            {inv.vencimento ? inv.vencimento.split('T')[0].split('-').reverse().join('/') : getInvoiceDueDate(inv)}
+                                                        </td>
                                                         
                                                         {/* 6. Leitura Ant. */}
-                                                        <td style={{ padding: '1rem', textAlign: 'center', color: '#64748b', whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
+                                                        <td style={{ padding: '0.75rem 0.75rem', textAlign: 'center', color: '#64748b', whiteSpace: 'nowrap', fontSize: '0.8rem' }}>
                                                             {getAnteriorLeitura(inv)}
                                                         </td>
 
                                                         {/* 7. Leitura Atual */}
-                                                        <td style={{ padding: '1rem', textAlign: 'center', color: '#475569', whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
+                                                        <td style={{ padding: '0.75rem 0.75rem', textAlign: 'center', color: '#475569', whiteSpace: 'nowrap', fontSize: '0.8rem', fontWeight: 500 }}>
                                                             {inv.data_leitura ? inv.data_leitura.split('T')[0].split('-').reverse().join('/') : '-'}
                                                         </td>
 
                                                         {/* 8. Vr. da Fatura + Boleto */}
-                                                        <td style={{ padding: '1rem', textAlign: 'center', whiteSpace: 'nowrap', minWidth: '100px' }}>
-                                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem' }}>
-                                                                {/*
-                                                                    R$ 0,00 sozinho na coluna parece defeito de tela.
-                                                                    Nas UCs sombra de troca de titularidade o zero e
-                                                                    deliberado -- a conta final e do novo titular --, e
-                                                                    dizer isso evita que alguem "conserte" recalculando.
-                                                                */}
+                                                        <td style={{ padding: '0.75rem 1rem', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                                                            <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.55rem' }}>
                                                                 {factValue === 0 && inv.consumer_units?.nao_faturavel ? (
-                                                                    <div style={{ fontWeight: 700, color: '#7c3aed', fontSize: '0.75rem', lineHeight: 1.2 }}>
+                                                                    <div style={{ fontWeight: 700, color: '#7c3aed', fontSize: '0.73rem', lineHeight: 1.15, textAlign: 'right' }}>
                                                                         Não faturável
-                                                                        <div style={{ fontWeight: 500, color: '#a78bfa', fontSize: '0.68rem' }}>R$ 0,00</div>
+                                                                        <div style={{ fontWeight: 600, color: '#a78bfa', fontSize: '0.66rem' }}>R$ 0,00</div>
                                                                     </div>
                                                                 ) : (
-                                                                    <div style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '1rem' }}>{formatCurrency(factValue)}</div>
+                                                                    <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.94rem' }}>{formatCurrency(factValue)}</span>
                                                                 )}
                                                                 {inv.asaas_boleto_url && inv.status !== 'pago' && (
                                                                     <a 
@@ -2704,14 +2819,15 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                                                         target="_blank" 
                                                                         rel="noopener noreferrer" 
                                                                         style={{ 
-                                                                            padding: '0.3rem 0.6rem',
-                                                                            background: '#dcfce7', 
-                                                                            color: '#166534', 
-                                                                            border: '1px solid #bbf7d0', 
-                                                                            borderRadius: '4px', 
+                                                                            padding: '0.22rem 0.5rem',
+                                                                            background: '#ecfdf5', 
+                                                                            color: '#047857', 
+                                                                            border: '1px solid #a7f3d0', 
+                                                                            borderRadius: '6px', 
                                                                             textDecoration: 'none', 
-                                                                            fontSize: '0.7rem',
-                                                                            fontWeight: 'bold'
+                                                                            fontSize: '0.66rem',
+                                                                            fontWeight: 800,
+                                                                            letterSpacing: '0.02em'
                                                                         }}
                                                                     >
                                                                         BOLETO
@@ -2721,32 +2837,30 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                                         </td>
 
                                                         {/* 9. Status */}
-                                                        <td style={{ padding: '1rem', whiteSpace: 'nowrap' }}>{getStatusBadge(inv.status)}</td>
+                                                        <td style={{ padding: '0.75rem 1rem', whiteSpace: 'nowrap' }}>{getStatusBadge(inv.status)}</td>
                                                     </tr>
                                                 );
                                             })}
                                         </tbody>
-                                        <tfoot style={{ background: '#f8fafc', borderTop: '2px solid #e2e8f0', fontWeight: 'bold' }}>
+                                        <tfoot style={{ background: 'linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%)', borderTop: '2px solid #e2e8f0', fontWeight: 700 }}>
                                             <tr>
-                                                <td colSpan="2" style={{ padding: '1rem', color: '#475569', fontSize: '0.85rem' }}>
+                                                <td colSpan="2" style={{ padding: '0.9rem 1rem', color: '#475569', fontSize: '0.82rem' }}>
                                                     <span>Total de Registros: </span>
-                                                    <span style={{ fontWeight: '800', color: 'var(--color-blue)' }}>{sortedInvoices.length} {sortedInvoices.length === 1 ? 'fatura' : 'faturas'}</span>
+                                                    <span style={{ fontWeight: 800, color: 'var(--color-blue)' }}>{sortedInvoices.length} {sortedInvoices.length === 1 ? 'fatura' : 'faturas'}</span>
                                                 </td>
-                                                <td style={{ padding: '1rem' }}></td>
-                                                <td style={{ padding: '1rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                                                    <div style={{ color: '#ef4444', fontSize: '0.95rem', fontWeight: '900' }}>
+                                                <td style={{ padding: '0.9rem 0.85rem' }}></td>
+                                                <td style={{ padding: '0.9rem 1rem', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                                                    <span style={{ color: '#dc2626', fontSize: '0.92rem', fontWeight: 800 }}>
                                                         {formatCurrency(totalEnergyBillValue)}
-                                                    </div>
+                                                    </span>
                                                 </td>
-                                                <td style={{ padding: '1rem' }}></td>
-                                                <td style={{ padding: '1rem' }}></td>
-                                                <td style={{ padding: '1rem' }}></td>
-                                                <td style={{ padding: '1rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                                                    <div style={{ color: '#0f172a', fontSize: '0.95rem', fontWeight: '900' }}>
+                                                <td colSpan="3" style={{ padding: '0.9rem' }}></td>
+                                                <td style={{ padding: '0.9rem 1rem', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                                                    <span style={{ color: '#0f172a', fontSize: '0.95rem', fontWeight: 900 }}>
                                                         {formatCurrency(totalFactValue)}
-                                                    </div>
+                                                    </span>
                                                 </td>
-                                                <td style={{ padding: '1rem' }}></td>
+                                                <td style={{ padding: '0.9rem 1rem' }}></td>
                                             </tr>
                                         </tfoot>
                                     </table>
@@ -2754,36 +2868,43 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                             );
                         })()
                     ) : viewMode === 'energy_list' ? (
-                        <div style={{ background: 'white', borderRadius: '8px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', overflowX: 'auto' }}>
+                        <div style={{
+                            background: 'white',
+                            borderRadius: '14px',
+                            border: '1px solid #e2e8f0',
+                            boxShadow: '0 4px 16px -4px rgba(15, 23, 42, 0.05)',
+                            overflowX: 'auto',
+                            fontVariantNumeric: 'tabular-nums'
+                        }}>
                             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                                <thead style={{ background: '#f8fafc' }}>
-                                    <tr>
-                                        <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left', color: '#64748b', fontSize: '0.72rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Código do Cliente</th>
-                                        <th style={{ padding: '0.5rem 0.75rem', textAlign: 'center', color: '#64748b', fontSize: '0.72rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Ref.</th>
-                                        <th style={{ padding: '0.5rem 0.75rem', textAlign: 'center', color: '#64748b', fontSize: '0.72rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Vl. Pagar</th>
-                                        <th style={{ padding: '0.5rem 0.75rem', textAlign: 'center', color: '#64748b', fontSize: '0.72rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Vencimento</th>
-                                        <th style={{ padding: '0.5rem 0.75rem', textAlign: 'center', color: '#64748b', fontSize: '0.72rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Lt. Anterior</th>
-                                        <th style={{ padding: '0.5rem 0.75rem', textAlign: 'center', color: '#64748b', fontSize: '0.72rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Lt. Atual</th>
-                                        <th style={{ padding: '0.5rem 0.75rem', textAlign: 'center', color: '#64748b', fontSize: '0.72rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Consumo</th>
-                                        <th style={{ padding: '0.5rem 0.75rem', textAlign: 'center', color: '#64748b', fontSize: '0.72rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Compens.</th>
-                                        <th style={{ padding: '0.5rem 0.75rem', textAlign: 'center', color: '#64748b', fontSize: '0.72rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Injetada</th>
-                                        <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left', color: '#64748b', fontSize: '0.72rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>St. Conta</th>
-                                        <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left', color: '#64748b', fontSize: '0.72rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>St. Fatura</th>
+                                <thead>
+                                    <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                                        <th style={{ padding: '0.8rem 1rem', textAlign: 'left', color: '#475569', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>Unidade Consumidora</th>
+                                        <th style={{ padding: '0.8rem 0.75rem', textAlign: 'center', color: '#475569', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>Ref.</th>
+                                        <th style={{ padding: '0.8rem 0.85rem', textAlign: 'right', color: '#475569', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>Vl. Pagar</th>
+                                        <th style={{ padding: '0.8rem 0.75rem', textAlign: 'center', color: '#475569', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>Vencimento</th>
+                                        <th style={{ padding: '0.8rem 0.75rem', textAlign: 'center', color: '#475569', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>Lt. Anterior</th>
+                                        <th style={{ padding: '0.8rem 0.75rem', textAlign: 'center', color: '#475569', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>Lt. Atual</th>
+                                        <th style={{ padding: '0.8rem 0.75rem', textAlign: 'right', color: '#475569', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>Consumo</th>
+                                        <th style={{ padding: '0.8rem 0.75rem', textAlign: 'right', color: '#475569', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>Compens.</th>
+                                        <th style={{ padding: '0.8rem 0.75rem', textAlign: 'right', color: '#475569', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>Injetada</th>
+                                        <th style={{ padding: '0.8rem 0.85rem', textAlign: 'left', color: '#475569', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>St. Conta</th>
+                                        <th style={{ padding: '0.8rem 0.85rem', textAlign: 'left', color: '#475569', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>St. Fatura</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {sortedInvoices.map(inv => {
                                         const cost = getEnergyBillValue(inv);
-                                        const today = new Date();
-                                        today.setHours(0,0,0,0);
-                                        const dueDate = (inv.vencimento_concessionaria || inv.vencimento) ? new Date(inv.vencimento_concessionaria || inv.vencimento) : null;
-                                        const isPastDue = dueDate && dueDate < today;
 
                                         return (
-                                            <tr key={inv.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                                {/* Código do Cliente clicável azul + Assinante como sublinha */}
-                                                <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap', maxWidth: '160px' }}>
-                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+                                            <tr
+                                                key={inv.id}
+                                                style={{ borderBottom: '1px solid #f1f5f9', transition: 'background-color 0.15s ease' }}
+                                                onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#f8fafc'; }}
+                                                onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                                            >
+                                                <td style={{ padding: '0.65rem 1rem', whiteSpace: 'nowrap' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
                                                         <span 
                                                             onClick={() => {
                                                                 setSelectedInvoiceForSummary(inv);
@@ -2794,14 +2915,13 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                                                 alignItems: 'center',
                                                                 padding: '0.15rem 0.5rem',
                                                                 background: '#eff6ff', 
-                                                                color: '#2563eb', 
+                                                                color: '#1d4ed8', 
                                                                 border: '1px solid #bfdbfe',
-                                                                borderRadius: '99px',
-                                                                fontSize: '0.75rem',
-                                                                fontWeight: 'bold',
+                                                                borderRadius: '6px',
+                                                                fontSize: '0.74rem',
+                                                                fontWeight: 700,
                                                                 cursor: 'pointer',
-                                                                transition: 'all 0.2s',
-                                                                boxShadow: '0 1px 2px rgba(37, 99, 235, 0.05)',
+                                                                transition: 'all 0.18s',
                                                                 width: 'fit-content'
                                                             }}
                                                             onMouseOver={(e) => {
@@ -2815,39 +2935,39 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                                         >
                                                             {inv.consumer_units?.numero_uc || '-'}
                                                         </span>
-                                                        <span style={{ color: '#334155', fontSize: '0.72rem', fontWeight: '700', paddingLeft: '0.2rem', maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block' }}>
-                                                            {abbreviateName(getDisplayName(inv), 18) || '-'}
+                                                        <span style={{ color: '#0f172a', fontSize: '0.78rem', fontWeight: 700, maxWidth: '165px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block' }}>
+                                                            {abbreviateName(getDisplayName(inv), 20) || '-'}
                                                         </span>
                                                     </div>
                                                 </td>
-                                                <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center', color: '#475569', whiteSpace: 'nowrap', fontSize: '0.8rem' }}>
+                                                <td style={{ padding: '0.65rem 0.75rem', textAlign: 'center', color: '#475569', fontWeight: 600, whiteSpace: 'nowrap', fontSize: '0.78rem' }}>
                                                     {inv.mes_referencia ? inv.mes_referencia.substring(0, 7).split('-').reverse().join('/') : '-'}
                                                 </td>
-                                                <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center', fontWeight: '800', color: '#ef4444', whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
+                                                <td style={{ padding: '0.65rem 0.85rem', textAlign: 'right', fontWeight: 800, color: '#dc2626', whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
                                                     {formatCurrency(cost)}
                                                 </td>
-                                                <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center', color: '#475569', whiteSpace: 'nowrap', fontSize: '0.8rem' }}>
+                                                <td style={{ padding: '0.65rem 0.75rem', textAlign: 'center', color: '#334155', fontWeight: 600, whiteSpace: 'nowrap', fontSize: '0.78rem' }}>
                                                     {inv.vencimento_concessionaria ? inv.vencimento_concessionaria.split('-').reverse().join('/') : (inv.vencimento ? inv.vencimento.split('-').reverse().join('/') : '-')}
                                                 </td>
-                                                <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center', color: '#64748b', whiteSpace: 'nowrap', fontSize: '0.8rem' }}>
+                                                <td style={{ padding: '0.65rem 0.75rem', textAlign: 'center', color: '#64748b', whiteSpace: 'nowrap', fontSize: '0.78rem' }}>
                                                     {getAnteriorLeitura(inv)}
                                                 </td>
-                                                <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center', color: '#475569', whiteSpace: 'nowrap', fontSize: '0.8rem' }}>
+                                                <td style={{ padding: '0.65rem 0.75rem', textAlign: 'center', color: '#475569', whiteSpace: 'nowrap', fontSize: '0.78rem' }}>
                                                     {inv.data_leitura ? inv.data_leitura.split('-').reverse().join('/') : '-'}
                                                 </td>
-                                                <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center', color: '#475569', fontWeight: 'bold', whiteSpace: 'nowrap', fontSize: '0.8rem' }}>
-                                                    {inv.consumo_kwh ? `${inv.consumo_kwh} kWh` : '-'}
+                                                <td style={{ padding: '0.65rem 0.75rem', textAlign: 'right', color: '#334155', fontWeight: 700, whiteSpace: 'nowrap', fontSize: '0.78rem' }}>
+                                                    {inv.consumo_kwh ? `${Number(inv.consumo_kwh).toLocaleString('pt-BR')} kWh` : '-'}
                                                 </td>
-                                                <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center', color: '#16a34a', fontWeight: 'bold', whiteSpace: 'nowrap', fontSize: '0.8rem' }}>
-                                                    {inv.consumo_compensado ? `${inv.consumo_compensado} kWh` : '-'}
+                                                <td style={{ padding: '0.65rem 0.75rem', textAlign: 'right', color: '#15803d', fontWeight: 700, whiteSpace: 'nowrap', fontSize: '0.78rem' }}>
+                                                    {inv.consumo_compensado ? `${Number(inv.consumo_compensado).toLocaleString('pt-BR')} kWh` : '-'}
                                                 </td>
-                                                <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center', color: '#0284c7', fontWeight: 'bold', whiteSpace: 'nowrap', fontSize: '0.8rem' }}>
-                                                    {inv.energia_injetada ? `${inv.energia_injetada} kWh` : '-'}
+                                                <td style={{ padding: '0.65rem 0.75rem', textAlign: 'right', color: '#0284c7', fontWeight: 700, whiteSpace: 'nowrap', fontSize: '0.78rem' }}>
+                                                    {inv.energia_injetada ? `${Number(inv.energia_injetada).toLocaleString('pt-BR')} kWh` : '-'}
                                                 </td>
-                                                <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>
+                                                <td style={{ padding: '0.65rem 0.85rem', whiteSpace: 'nowrap' }}>
                                                     {getEnergyStatusBadge(inv)}
                                                 </td>
-                                                <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>
+                                                <td style={{ padding: '0.65rem 0.85rem', whiteSpace: 'nowrap' }}>
                                                     {getStatusBadge(inv.status)}
                                                 </td>
                                             </tr>
@@ -2867,55 +2987,185 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                             return effectiveStatus === status;
                                         });
                                         const statusMap = { 
-                                            'sem_faturamento': { color: '#2563eb', bg: '#eff6ff', label: 'Sem Faturamento' },
-                                            'confirmado': { color: '#0891b2', bg: '#ecfeff', label: 'Confirmado' },
-                                            'pago': { color: '#166534', bg: '#dcfce7', label: 'Pago' }, 
-                                            'a_vencer': { color: '#854d0e', bg: '#fef9c3', label: 'A Vencer' }, 
-                                            'atrasado': { color: '#dc2626', bg: '#fee2e2', label: 'Atrasado' } 
+                                            'sem_faturamento': { color: '#1d4ed8', dot: '#2563eb', bg: '#eff6ff', border: '#bfdbfe', label: 'Sem Faturamento' },
+                                            'confirmado': { color: '#0e7490', dot: '#0891b2', bg: '#ecfeff', border: '#a5f3fc', label: 'Confirmado' },
+                                            'pago': { color: '#166534', dot: '#16a34a', bg: '#dcfce7', border: '#bbf7d0', label: 'Pago' }, 
+                                            'a_vencer': { color: '#854d0e', dot: '#ca8a04', bg: '#fef9c3', border: '#fde047', label: 'A Vencer' }, 
+                                            'atrasado': { color: '#b91c1c', dot: '#dc2626', bg: '#fee2e2', border: '#fecaca', label: 'Atrasado' } 
                                         };
-                                    const s = statusMap[status] || { color: '#475569', bg: '#f1f5f9', label: status };
-                                    return (
-                                        <div 
-                                            key={status} 
-                                            className="kanban-column" 
-                                            style={{ borderTop: `4px solid ${s.color}` }}
-                                            onDragOver={(e) => e.preventDefault()}
-                                            onDrop={(e) => handleDrop(e, status)}
-                                        >
-                                            <div className="kanban-column-header" style={{ color: s.color }}>
-                                                <span style={{ textTransform: 'uppercase', fontSize: '0.85rem', fontWeight: 'bold' }}>{s.label}</span>
-                                                <span style={{ fontSize: '0.8rem', background: s.color, color: 'white', padding: '0.1rem 0.5rem', borderRadius: '99px' }}>{formatCurrency(invoicesInStatus.reduce((acc, curr) => acc + (Number(curr.valor_a_pagar) || 0), 0))}</span>
-                                            </div>
-                                            <div className="kanban-column-content">
-                                                {invoicesInStatus.map(inv => (
-                                                    <div 
-                                                        key={inv.id} 
-                                                        onClick={() => handleEdit(inv)} 
-                                                        className="kanban-card"
-                                                        draggable
-                                                        onDragStart={(e) => e.dataTransfer.setData('invoiceId', inv.id)}
-                                                    >
-                                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                                                            <span style={{ fontWeight: 'bold', fontSize: '1rem', color: 'var(--color-text-dark)' }}>{inv.consumer_units?.numero_uc}</span>
-                                                            <span style={{ fontSize: '1rem', color: '#1e293b', fontWeight: '800' }}>{inv.vencimento ? inv.vencimento.split('-').reverse().join('/') : '-'}</span>
-                                                        </div>
-                                                        <div style={{ fontSize: '0.85rem', color: 'var(--color-text-dark)', fontWeight: '500' }}>{getDisplayName(inv) !== '-' ? getDisplayName(inv) : ''}</div>
-                                                        {inv.consumer_units?.titular_fatura?.name && (
-                                                            <div style={{ fontSize: '0.75rem', color: '#64748b', fontStyle: 'italic', marginTop: '0.2rem' }}>
-                                                                {inv.consumer_units.titular_fatura.name}
-                                                            </div>
-                                                        )}
-                                                        <div style={{ fontWeight: 'bold', color: 'var(--color-blue)', marginTop: '0.5rem' }}>
-                                                            {Number(inv.valor_a_pagar) === 0 && inv.consumer_units?.nao_faturavel
-                                                                ? <span style={{ color: '#7c3aed', fontSize: '0.78rem' }}>Não faturável</span>
-                                                                : formatCurrency(inv.valor_a_pagar)}
-                                                        </div>
+                                        const s = statusMap[status] || { color: '#475569', dot: '#64748b', bg: '#f1f5f9', border: '#cbd5e1', label: status };
+                                        const colTotal = invoicesInStatus.reduce((acc, curr) => acc + (Number(curr.valor_a_pagar) || 0), 0);
+
+                                        return (
+                                            <div 
+                                                key={status} 
+                                                className="kanban-column" 
+                                                style={{ borderTop: `3.5px solid ${s.dot}` }}
+                                                onDragOver={(e) => e.preventDefault()}
+                                                onDrop={(e) => handleDrop(e, status)}
+                                            >
+                                                <div
+                                                    className="kanban-column-header"
+                                                    style={{
+                                                        background: `linear-gradient(180deg, ${s.bg}65 0%, #ffffff 100%)`
+                                                    }}
+                                                >
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', minWidth: 0 }}>
+                                                        <span style={{
+                                                            width: '8px',
+                                                            height: '8px',
+                                                            borderRadius: '50%',
+                                                            background: s.dot,
+                                                            boxShadow: `0 0 0 3px ${s.dot}22`,
+                                                            flexShrink: 0
+                                                        }} />
+                                                        <span style={{ textTransform: 'uppercase', fontSize: '0.76rem', fontWeight: 800, color: '#0f172a', letterSpacing: '0.03em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                            {s.label}
+                                                        </span>
+                                                        <span style={{
+                                                            fontSize: '0.68rem',
+                                                            fontWeight: 800,
+                                                            color: '#475569',
+                                                            background: '#f1f5f9',
+                                                            border: '1px solid #e2e8f0',
+                                                            padding: '0.05rem 0.42rem',
+                                                            borderRadius: '999px',
+                                                            fontVariantNumeric: 'tabular-nums',
+                                                            flexShrink: 0
+                                                        }}>
+                                                            {invoicesInStatus.length}
+                                                        </span>
                                                     </div>
-                                                ))}
+                                                    <span style={{
+                                                        fontSize: '0.74rem',
+                                                        background: s.bg,
+                                                        color: s.color,
+                                                        border: `1px solid ${s.border}`,
+                                                        padding: '0.15rem 0.55rem',
+                                                        borderRadius: '999px',
+                                                        fontWeight: 800,
+                                                        fontVariantNumeric: 'tabular-nums',
+                                                        whiteSpace: 'nowrap',
+                                                        flexShrink: 0
+                                                    }}>
+                                                        {formatCurrency(colTotal)}
+                                                    </span>
+                                                </div>
+                                                <div className="kanban-column-content">
+                                                    {invoicesInStatus.length === 0 ? (
+                                                        <div style={{
+                                                            padding: '2rem 1rem',
+                                                            margin: '0.25rem 0',
+                                                            borderRadius: '10px',
+                                                            border: '1px dashed #cbd5e1',
+                                                            background: 'rgba(255,255,255,0.5)',
+                                                            textAlign: 'center',
+                                                            color: '#94a3b8',
+                                                            fontSize: '0.76rem',
+                                                            fontWeight: 600
+                                                        }}>
+                                                            Nenhuma fatura nesta etapa
+                                                        </div>
+                                                    ) : (
+                                                        invoicesInStatus.map(inv => {
+                                                            const dueFormatted = inv.vencimento ? inv.vencimento.split('-').reverse().join('/') : '-';
+                                                            const refFormatted = inv.mes_referencia ? inv.mes_referencia.substring(0, 7).split('-').reverse().join('/') : null;
+                                                            const hasBoleto = !!inv.asaas_boleto_url;
+
+                                                            return (
+                                                                <div 
+                                                                    key={inv.id} 
+                                                                    onClick={() => handleEdit(inv)} 
+                                                                    className="kanban-card"
+                                                                    draggable
+                                                                    onDragStart={(e) => e.dataTransfer.setData('invoiceId', inv.id)}
+                                                                    style={{
+                                                                        borderLeft: `3.5px solid ${s.dot}`,
+                                                                        cursor: 'pointer'
+                                                                    }}
+                                                                >
+                                                                    {/* Topo do Card: UC + Ref | Vencimento */}
+                                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.4rem', marginBottom: '0.5rem' }}>
+                                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', minWidth: 0 }}>
+                                                                            <span style={{
+                                                                                fontWeight: 700,
+                                                                                fontSize: '0.75rem',
+                                                                                color: '#1d4ed8',
+                                                                                background: '#eff6ff',
+                                                                                border: '1px solid #bfdbfe',
+                                                                                padding: '0.12rem 0.48rem',
+                                                                                borderRadius: '6px',
+                                                                                whiteSpace: 'nowrap'
+                                                                            }}>
+                                                                                {inv.consumer_units?.numero_uc || '-'}
+                                                                            </span>
+                                                                            {refFormatted && (
+                                                                                <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#64748b', background: '#f8fafc', border: '1px solid #e2e8f0', padding: '0.1rem 0.38rem', borderRadius: '5px' }}>
+                                                                                    {refFormatted}
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                        <span style={{
+                                                                            display: 'inline-flex',
+                                                                            alignItems: 'center',
+                                                                            gap: '0.22rem',
+                                                                            fontSize: '0.73rem',
+                                                                            color: status === 'atrasado' ? '#b91c1c' : '#334155',
+                                                                            background: status === 'atrasado' ? '#fef2f2' : '#f8fafc',
+                                                                            padding: '0.12rem 0.42rem',
+                                                                            borderRadius: '5px',
+                                                                            fontWeight: 700,
+                                                                            whiteSpace: 'nowrap'
+                                                                        }}>
+                                                                            <CalendarIcon size={11} />
+                                                                            {dueFormatted}
+                                                                        </span>
+                                                                    </div>
+
+                                                                    {/* Corpo do Card: Nome do Assinante + Titular */}
+                                                                    <div style={{ fontSize: '0.86rem', color: '#0f172a', fontWeight: 700, lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                                        {getDisplayName(inv) !== '-' ? getDisplayName(inv) : 'Sem Assinante'}
+                                                                    </div>
+                                                                    {inv.consumer_units?.titular_fatura?.name && (
+                                                                        <div style={{ fontSize: '0.73rem', color: '#64748b', marginTop: '0.18rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                                            Titular: {inv.consumer_units.titular_fatura.name}
+                                                                        </div>
+                                                                    )}
+
+                                                                    {/* Rodapé do Card: Metadados + Valor */}
+                                                                    <div style={{
+                                                                        display: 'flex',
+                                                                        justifyContent: 'space-between',
+                                                                        alignItems: 'center',
+                                                                        marginTop: '0.6rem',
+                                                                        paddingTop: '0.55rem',
+                                                                        borderTop: '1px solid #f1f5f9'
+                                                                    }}>
+                                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                                                            {hasBoleto ? (
+                                                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.65rem', fontWeight: 700, color: '#0369a1', background: '#e0f2fe', padding: '0.12rem 0.42rem', borderRadius: '5px' }}>
+                                                                                    <TicketCheck size={11} /> Boleto
+                                                                                </span>
+                                                                            ) : (
+                                                                                <span style={{ fontSize: '0.68rem', color: '#94a3b8', fontWeight: 600 }}>
+                                                                                    {inv.consumo_compensado ? `${inv.consumo_compensado} kWh` : 'Fatura'}
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                        <div style={{ fontWeight: 800, fontSize: '0.96rem', color: '#0f172a' }}>
+                                                                            {Number(inv.valor_a_pagar) === 0 && inv.consumer_units?.nao_faturavel
+                                                                                ? <span style={{ color: '#7c3aed', fontSize: '0.75rem', background: '#f3e8ff', padding: '0.15rem 0.45rem', borderRadius: '5px' }}>Não faturável</span>
+                                                                                : formatCurrency(inv.valor_a_pagar)}
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })
+                                                    )}
+                                                </div>
                                             </div>
-                                        </div>
-                                    );
-                                })}
+                                        );
+                                    })}
                             </div>
                         </div>
                     ) : viewMode === 'energy_kanban' ? (
@@ -2932,18 +3182,18 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                     if (invoicesInCol.length === 0) return null;
 
                                     const colMap = { 
-                                        'pendente': { color: '#f97316', bg: '#fff7ed', label: 'Pendente' },
-                                        'indisponivel': { color: '#ef4444', bg: '#fef2f2', label: 'Indisponível' },
-                                        'baixada': { color: '#3b82f6', bg: '#eff6ff', label: 'Baixada' },
-                                        'processada': { color: '#22c55e', bg: '#f0fdf4', label: 'Processada' },
-                                        'a_vencer': { color: '#2563eb', bg: '#eff6ff', label: 'A Vencer' }, 
-                                        'inconsistente': { color: '#ea580c', bg: '#ffedd5', label: 'Inconsistente' },
-                                        'inconsistente_pago': { color: ENERGY_PAID_DIVERGENT.inconsistente_pago.color, bg: ENERGY_PAID_DIVERGENT.inconsistente_pago.bg, label: 'Inconsistente Pago' },
-                                        'contestada': { color: '#7c3aed', bg: '#f3e8ff', label: 'Contestada' },
-                                        'contestada_pago': { color: ENERGY_PAID_DIVERGENT.contestada_pago.color, bg: ENERGY_PAID_DIVERGENT.contestada_pago.bg, label: 'Contestado Pago' },
-                                        'parcelada': { color: '#ca8a04', bg: '#fef9c3', label: 'Parcelada' }, 
-                                        'atrasada': { color: '#dc2626', bg: '#fee2e2', label: 'Atrasada' },
-                                        'pago': { color: '#166534', bg: '#dcfce7', label: 'Paga' }
+                                        'pendente': { color: '#c2410c', dot: '#f97316', bg: '#fff7ed', label: 'Pendente' },
+                                        'indisponivel': { color: '#b91c1c', dot: '#ef4444', bg: '#fef2f2', label: 'Indisponível' },
+                                        'baixada': { color: '#1d4ed8', dot: '#3b82f6', bg: '#eff6ff', label: 'Baixada' },
+                                        'processada': { color: '#15803d', dot: '#22c55e', bg: '#f0fdf4', label: 'Processada' },
+                                        'a_vencer': { color: '#1d4ed8', dot: '#2563eb', bg: '#eff6ff', label: 'A Vencer' }, 
+                                        'inconsistente': { color: '#c2410c', dot: '#ea580c', bg: '#ffedd5', label: 'Inconsistente' },
+                                        'inconsistente_pago': { color: ENERGY_PAID_DIVERGENT.inconsistente_pago.color, dot: ENERGY_PAID_DIVERGENT.inconsistente_pago.color, bg: ENERGY_PAID_DIVERGENT.inconsistente_pago.bg, label: 'Inconsistente Pago' },
+                                        'contestada': { color: '#6d28d9', dot: '#7c3aed', bg: '#f3e8ff', label: 'Contestada' },
+                                        'contestada_pago': { color: ENERGY_PAID_DIVERGENT.contestada_pago.color, dot: ENERGY_PAID_DIVERGENT.contestada_pago.color, bg: ENERGY_PAID_DIVERGENT.contestada_pago.bg, label: 'Contestado Pago' },
+                                        'parcelada': { color: '#854d0e', dot: '#ca8a04', bg: '#fef9c3', label: 'Parcelada' }, 
+                                        'atrasada': { color: '#b91c1c', dot: '#dc2626', bg: '#fee2e2', label: 'Atrasada' },
+                                        'pago': { color: '#166534', dot: '#16a34a', bg: '#dcfce7', label: 'Paga' }
                                     };
                                     const s = colMap[col];
                                     
@@ -2956,7 +3206,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                         <div 
                                             key={col} 
                                             className="kanban-column" 
-                                            style={{ borderTop: `4px solid ${s.color}` }}
+                                            style={{ borderTop: `3.5px solid ${s.dot}` }}
                                             onDragOver={(e) => {
                                                 e.preventDefault();
                                                 setDropTarget({ type: 'status', label: s.label });
@@ -2967,15 +3217,59 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                                 handleEnergyDrop(e, col);
                                             }}
                                         >
-                                            <div className="kanban-column-header" style={{ color: s.color }}>
-                                                <span style={{ textTransform: 'uppercase', fontSize: '0.85rem', fontWeight: 'bold' }}>{s.label}</span>
-                                                <span style={{ fontSize: '0.8rem', background: s.color, color: 'white', padding: '0.1rem 0.5rem', borderRadius: '99px' }}>
+                                            <div
+                                                className="kanban-column-header"
+                                                style={{
+                                                    background: `linear-gradient(180deg, ${s.bg}65 0%, #ffffff 100%)`
+                                                }}
+                                            >
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', minWidth: 0 }}>
+                                                    <span style={{
+                                                        width: '8px',
+                                                        height: '8px',
+                                                        borderRadius: '50%',
+                                                        background: s.dot,
+                                                        boxShadow: `0 0 0 3px ${s.dot}22`,
+                                                        flexShrink: 0
+                                                    }} />
+                                                    <span style={{ textTransform: 'uppercase', fontSize: '0.76rem', fontWeight: 800, color: '#0f172a', letterSpacing: '0.03em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                        {s.label}
+                                                    </span>
+                                                    <span style={{
+                                                        fontSize: '0.68rem',
+                                                        fontWeight: 800,
+                                                        color: '#475569',
+                                                        background: '#f1f5f9',
+                                                        border: '1px solid #e2e8f0',
+                                                        padding: '0.05rem 0.42rem',
+                                                        borderRadius: '999px',
+                                                        fontVariantNumeric: 'tabular-nums',
+                                                        flexShrink: 0
+                                                    }}>
+                                                        {invoicesInCol.length}
+                                                    </span>
+                                                </div>
+                                                <span style={{
+                                                    fontSize: '0.74rem',
+                                                    background: s.bg,
+                                                    color: s.color,
+                                                    border: `1px solid ${s.color}30`,
+                                                    padding: '0.15rem 0.55rem',
+                                                    borderRadius: '999px',
+                                                    fontWeight: 800,
+                                                    fontVariantNumeric: 'tabular-nums',
+                                                    whiteSpace: 'nowrap',
+                                                    flexShrink: 0
+                                                }}>
                                                     {formatCurrency(totalAmount)}
                                                 </span>
                                             </div>
                                             <div className="kanban-column-content">
                                                 {invoicesInCol.map(inv => {
                                                     const cost = getEnergyBillValue(inv);
+                                                    const dueStr = inv.vencimento_concessionaria ? inv.vencimento_concessionaria.split('-').reverse().join('/') : (inv.vencimento ? inv.vencimento.split('-').reverse().join('/') : '-');
+                                                    const refStr = inv.mes_referencia ? inv.mes_referencia.substring(0, 7).split('-').reverse().join('/') : '-';
+
                                                     return (
                                                         <div 
                                                             key={inv.id} 
@@ -3011,38 +3305,67 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                                             }}
                                                             style={{ 
                                                                 cursor: 'pointer', 
+                                                                borderLeft: `3.5px solid ${s.dot}`,
                                                                 border: dropTarget?.targetId === inv.id ? '2px dashed #3b82f6' : undefined,
                                                                 transform: dropTarget?.targetId === inv.id ? 'scale(1.02)' : 'none',
                                                                 transition: 'all 0.2s'
                                                             }}
                                                         >
-                                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                                                                <span style={{ fontWeight: 'bold', fontSize: '1rem', color: 'var(--color-text-dark)' }}>
-                                                                    {inv.consumer_units?.numero_uc}
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.4rem', marginBottom: '0.5rem' }}>
+                                                                <span style={{
+                                                                    fontWeight: 700,
+                                                                    fontSize: '0.75rem',
+                                                                    color: '#1d4ed8',
+                                                                    background: '#eff6ff',
+                                                                    border: '1px solid #bfdbfe',
+                                                                    padding: '0.12rem 0.48rem',
+                                                                    borderRadius: '6px',
+                                                                    whiteSpace: 'nowrap'
+                                                                }}>
+                                                                    {inv.consumer_units?.numero_uc || '-'}
                                                                 </span>
-                                                                <span style={{ fontSize: '1rem', color: '#1e293b', fontWeight: '800' }}>
-                                                                    {inv.vencimento_concessionaria ? inv.vencimento_concessionaria.split('-').reverse().join('/') : (inv.vencimento ? inv.vencimento.split('-').reverse().join('/') : '-')}
+                                                                <span style={{
+                                                                    display: 'inline-flex',
+                                                                    alignItems: 'center',
+                                                                    gap: '0.22rem',
+                                                                    fontSize: '0.73rem',
+                                                                    color: col === 'atrasada' ? '#b91c1c' : '#334155',
+                                                                    background: col === 'atrasada' ? '#fef2f2' : '#f8fafc',
+                                                                    padding: '0.12rem 0.42rem',
+                                                                    borderRadius: '5px',
+                                                                    fontWeight: 700,
+                                                                    whiteSpace: 'nowrap'
+                                                                }}>
+                                                                    <CalendarIcon size={11} />
+                                                                    {dueStr}
                                                                 </span>
                                                             </div>
-                                                            <div style={{ fontSize: '0.85rem', color: 'var(--color-text-dark)', fontWeight: '500' }}>
-                                                                {getDisplayName(inv) !== '-' ? getDisplayName(inv) : ''}
+                                                            <div style={{ fontSize: '0.86rem', color: '#0f172a', fontWeight: 700, lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                                {getDisplayName(inv) !== '-' ? getDisplayName(inv) : 'Sem Assinante'}
                                                             </div>
                                                             {inv.consumer_units?.titular_fatura?.name && (
-                                                                <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.2rem' }}>
-                                                                    <span style={{ fontWeight: '600' }}>Titular: </span>{inv.consumer_units.titular_fatura.name}
+                                                                <div style={{ fontSize: '0.73rem', color: '#64748b', marginTop: '0.18rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                                    <span style={{ fontWeight: 600 }}>Titular: </span>{inv.consumer_units.titular_fatura.name}
                                                                 </div>
                                                             )}
                                                             {inv.consumer_units?.concessionaria && (
-                                                                <div style={{ fontSize: '0.75rem', color: '#64748b', fontStyle: 'italic', marginTop: '0.2rem' }}>
+                                                                <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '0.12rem' }}>
                                                                     {inv.consumer_units.concessionaria}
                                                                 </div>
                                                             )}
-                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem' }}>
-                                                                <span style={{ fontWeight: 'bold', color: '#ef4444' }}>
-                                                                    {formatCurrency(cost)}
+                                                            <div style={{
+                                                                display: 'flex',
+                                                                justifyContent: 'space-between',
+                                                                alignItems: 'center',
+                                                                marginTop: '0.6rem',
+                                                                paddingTop: '0.55rem',
+                                                                borderTop: '1px solid #f1f5f9'
+                                                            }}>
+                                                                <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#64748b', background: '#f8fafc', border: '1px solid #e2e8f0', padding: '0.1rem 0.4rem', borderRadius: '5px' }}>
+                                                                    Ref. {refStr}
                                                                 </span>
-                                                                <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
-                                                                    {inv.mes_referencia ? inv.mes_referencia.substring(0, 7).split('-').reverse().join('/') : '-'}
+                                                                <span style={{ fontWeight: 800, fontSize: '0.95rem', color: '#dc2626' }}>
+                                                                    {formatCurrency(cost)}
                                                                 </span>
                                                             </div>
                                                         </div>
@@ -3070,7 +3393,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                             />
                         </div>
                     ) : (
-                        <div style={{ background: '#fff1f2', borderRadius: '16px', border: '1px solid #fecaca' }}>
+                        <div style={{ background: '#f8fafc', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
                             <EnergyCalendarView 
                                 invoices={filteredInvoices} 
                                 onInvoiceClick={(inv) => {
