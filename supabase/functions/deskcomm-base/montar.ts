@@ -224,7 +224,10 @@ const ABERTURA_ANUNCIO =
     'Em anúncio de outro produto (Usinas de Investimento, Cotas e os demais), não pergunte se é pessoa física ou empresa: ' +
     'o produto já está claro, abra falando do anúncio e siga. ' +
     'A promessa do anúncio não é garantia: nunca repita um percentual do anúncio como valor garantido; ' +
-    'o percentual do cliente sai da simulação. Se o contato tiver mais de uma etiqueta de anúncio, vale a última.'
+    'o percentual do cliente sai da simulação. ' +
+    'Alguns anúncios dizem "receba o dossiê": a B2W não envia dossiê. O que existe é a apresentação on-line do projeto, ' +
+    'em reunião com o time comercial, só para leads qualificados; não prometa dossiê. ' +
+    'Se o contato tiver mais de uma etiqueta de anúncio, vale a última.'
 
 const ENTRADAS_FIXAS = `## Contato da Meta sem etiqueta de anúncio
 Contato com origem meta_ads e sem etiqueta anuncio:… é interesse em desconto na conta de luz (Energia por Assinatura). Pergunte se é pessoa física ou empresa.
