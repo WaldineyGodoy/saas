@@ -67,6 +67,13 @@ export default function Dashboard() {
     const [isDesktopCollapsed, setIsDesktopCollapsed] = useState(false);
     // Fallback if external logo URL is blocked by OpaqueResponseBlocking
     const [logoFailed, setLogoFailed] = useState(false);
+    // Theme state (light | dark) persisted in localStorage
+    const [theme, setTheme] = useState(() => localStorage.getItem('crm_theme') || 'light');
+
+    useEffect(() => {
+        document.documentElement.setAttribute('data-theme', theme);
+        localStorage.setItem('crm_theme', theme);
+    }, [theme]);
 
     useEffect(() => {
         setLogoFailed(false);
@@ -359,6 +366,39 @@ export default function Dashboard() {
                 </nav>
 
                 <div className="sidebar-footer">
+                    {!isDesktopCollapsed ? (
+                        <div className="sidebar-theme-switch" role="group" aria-label="Tema de aparência">
+                            <button
+                                type="button"
+                                onClick={() => setTheme('light')}
+                                className={`sidebar-theme-btn ${theme === 'light' ? 'is-active' : ''}`}
+                                aria-pressed={theme === 'light'}
+                            >
+                                <i className="bi bi-sun" aria-hidden="true"></i>
+                                <span>Claro</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setTheme('dark')}
+                                className={`sidebar-theme-btn ${theme === 'dark' ? 'is-active' : ''}`}
+                                aria-pressed={theme === 'dark'}
+                            >
+                                <i className="bi bi-moon-stars" aria-hidden="true"></i>
+                                <span>Escuro</span>
+                            </button>
+                        </div>
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                            className="sidebar-theme-compact-btn"
+                            title={theme === 'dark' ? 'Alternar para modo claro' : 'Alternar para modo escuro'}
+                            aria-label={theme === 'dark' ? 'Alternar para modo claro' : 'Alternar para modo escuro'}
+                        >
+                            <i className={`bi ${theme === 'dark' ? 'bi-sun' : 'bi-moon-stars'}`} aria-hidden="true"></i>
+                        </button>
+                    )}
+
                     <div
                         className="sidebar-user-row"
                         style={{ justifyContent: isDesktopCollapsed ? 'center' : 'flex-start' }}
