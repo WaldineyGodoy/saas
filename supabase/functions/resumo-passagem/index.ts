@@ -8,13 +8,17 @@ import { createClient } from 'npm:@supabase/supabase-js@2.45.0'
  * acumulado, as tentativas, a fala do cliente e o texto de quem passou, tudo
  * repetido. Aqui ele vira:
  *
- *   Nome: ...
- *   Cidade: ...
+ *   Nome / Telefone / E-mail / Cidade
  *   Interesse: <produto> · <o que pediu>
- *   Principais dúvidas: ...
- *   Dúvidas não respondidas: ...
- *   Objeções: ...
- *   Temperatura: ...            (só se o Jev já mediu)
+ *   Origem: anúncio "..." (...)          (avisa quando o interesse real é outro)
+ *   Atenção: card no funil errado        (só quando diverge)
+ *   Agente que atendeu: Bel → Sérgio
+ *   Principais dúvidas / Dúvidas não respondidas / Objeções
+ *   Temperatura (só se o Jev já mediu) / Tags
+ *
+ * O INTERESSE é o real, julgado pelo Jev só pelas mensagens do cliente: quem
+ * clica no anúncio de usina de investimento pode querer arrendar terra. O
+ * anúncio e o funil só aparecem como aviso quando divergem.
  *
  * As dúvidas e as objeções vêm do Jev (TypeSafe System One): ele não escreve
  * texto, então cada tema é uma pergunta tipada — `choice` para dúvida
@@ -154,7 +158,7 @@ async function perguntarAoJev(cfg: { base: string; chave: string; model: string 
     }
 }
 
-function perguntas(entrada: boolean): Record<string, unknown> {
+function perguntas(): Record<string, unknown> {
     const q: Record<string, unknown> = {}
     for (const [k, d] of Object.entries(DUVIDAS)) {
         q[`duvida_${k}`] = {
@@ -174,14 +178,25 @@ function perguntas(entrada: boolean): Record<string, unknown> {
             criteria: { true: 'Sim, ele disse isso', false: 'Não disse' },
         }
     }
-    if (entrada) {
-        q.categoria = {
-            type: 'choice',
-            instructions: 'Sobre qual linha de negócio da B2W o cliente está falando?',
-            criteria: DESCRICAO_CATEGORIA,
-        }
+    // O interesse REAL, sempre: quem clica no anúncio de usina pode querer
+    // arrendar terra, e o funil/agente da hora pode estar errado.
+    q.categoria = {
+        type: 'choice',
+        instructions:
+            'O que o CLIENTE quer de fato, pelo que ELE escreveu? Ignore o anúncio que ele clicou, ' +
+            'o funil em que está e o agente que atendeu: julgue só pelas mensagens do cliente.',
+        criteria: DESCRICAO_CATEGORIA,
     }
     return q
+}
+
+/** Interesse real: o do Jev quando ele tem confiança; senão o do funil. */
+function interesseReal(resp: any, funil: string | null, funilEhEntrada: boolean): string | null {
+    const escolha = resp?.choice ?? null
+    const conf = typeof resp?.confidence === 'number' ? resp.confidence : 1
+    if (escolha && escolha !== 'nenhuma' && NOME_CATEGORIA[escolha] && conf >= 0.5) return escolha
+    if (escolha === 'nenhuma' && conf >= 0.6) return 'nenhuma'
+    return funilEhEntrada ? null : funil
 }
 
 serve(async (req) => {
@@ -237,9 +252,9 @@ serve(async (req) => {
 
         if (linhas.length > 0) {
             const estado =
-                `Produto do funil: ${p.categoria_nome ?? 'não definido'}.\n` +
+                (p.anuncio_nome ? `O cliente chegou por um anúncio de ${NOME_CATEGORIA[p.anuncio_categoria] ?? 'produto não identificado'} (o anúncio NÃO prova o interesse).\n` : '') +
                 `Conversa de WhatsApp entre o cliente e a B2W Energia (mais antiga primeiro):\n${linhas.join('\n')}`
-            const r = await perguntarAoJev(cfg, estado, perguntas(p.entrada === true))
+            const r = await perguntarAoJev(cfg, estado, perguntas())
             if (!r.ok) {
                 if (!ensaio) await supabase.rpc('ponte_deskcomm_falha_resumo_passagem', { p_passagem: p.passagem_id, p_erro: r.erro })
                 itens.push({ passagem_id: p.passagem_id, erro: r.erro })
@@ -255,28 +270,51 @@ serve(async (req) => {
                 const prob = Number(r.answers[`objecao_${k}`]?.noul)
                 if (Number.isFinite(prob) && prob >= LIMIAR_OBJECAO) objecoes.push(OBJECOES[k].rotulo)
             }
-            categoriaJev = r.answers.categoria?.choice ?? null
-            jevInfo = { modelo: r.model, tokens_entrada: r.usage?.input_tokens ?? null }
+            categoriaJev = interesseReal(r.answers.categoria, p.categoria_slug, p.entrada === true)
+            jevInfo = {
+                modelo: r.model, tokens_entrada: r.usage?.input_tokens ?? null,
+                categoria_jev_bruta: r.answers.categoria?.choice ?? null,
+                categoria_jev_confianca: r.answers.categoria?.confidence ?? null,
+            }
+        } else if (p.entrada !== true) {
+            categoriaJev = p.categoria_slug
         }
 
-        const produto = p.entrada
-            ? (categoriaJev && NOME_CATEGORIA[categoriaJev]) || 'Ainda não definido'
-            : (p.categoria_nome ?? 'Ainda não definido')
+        const produto = categoriaJev === 'nenhuma'
+            ? 'Nenhum produto da B2W'
+            : (categoriaJev && NOME_CATEGORIA[categoriaJev]) || 'Ainda não definido'
         const pedido = (p.title ?? '').trim().replace(/^"[^"]*"\s*[—-]\s*/, '')
         const interesse = pedido ? `${produto} · ${frase(pedido).slice(0, 180)}` : produto
         const nome = nomeLegivel(p.lead_nome, p.contato_nome)
         const cidade = p.cidade ? `${p.cidade}${p.uf ? '/' + p.uf : ''}` : 'não informada'
         const nada = (l: string[]) => (l.length ? l.join(', ') : 'nenhuma')
+        const agentes = ((p.agentes ?? []) as string[]).filter(Boolean)
+        const tags = ((p.tags ?? []) as string[]).filter(Boolean)
 
         const linhasResumo = [
             `Nome: ${nome}`,
+            `Telefone: ${p.telefone || 'não informado'}`,
+            `E-mail: ${p.email || 'não informado'}`,
             `Cidade: ${cidade}`,
             `Interesse: ${interesse}`,
+        ]
+        // Avisos de divergência: o interesse real manda; anúncio e funil só informam.
+        if (p.anuncio_nome) {
+            const doAnuncio = NOME_CATEGORIA[p.anuncio_categoria] ?? 'produto não identificado'
+            const diverge = categoriaJev && categoriaJev !== 'nenhuma' && p.anuncio_categoria && categoriaJev !== p.anuncio_categoria
+            linhasResumo.push(`Origem: anúncio "${p.anuncio_nome}" (${doAnuncio})${diverge ? ' — o interesse real é outro' : ''}`)
+        }
+        if (p.entrada !== true && categoriaJev && categoriaJev !== 'nenhuma' && categoriaJev !== p.categoria_slug) {
+            linhasResumo.push(`Atenção: o card está no funil de ${p.categoria_nome ?? p.categoria_slug}, mas o interesse é ${produto}`)
+        }
+        linhasResumo.push(
+            `Agente que atendeu: ${agentes.length ? agentes.join(' → ') : 'nenhum'}`,
             `Principais dúvidas: ${nada(duvidas)}`,
             `Dúvidas não respondidas: ${nada(semResposta)}`,
             `Objeções: ${nada(objecoes)}`,
-        ]
+        )
         if (p.temperatura && FAIXA_LEGIVEL[p.temperatura]) linhasResumo.push(`Temperatura: ${FAIXA_LEGIVEL[p.temperatura]}`)
+        linhasResumo.push(`Tags: ${tags.length ? tags.join(', ') : 'nenhuma'}`)
         const resumo = linhasResumo.join('\n')
         const titulo = `${nome} · ${produto}`
 

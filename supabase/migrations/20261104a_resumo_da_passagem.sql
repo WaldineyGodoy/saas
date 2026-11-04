@@ -68,18 +68,39 @@ returns table (
   passagem_id uuid, organization_id uuid, contact_id uuid, conversation_id uuid,
   criado_em timestamptz, motivo_codigo text, title text, content text,
   contato_nome text, b2w_lead_id uuid, lead_nome text, cidade text, uf text,
-  temperatura text, categoria_slug text, categoria_nome text, entrada boolean
+  temperatura text, categoria_slug text, categoria_nome text, entrada boolean,
+  telefone text, email text, agentes text[], tags text[],
+  anuncio_nome text, anuncio_categoria text
 )
 language sql stable security definer
 set search_path = public, pg_temp
 as $$
   select p.id, p.organization_id, p.contact_id, p.conversation_id,
          p.criado_em, p.motivo_codigo, p.title, p.content,
-         ct.name, v.b2w_lead_id, l.name, l.cidade, l.uf,
+         coalesce(nullif(ct.name, ''), ct.display_name), v.b2w_lead_id, l.name, l.cidade, l.uf,
          l.qualificacao->'jev'->>'temperatura',
-         v.categoria, cat.nome, coalesce(cat.entrada, true)
+         v.categoria, cat.nome, coalesce(cat.entrada, true),
+         coalesce(nullif(l.phone, ''), ct.phone_number),
+         coalesce(nullif(l.email, ''), ct.email),
+         -- Os agentes que de fato escreveram na conversa, na ordem em que entraram.
+         (select array_agg(a.name order by a.primeira)
+            from (select ag.name, min(m.created_at) primeira
+                    from messages m
+                    join ai_agents ag on ag.id::text = m.metadata->>'ai_actor_id'
+                   where m.conversation_id = p.conversation_id
+                     and m.direction = 'outbound'
+                     and m.created_at <= p.criado_em + interval '2 minutes'
+                   group by ag.name) a),
+         ct.tags,
+         an.nome, an.categoria
     from passagens_de_atendimento p
     join contacts ct on ct.id = p.contact_id
+    left join lateral (
+      select a.nome, a.categoria
+        from ponte_deskcomm.anuncios a
+       where ('anuncio:' || a.slug) = any (ct.tags)
+       limit 1
+    ) an on true
     left join lateral (
       -- O card de PRODUTO vence o da Recepção; entre iguais, o mexido por último.
       select vv.b2w_lead_id, vv.categoria
