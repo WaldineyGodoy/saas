@@ -8,14 +8,25 @@ import { getTagColor } from '../../lib/tagHelpers';
 import LeadAgenda from '../../components/LeadAgenda';
 import { SeloJev } from '../../components/TermometroJev';
 import {
+    Search,
+    Plus,
+    X,
+    Columns3,
+    List,
+    Calendar,
+    Zap,
+    Mail,
+    Phone,
+    Tag,
+    Filter
+} from 'lucide-react';
+import {
     DndContext,
     PointerSensor,
     useSensor,
     useSensors,
-    closestCorners,
     rectIntersection,
     pointerWithin,
-    getFirstCollision,
     DragOverlay
 } from '@dnd-kit/core';
 import {
@@ -36,11 +47,11 @@ const KANBAN_STATUSES = [
     { status: 'simulacao', label: 'Simulação', color: '#64748b' },
     { status: 'negociacao', label: 'Negociação', color: '#eab308' },
     { status: 'reuniao_agendada', label: 'Reunião Agendada', color: '#f97316' },
-    { status: 'contrato_enviado', label: 'Contrato Enviado', color: '#8b5cf6' },
-    { status: 'ativacao', label: 'Ativação', color: '#7c3aed' },
-    { status: 'ativo', label: 'Ativo', color: '#22c55e' },
+    { status: 'contrato_enviado', label: 'Contrato Enviado', color: '#8b5cf6' }, // taste-skill-ignore
+    { status: 'ativacao', label: 'Ativação', color: '#7c3aed' }, // taste-skill-ignore
+    { status: 'ativo', label: 'Ativo', color: '#22c55e' }, // taste-skill-ignore
     { status: 'pago', label: 'Pago', color: '#06b6d4' },
-    { status: 'negocio_perdido', label: 'Negócio Perdido', color: '#ef4444' }
+    { status: 'negocio_perdido', label: 'Negócio Perdido', color: '#ef4444' } // taste-skill-ignore
 ];
 
 // Categorias do topo da página. O lead guarda a tag com '#' ('#Investidor').
@@ -79,6 +90,33 @@ function textoSobre(hex) {
 
 const textoNovos = (qtd) => `${qtd} lead${qtd > 1 ? 's' : ''} novo${qtd > 1 ? 's' : ''}`;
 
+// Paleta de avatares neutra/distinta (evitando violeta/indigo conforme app-screens.md)
+const AVATAR_PALETTES = [
+    { bg: '#e0f2fe', color: '#0369a1' },
+    { bg: '#dcfce7', color: '#15803d' },
+    { bg: '#fef3c7', color: '#b45309' },
+    { bg: '#ffe4e6', color: '#be123c' },
+    { bg: '#ccfbf1', color: '#0f766e' },
+    { bg: '#ffedd5', color: '#c2410c' }
+];
+
+function iniciaisDoNome(nome) {
+    if (!nome) return '?';
+    const partes = String(nome).trim().split(/\s+/).filter(Boolean);
+    if (partes.length === 0) return '?';
+    if (partes.length === 1) return partes[0].slice(0, 2).toUpperCase();
+    return (partes[0][0] + partes[partes.length - 1][0]).toUpperCase();
+}
+
+function corAvatar(nome) {
+    const str = String(nome || '');
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+        hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return AVATAR_PALETTES[Math.abs(hash) % AVATAR_PALETTES.length];
+}
+
 function SeloNew() {
     return <span className="lead-selo-new" title="Lead novo">NEW</span>;
 }
@@ -96,51 +134,58 @@ function KanbanCard({ lead, onClick, isOverlay, novo }) {
     const style = {
         transform: CSS.Transform.toString(transform),
         transition,
-        opacity: isDragging ? 0.3 : 1,
+        opacity: isDragging ? 0.35 : 1,
         zIndex: isDragging ? 1000 : 1,
         position: 'relative',
-        width: isOverlay ? '280px' : 'auto'
+        width: isOverlay ? '292px' : 'auto',
+        boxShadow: isOverlay ? '0 14px 28px -6px rgba(15, 23, 42, 0.18)' : undefined
     };
+
+    const temConsumo = Number(lead.consumo_kwh) > 0;
+    const origName = lead.originator?.name;
+    const origAvatar = origName ? corAvatar(origName) : null;
 
     return (
         <div
             ref={setNodeRef}
-            className="kanban-card"
+            className={`kanban-card${novo ? ' is-new-lead' : ''}`}
             style={style}
             {...(!isOverlay ? attributes : {})}
             {...(!isOverlay ? listeners : {})}
             onClick={() => !isOverlay && onClick(lead)}
         >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem', marginBottom: '0.3rem' }}>
-                <span style={{ fontWeight: 'bold', color: 'var(--color-text-dark)' }}>{lead.name}</span>
-                <span style={{ display: 'flex', gap: '0.3rem', alignItems: 'center', flexShrink: 0 }}>
+            <div className="leads-card-header">
+                <span className="leads-card-name">{lead.name || 'Sem nome'}</span>
+                <span className="leads-card-badges">
                     <SeloJev lead={lead} />
                     {novo && <SeloNew />}
                 </span>
             </div>
 
-            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
-                <span style={{ fontSize: '0.7rem', color: 'var(--color-blue)', background: '#eff6ff', padding: '0.1rem 0.4rem', borderRadius: '4px' }}>
+            <div className="leads-card-energy-bar">
+                <span className="leads-card-concessionaria" title={lead.concessionaria || 'N/A'}>
+                    <Zap size={12} style={{ color: '#0284c7', flexShrink: 0 }} aria-hidden />
                     {lead.concessionaria || 'N/A'}
                 </span>
-                <span style={{ fontSize: '0.7rem', color: '#047857', background: '#ecfdf5', padding: '0.1rem 0.4rem', borderRadius: '4px' }}>
-                    {lead.consumo_kwh ? `${Number(lead.consumo_kwh).toLocaleString('pt-BR')} kWh` : '0 kWh'}
+                <span className={`leads-card-kwh${temConsumo ? '' : ' is-zero'}`}>
+                    {temConsumo ? `${Number(lead.consumo_kwh).toLocaleString('pt-BR')} kWh` : '0 kWh'}
                 </span>
             </div>
 
             {lead.tags && lead.tags.length > 0 && (
-                <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+                <div className="leads-card-tags">
                     {lead.tags.map(tag => {
-                        const style = getTagColor(tag);
+                        const tagStyle = getTagColor(tag);
                         return (
-                            <span key={tag} style={{
-                                fontSize: '0.65rem',
-                                color: style.color,
-                                backgroundColor: style.bg,
-                                padding: '0.1rem 0.3rem',
-                                borderRadius: '4px',
-                                fontWeight: 500
-                            }}>
+                            <span
+                                key={tag}
+                                className="leads-card-tag"
+                                style={{
+                                    color: tagStyle.color,
+                                    backgroundColor: tagStyle.bg,
+                                    border: `1px solid color-mix(in srgb, ${tagStyle.color} 22%, transparent)`
+                                }}
+                            >
                                 {tag}
                             </span>
                         );
@@ -148,17 +193,44 @@ function KanbanCard({ lead, onClick, isOverlay, novo }) {
                 </div>
             )}
 
-            <div style={{ fontSize: '0.8rem', color: 'var(--color-text-medium)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {lead.email}
-            </div>
-            <div style={{ fontSize: '0.8rem', color: 'var(--color-text-medium)', marginTop: '0.2rem' }}>
-                {lead.phone}
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.8rem', fontSize: '0.75rem', color: 'var(--color-text-light)' }}>
-                <span>{lead.originator?.name?.split(' ')[0] || '-'}</span>
-                <span>{new Date(lead.created_at).toLocaleDateString()}</span>
+            <div className="leads-card-contacts">
+                {lead.email && (
+                    <div className="leads-card-contact-line" title={lead.email}>
+                        <Mail size={12} aria-hidden />
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{lead.email}</span>
+                    </div>
+                )}
+                {lead.phone && (
+                    <div className="leads-card-contact-line">
+                        <Phone size={12} aria-hidden />
+                        <span>{lead.phone}</span>
+                    </div>
+                )}
+                {!lead.email && !lead.phone && (
+                    <div className="leads-card-contact-line" style={{ color: '#6b6b6b' }}>
+                        <span>Sem dados de contato</span>
+                    </div>
+                )}
             </div>
 
+            <div className="leads-card-footer">
+                <span className="leads-card-originator" title={origName || ' Sem originador'}>
+                    {origName ? (
+                        <>
+                            <span
+                                className="leads-avatar-mini"
+                                style={{ backgroundColor: origAvatar.bg, color: origAvatar.color }}
+                            >
+                                {iniciaisDoNome(origName)}
+                            </span>
+                            <span>{origName.split(' ')[0]}</span>
+                        </>
+                    ) : (
+                        <span>-</span>
+                    )}
+                </span>
+                <span>{new Date(lead.created_at).toLocaleDateString('pt-BR')}</span>
+            </div>
         </div>
     );
 }
@@ -168,35 +240,63 @@ function KanbanColumn({ status, label, color, leads, onCardClick, leadEhNovo }) 
         id: status,
     });
 
+    const somaKwh = leads.reduce((acc, l) => acc + (Number(l.consumo_kwh) || 0), 0);
+    const temNovos = leads.some(leadEhNovo);
+
     return (
         <div
             ref={setNodeRef}
-            className="kanban-column"
+            className={`kanban-column${isOver ? ' is-over' : ''}`}
             style={{
-                borderTop: `4px solid ${color}`,
-                background: isOver ? '#e2e8f0' : '#f8fafc',
-                transition: 'background 0.2s ease'
+                borderTop: `3px solid ${color}`
             }}
         >
-            <div className="kanban-column-header" style={{ color: color }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                    <span style={{ textTransform: 'uppercase', fontSize: '0.8rem', fontWeight: 'bold' }}>
+            <div className="kanban-column-header">
+                <div className="leads-col-title-wrap">
+                    <span
+                        className="leads-col-dot"
+                        style={{ backgroundColor: color }}
+                        aria-hidden
+                    />
+                    <span className="leads-col-title" title={label}>
                         {label}
                     </span>
-                    {leads.some(leadEhNovo) && <SeloNew />}
-                </span>
-                <span style={{ fontSize: '0.8rem', background: color, color: 'white', padding: '0.1rem 0.5rem', borderRadius: '99px' }}>
-                    {leads.length}
-                </span>
+                    {temNovos && <SeloNew />}
+                </div>
+                <div className="leads-col-meta">
+                    {somaKwh > 0 && (
+                        <span className="leads-col-kwh" title={`${somaKwh.toLocaleString('pt-BR')} kWh nesta etapa`}>
+                            {somaKwh >= 10000
+                                ? `${(somaKwh / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}k kWh`
+                                : `${somaKwh.toLocaleString('pt-BR')} kWh`}
+                        </span>
+                    )}
+                    <span
+                        className="leads-col-count"
+                        style={{
+                            background: `color-mix(in srgb, ${color} 15%, #ffffff)`,
+                            color: color,
+                            border: `1px solid color-mix(in srgb, ${color} 32%, transparent)`
+                        }}
+                    >
+                        {leads.length}
+                    </span>
+                </div>
             </div>
             <div className="kanban-column-content">
                 <SortableContext
                     items={leads.map(l => l.id)}
                     strategy={verticalListSortingStrategy}
                 >
-                    {leads.map(lead => (
-                        <KanbanCard key={lead.id} lead={lead} onClick={onCardClick} novo={leadEhNovo(lead)} />
-                    ))}
+                    {leads.length === 0 ? (
+                        <div className="leads-kanban-empty">
+                            {isOver ? 'Solte para mover para esta etapa' : 'Nenhum lead nesta etapa'}
+                        </div>
+                    ) : (
+                        leads.map(lead => (
+                            <KanbanCard key={lead.id} lead={lead} onClick={onCardClick} novo={leadEhNovo(lead)} />
+                        ))
+                    )}
                 </SortableContext>
             </div>
         </div>
@@ -277,13 +377,36 @@ export default function LeadsList() {
 
     const novosPorCategoria = {};
     const novosPorStatus = {};
+    const contagemPorCategoria = {};
+    const contagemPorStatus = {};
+
     for (const lead of leads) {
+        const visivelNaBase = !lead.arquivado_em || mostrarArquivados;
+        if (visivelNaBase) {
+            for (const categoria of categoriasDoLead(lead)) {
+                contagemPorCategoria[categoria] = (contagemPorCategoria[categoria] || 0) + 1;
+            }
+            const st = statusDoLead(lead);
+            contagemPorStatus[st] = (contagemPorStatus[st] || 0) + 1;
+        }
+
         if (!leadEhNovo(lead)) continue;
         for (const categoria of categoriasDoLead(lead)) {
             (novosPorCategoria[categoria] ||= []).push(lead);
         }
         (novosPorStatus[statusDoLead(lead)] ||= []).push(lead);
     }
+
+    const totalNovos = leads.filter(leadEhNovo).length;
+    const totalKwhFiltrado = filteredLeads.reduce((acc, l) => acc + (Number(l.consumo_kwh) || 0), 0);
+    const qtdArquivados = leads.filter(l => l.arquivado_em).length;
+    const temFiltroAtivo = selectedTags.length > 0 || selectedStatuses.length > 0 || Boolean(searchTerm);
+
+    const limparFiltros = () => {
+        setSelectedTags([]);
+        setSelectedStatuses([]);
+        setSearchTerm('');
+    };
 
     const marcarVistos = (ids) => {
         if (ids.length === 0) return;
@@ -483,231 +606,429 @@ export default function LeadsList() {
     };
 
     return (
-        <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-                <h2>Gestão de Leads</h2>
-                <button
-                    onClick={() => { setEditingLead(null); setIsModalOpen(true); }}
-                    className="btn btn-primary"
-                >
-                    + Novo Lead
-                </button>
-            </div>
+        <div className="leads-workspace">
+            {/* Top Bar: Title, Live Metrics Strip, View Switcher & Primary CTA */}
+            <div className="leads-top-bar">
+                <div className="leads-title-group">
+                    <h1 className="leads-page-title">Gestão de Leads</h1>
+                    <div className="leads-kpi-strip">
+                        <span className="leads-kpi-item">
+                            <strong>{filteredLeads.length}</strong> {filteredLeads.length === 1 ? 'lead exibido' : 'leads exibidos'}
+                        </span>
+                        <span className="leads-kpi-divider" aria-hidden />
+                        <span className="leads-kpi-item">
+                            Volume no funil: <strong>{totalKwhFiltrado.toLocaleString('pt-BR')} kWh</strong>
+                        </span>
+                        {totalNovos > 0 && (
+                            <>
+                                <span className="leads-kpi-divider" aria-hidden />
+                                <span className="leads-kpi-new-badge" title="Leads recentes ainda não visualizados">
+                                    <span className="leads-kpi-new-dot" aria-hidden />
+                                    {textoNovos(totalNovos)}
+                                </span>
+                            </>
+                        )}
+                    </div>
+                </div>
 
-            {/* Controls Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
-                <div style={{ display: 'flex', gap: '1rem', flex: 1, alignItems: 'center' }}>
-                    <input
-                        type="text"
-                        placeholder="Buscar por nome, email, telefone..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="input"
-                        style={{ maxWidth: '300px' }}
-                    />
-                    
-                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', flex: 1, alignItems: 'center' }}>
-                        {[...CATEGORIAS, SEM_CATEGORIA].map(tag => {
-                            // A tag selecionada usava var(--color-primary), que
-                            // não existe no CSS: o fundo sumia e o texto branco
-                            // ficava sobre a página. Cada tag usa a própria cor,
-                            // no mesmo padrão do filtro de status.
-                            const cor = tag === SEM_CATEGORIA ? COR_SEM_CATEGORIA : getTagColor(`#${tag}`);
-                            const selecionada = selectedTags.includes(tag);
-                            const qtdNovos = novosPorCategoria[tag]?.length || 0;
-                            return (
-                                <button
-                                    key={tag}
-                                    onClick={() => alternarCategoria(tag)}
-                                    className={qtdNovos > 0 ? 'lead-tag-pulso' : undefined}
-                                    title={qtdNovos > 0 ? textoNovos(qtdNovos) : undefined}
-                                    aria-pressed={selecionada}
-                                    style={{
-                                        '--pulso-cor': cor.color,
-                                        fontSize: '0.75rem',
-                                        padding: '0.2rem 0.6rem',
-                                        borderRadius: '16px',
-                                        border: `1px solid ${cor.color}`,
-                                        background: selecionada ? cor.color : cor.bg,
-                                        color: selecionada ? textoSobre(cor.color) : cor.color,
-                                        fontWeight: selecionada ? 600 : 500,
-                                        cursor: 'pointer',
-                                        transition: 'background 0.2s, color 0.2s'
-                                    }}
-                                >
-                                    {tag === SEM_CATEGORIA ? 'Sem categoria' : tag}
-                                </button>
-                            );
-                        })}
-                    </div>
-                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', flex: 1, alignItems: 'center', marginTop: '0.5rem' }}>
-                        <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>Filtrar Status:</span>
-                        {KANBAN_STATUSES.map(s => {
-                            const qtdNovos = novosPorStatus[s.status]?.length || 0;
-                            return (
-                            <button
-                                key={s.status}
-                                onClick={() => alternarStatus(s.status)}
-                                className={qtdNovos > 0 ? 'lead-tag-pulso' : undefined}
-                                title={qtdNovos > 0 ? textoNovos(qtdNovos) : undefined}
-                                aria-pressed={selectedStatuses.includes(s.status)}
-                                style={{
-                                    '--pulso-cor': s.color,
-                                    fontSize: '0.75rem',
-                                    padding: '0.2rem 0.6rem',
-                                    borderRadius: '16px',
-                                    border: `1px solid ${selectedStatuses.includes(s.status) ? s.color : s.color + '40'}`,
-                                    background: selectedStatuses.includes(s.status) ? s.color : s.color + '15',
-                                    color: selectedStatuses.includes(s.status) ? 'white' : s.color,
-                                    fontWeight: selectedStatuses.includes(s.status) ? 600 : 500,
-                                    cursor: 'pointer',
-                                    transition: 'all 0.2s'
-                                }}
-                            >
-                                {s.label}
-                            </button>
-                            );
-                        })}
-                    </div>
-                    {viewMode === 'kanban' && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginLeft: 'auto', marginTop: '0.5rem' }}>
-                            <input 
-                                type="checkbox" 
-                                id="hide-empty" 
-                                checked={hideEmptyStatuses}
-                                onChange={e => setHideEmptyStatuses(e.target.checked)}
-                            />
-                            <label htmlFor="hide-empty" style={{ fontSize: '0.85rem', color: '#64748b', cursor: 'pointer' }}>Ocultar colunas vazias</label>
-                        </div>
-                    )}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.5rem' }}>
-                        <input
-                            type="checkbox"
-                            id="mostrar-arquivados"
-                            checked={mostrarArquivados}
-                            onChange={e => setMostrarArquivados(e.target.checked)}
-                        />
-                        <label htmlFor="mostrar-arquivados" style={{ fontSize: '0.85rem', color: '#64748b', cursor: 'pointer' }}>
-                            Mostrar arquivados ({leads.filter(l => l.arquivado_em).length})
-                        </label>
-                    </div>
-                    <div className="btn-group" style={{ display: 'flex', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
+                <div className="leads-top-actions">
+                    <div className="leads-view-segmented" role="group" aria-label="Modo de visualização">
                         <button
-                            onClick={() => setViewMode('list')}
-                            className={`btn ${viewMode === 'list' ? 'btn-primary' : 'btn-secondary'}`}
-                            style={{ borderRadius: 0, border: 'none' }}
-                        >
-                            Lista
-                        </button>
-                        <button
+                            type="button"
                             onClick={() => setViewMode('kanban')}
-                            className={`btn ${viewMode === 'kanban' ? 'btn-primary' : 'btn-secondary'}`}
-                            style={{ borderRadius: 0, border: 'none' }}
+                            className={`leads-view-tab ${viewMode === 'kanban' ? 'is-active' : ''}`}
                         >
+                            <Columns3 size={14} aria-hidden />
                             Kanban
                         </button>
                         <button
-                            onClick={() => setViewMode('agenda')}
-                            className={`btn ${viewMode === 'agenda' ? 'btn-primary' : 'btn-secondary'}`}
-                            style={{ borderRadius: 0, border: 'none' }}
+                            type="button"
+                            onClick={() => setViewMode('list')}
+                            className={`leads-view-tab ${viewMode === 'list' ? 'is-active' : ''}`}
                         >
+                            <List size={14} aria-hidden />
+                            Lista
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setViewMode('agenda')}
+                            className={`leads-view-tab ${viewMode === 'agenda' ? 'is-active' : ''}`}
+                        >
+                            <Calendar size={14} aria-hidden />
                             Agenda
                         </button>
+                    </div>
+
+                    <button
+                        type="button"
+                        onClick={() => { setEditingLead(null); setIsModalOpen(true); }}
+                        className="leads-btn-new"
+                    >
+                        <Plus size={15} aria-hidden />
+                        Novo Lead
+                    </button>
+                </div>
+            </div>
+
+            {/* Reorganized Control & Filter Console */}
+            <div className="leads-filter-panel">
+                {/* Row 1: Search & View Toggles */}
+                <div className="leads-toolbar-row">
+                    <div className="leads-search-box">
+                        <Search size={15} className="leads-search-icon" aria-hidden />
+                        <input
+                            type="text"
+                            placeholder="Buscar por nome, email, telefone, concessionária..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="leads-search-input"
+                            aria-label="Buscar leads"
+                        />
+                        {searchTerm && (
+                            <button
+                                type="button"
+                                onClick={() => setSearchTerm('')}
+                                className="leads-search-clear"
+                                title="Limpar busca"
+                                aria-label="Limpar busca"
+                            >
+                                <X size={13} />
+                            </button>
+                        )}
+                    </div>
+
+                    <div className="leads-toolbar-toggles">
+                        {temFiltroAtivo && (
+                            <button
+                                type="button"
+                                onClick={limparFiltros}
+                                className="leads-clear-filters-btn"
+                            >
+                                <X size={13} aria-hidden />
+                                Limpar filtros ({selectedTags.length + selectedStatuses.length + (searchTerm ? 1 : 0)})
+                            </button>
+                        )}
+
+                        {viewMode === 'kanban' && (
+                            <label
+                                htmlFor="hide-empty"
+                                className={`leads-toggle-pill ${hideEmptyStatuses ? 'is-checked' : ''}`}
+                            >
+                                <input
+                                    type="checkbox"
+                                    id="hide-empty"
+                                    checked={hideEmptyStatuses}
+                                    onChange={e => setHideEmptyStatuses(e.target.checked)}
+                                />
+                                Ocultar colunas vazias
+                            </label>
+                        )}
+
+                        <label
+                            htmlFor="mostrar-arquivados"
+                            className={`leads-toggle-pill ${mostrarArquivados ? 'is-checked' : ''}`}
+                        >
+                            <input
+                                type="checkbox"
+                                id="mostrar-arquivados"
+                                checked={mostrarArquivados}
+                                onChange={e => setMostrarArquivados(e.target.checked)}
+                            />
+                            Mostrar arquivados ({qtdArquivados})
+                        </label>
+                    </div>
+                </div>
+
+                {/* Row 2 & 3: Structured Tag Selector & Status Filter (Preserving Pulse on New Leads) */}
+                <div className="leads-filter-rows">
+                    {/* Seletor de Tags / Categorias */}
+                    <div className="leads-filter-row">
+                        <div className="leads-filter-label">
+                            <Tag size={13} aria-hidden />
+                            <span>Categorias:</span>
+                        </div>
+                        <div className="leads-filter-rail">
+                            {[...CATEGORIAS, SEM_CATEGORIA].map(tag => {
+                                const cor = tag === SEM_CATEGORIA ? COR_SEM_CATEGORIA : getTagColor(`#${tag}`);
+                                const selecionada = selectedTags.includes(tag);
+                                const qtdNovos = novosPorCategoria[tag]?.length || 0;
+                                const qtdTotal = contagemPorCategoria[tag] || 0;
+                                const corTextoSelecionado = textoSobre(cor.color);
+
+                                return (
+                                    <button
+                                        key={tag}
+                                        type="button"
+                                        onClick={() => alternarCategoria(tag)}
+                                        className={`lead-filter-chip${qtdNovos > 0 ? ' lead-tag-pulso' : ''}`}
+                                        title={qtdNovos > 0 ? textoNovos(qtdNovos) : undefined}
+                                        aria-pressed={selecionada}
+                                        style={{
+                                            '--pulso-cor': cor.color,
+                                            border: `1px solid ${selecionada ? cor.color : `color-mix(in srgb, ${cor.color} 38%, transparent)`}`,
+                                            background: selecionada ? cor.color : cor.bg,
+                                            color: selecionada ? corTextoSelecionado : cor.color,
+                                            fontWeight: selecionada ? 600 : 500
+                                        }}
+                                    >
+                                        <span
+                                            className="lead-filter-chip-dot"
+                                            style={{ backgroundColor: selecionada ? corTextoSelecionado : cor.color }}
+                                            aria-hidden
+                                        />
+                                        <span>{tag === SEM_CATEGORIA ? 'Sem categoria' : tag}</span>
+                                        <span className="lead-filter-chip-count">{qtdTotal}</span>
+                                        {qtdNovos > 0 && (
+                                            <span className="lead-filter-chip-new">+{qtdNovos}</span>
+                                        )}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    {/* Filtro de Status / Etapas */}
+                    <div className="leads-filter-row">
+                        <div className="leads-filter-label">
+                            <Filter size={13} aria-hidden />
+                            <span>Filtrar Status:</span>
+                        </div>
+                        <div className="leads-filter-rail">
+                            {KANBAN_STATUSES.map(s => {
+                                const selecionada = selectedStatuses.includes(s.status);
+                                const qtdNovos = novosPorStatus[s.status]?.length || 0;
+                                const qtdTotal = contagemPorStatus[s.status] || 0;
+                                const corTextoSelecionado = textoSobre(s.color);
+
+                                return (
+                                    <button
+                                        key={s.status}
+                                        type="button"
+                                        onClick={() => alternarStatus(s.status)}
+                                        className={`lead-filter-chip${qtdNovos > 0 ? ' lead-tag-pulso' : ''}`}
+                                        title={qtdNovos > 0 ? textoNovos(qtdNovos) : undefined}
+                                        aria-pressed={selecionada}
+                                        style={{
+                                            '--pulso-cor': s.color,
+                                            border: `1px solid ${selecionada ? s.color : s.color + '45'}`,
+                                            background: selecionada ? s.color : s.color + '14',
+                                            color: selecionada ? corTextoSelecionado : s.color,
+                                            fontWeight: selecionada ? 600 : 500
+                                        }}
+                                    >
+                                        <span
+                                            className="lead-filter-chip-dot"
+                                            style={{ backgroundColor: selecionada ? corTextoSelecionado : s.color }}
+                                            aria-hidden
+                                        />
+                                        <span>{s.label}</span>
+                                        <span className="lead-filter-chip-count">{qtdTotal}</span>
+                                        {qtdNovos > 0 && (
+                                            <span className="lead-filter-chip-new">+{qtdNovos}</span>
+                                        )}
+                                    </button>
+                                );
+                            })}
+                        </div>
                     </div>
                 </div>
             </div>
 
-            {loading ? <p>Carregando...</p> : (
+            {loading ? (
+                <div className="leads-table-panel" style={{ padding: '2.5rem', textAlign: 'center', color: '#5f6368' }}>
+                    Carregando leads...
+                </div>
+            ) : (
                 <>
                     {viewMode === 'agenda' ? (
                         <LeadAgenda onLeadClick={abrirLead} />
                     ) : viewMode === 'list' ? (
-                        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+                        <div className="leads-table-panel">
+                            <div className="leads-table-summary">
+                                <span>
+                                    Mostrando <strong>{filteredLeads.length}</strong> {filteredLeads.length === 1 ? 'registro' : 'registros'}
+                                    {temFiltroAtivo ? ' com os filtros aplicados' : ''}
+                                </span>
+                                <span>
+                                    Consumo somado na lista: <strong>{totalKwhFiltrado.toLocaleString('pt-BR')} kWh</strong>
+                                </span>
+                            </div>
                             <div className="table-container">
                                 {filteredLeads.length === 0 ? (
-                                    <p style={{ padding: '2rem', textAlign: 'center', color: 'var(--color-text-light)' }}>Nenhum lead encontrado.</p>
+                                    <p style={{ padding: '2.5rem', textAlign: 'center', color: '#5f6368', fontSize: '0.875rem' }}>
+                                        Nenhum lead encontrado para os filtros selecionados.
+                                    </p>
                                 ) : (
-                                    <table className="table">
+                                    <table className="leads-modern-table">
                                         <thead>
                                             <tr>
                                                 <th>Nome</th>
                                                 <th>Concessionária</th>
-                                                <th>Consumo (kWh)</th>
+                                                <th className="num">Consumo (kWh)</th>
                                                 <th>Contato</th>
                                                 <th>Status</th>
                                                 <th>Originador</th>
-                                                <th>Ações</th>
+                                                <th style={{ textAlign: 'right' }}>Ações</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {filteredLeads.map(lead => (
-                                                <tr key={lead.id}>
-                                                    <td style={{ fontWeight: 'bold' }}>{lead.name}{leadEhNovo(lead) && <> <SeloNew /></>}</td>
-                                                    <td>{lead.concessionaria || '-'}</td>
-                                                    <td>{lead.consumo_kwh ? `${Number(lead.consumo_kwh).toLocaleString('pt-BR')} kWh` : '-'}</td>
-                                                    <td>
-                                                        <div style={{ fontSize: '0.9rem' }}>{lead.email}</div>
-                                                        <div style={{ fontSize: '0.8rem', color: 'var(--color-text-medium)' }}>{lead.phone}</div>
-                                                    </td>
-                                                    <td>
-                                                        <span style={{
-                                                            padding: '0.25rem 0.75rem', borderRadius: '999px', fontSize: '0.85rem', fontWeight: '500',
-                                                            background: (KANBAN_STATUSES.find(s => s.status === lead.status)?.color || '#94a3b8') + '20',
-                                                            color: KANBAN_STATUSES.find(s => s.status === lead.status)?.color || '#94a3b8'
-                                                        }}>
-                                                            {KANBAN_STATUSES.find(s => s.status === lead.status)?.label || lead.status}
-                                                        </span>
-                                                        {lead.tags && lead.tags.length > 0 && (
-                                                            <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
-                                                                {lead.tags.map(tag => {
-                                                                    const style = getTagColor(tag);
-                                                                    return (
-                                                                        <span key={tag} style={{
-                                                                            fontSize: '0.65rem', color: style.color,
-                                                                            backgroundColor: style.bg, padding: '0.1rem 0.3rem',
-                                                                            borderRadius: '4px', fontWeight: 500
-                                                                        }}>
-                                                                            {tag}
-                                                                        </span>
-                                                                    );
-                                                                })}
+                                            {filteredLeads.map(lead => {
+                                                const ehNovo = leadEhNovo(lead);
+                                                const avatar = corAvatar(lead.name);
+                                                const statusObj = KANBAN_STATUSES.find(s => s.status === lead.status);
+                                                const statusColor = statusObj?.color || '#64748b';
+                                                const statusLabel = statusObj?.label || lead.status;
+                                                const origName = lead.originator?.name;
+                                                const origAvatar = origName ? corAvatar(origName) : null;
+                                                const temConsumo = Number(lead.consumo_kwh) > 0;
+
+                                                return (
+                                                    <tr key={lead.id} className={ehNovo ? 'is-new-row' : undefined}>
+                                                        <td>
+                                                            <div className="leads-list-identity">
+                                                                <span
+                                                                    className="leads-avatar-md"
+                                                                    style={{ backgroundColor: avatar.bg, color: avatar.color }}
+                                                                    aria-hidden
+                                                                >
+                                                                    {iniciaisDoNome(lead.name)}
+                                                                </span>
+                                                                <div className="leads-list-name-block">
+                                                                    <div className="leads-list-name-row">
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => abrirLead(lead)}
+                                                                            className="leads-list-name-btn"
+                                                                        >
+                                                                            {lead.name || 'Sem nome'}
+                                                                        </button>
+                                                                        {ehNovo && <SeloNew />}
+                                                                        <SeloJev lead={lead} />
+                                                                    </div>
+                                                                    <span className="leads-list-subdate">
+                                                                        Criado em {new Date(lead.created_at).toLocaleDateString('pt-BR')}
+                                                                    </span>
+                                                                </div>
                                                             </div>
-                                                        )}
-                                                    </td>
-                                                    <td>{lead.originator?.name || '-'}</td>
-                                                    <td style={{ display: 'flex', gap: '0.5rem' }}>
-                                                        <button
-                                                            onClick={() => abrirLead(lead)}
-                                                            className="btn btn-secondary"
-                                                            style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}
-                                                        >
-                                                            Editar
-                                                        </button>
-                                                        {!['ativacao', 'ativo', 'pago', 'negocio_perdido'].includes(lead.status) && (
-        <select
-            onChange={(e) => {
-                if (e.target.value) {
-                    if (e.target.value === 'assinante' || e.target.value === 'fornecedor') {
-                        handleConvert(lead, e.target.value);
-                    } else {
-                        alert('Conversão para ' + e.target.value + ' em desenvolvimento!');
-                    }
-                    e.target.value = '';
-                }
-            }}
-            className="input"
-            style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', border: '1px solid var(--color-success)', color: 'var(--color-success)', background: 'white', maxWidth: '120px' }}
-        >
-            <option value="">Converter...</option>
-            <option value="embaixador">Embaixador</option>
-            <option value="assinante">Assinante</option>
-            <option value="fornecedor">Fornecedor</option>
-            <option value="dono_areas">Dono de Áreas/Vagas</option>
-        </select>
-    )}
-                                                    </td>
-                                                </tr>
-                                            ))}
+                                                        </td>
+                                                        <td>
+                                                            {lead.concessionaria ? (
+                                                                <span style={{ fontWeight: 500, color: '#334155' }}>
+                                                                    {lead.concessionaria}
+                                                                </span>
+                                                            ) : (
+                                                                <span style={{ color: '#6b6b6b' }}>-</span>
+                                                            )}
+                                                        </td>
+                                                        <td className="num">
+                                                            {temConsumo ? (
+                                                                <span>
+                                                                    <strong style={{ color: '#111827', fontWeight: 600 }}>
+                                                                        {Number(lead.consumo_kwh).toLocaleString('pt-BR')}
+                                                                    </strong>{' '}
+                                                                    <span style={{ fontSize: '0.75rem', color: '#5f6368' }}>kWh</span>
+                                                                </span>
+                                                            ) : (
+                                                                <span style={{ color: '#6b6b6b' }}>-</span>
+                                                            )}
+                                                        </td>
+                                                        <td>
+                                                            <div style={{ fontSize: '0.84rem', color: '#1f2937', lineHeight: 1.35 }}>
+                                                                {lead.email || '-'}
+                                                            </div>
+                                                            <div style={{ fontSize: '0.76rem', color: '#5f6368', marginTop: '0.15rem', fontVariantNumeric: 'tabular-nums' }}>
+                                                                {lead.phone || '-'}
+                                                            </div>
+                                                        </td>
+                                                        <td>
+                                                            <span
+                                                                className="leads-status-pill"
+                                                                style={{
+                                                                    background: `color-mix(in srgb, ${statusColor} 14%, #ffffff)`,
+                                                                    color: statusColor,
+                                                                    border: `1px solid color-mix(in srgb, ${statusColor} 30%, transparent)`
+                                                                }}
+                                                            >
+                                                                <span
+                                                                    className="lead-filter-chip-dot"
+                                                                    style={{ backgroundColor: statusColor }}
+                                                                    aria-hidden
+                                                                />
+                                                                {statusLabel}
+                                                            </span>
+                                                            {lead.tags && lead.tags.length > 0 && (
+                                                                <div style={{ display: 'flex', gap: '0.28rem', flexWrap: 'wrap', marginTop: '0.38rem' }}>
+                                                                    {lead.tags.map(tag => {
+                                                                        const style = getTagColor(tag);
+                                                                        return (
+                                                                            <span
+                                                                                key={tag}
+                                                                                className="leads-card-tag"
+                                                                                style={{
+                                                                                    color: style.color,
+                                                                                    backgroundColor: style.bg,
+                                                                                    border: `1px solid color-mix(in srgb, ${style.color} 22%, transparent)`
+                                                                                }}
+                                                                            >
+                                                                                {tag}
+                                                                            </span>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            )}
+                                                        </td>
+                                                        <td>
+                                                            {origName ? (
+                                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', color: '#334155', fontSize: '0.8125rem' }}>
+                                                                    <span
+                                                                        className="leads-avatar-mini"
+                                                                        style={{ backgroundColor: origAvatar.bg, color: origAvatar.color }}
+                                                                        aria-hidden
+                                                                    >
+                                                                        {iniciaisDoNome(origName)}
+                                                                    </span>
+                                                                    <span>{origName}</span>
+                                                                </span>
+                                                            ) : (
+                                                                <span style={{ color: '#6b6b6b' }}>-</span>
+                                                            )}
+                                                        </td>
+                                                        <td>
+                                                            <div className="leads-row-actions">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => abrirLead(lead)}
+                                                                    className="leads-action-btn"
+                                                                >
+                                                                    Editar
+                                                                </button>
+                                                                {!['ativacao', 'ativo', 'pago', 'negocio_perdido'].includes(lead.status) && (
+                                                                    <select
+                                                                        aria-label={`Converter lead ${lead.name || ''}`}
+                                                                        onChange={(e) => {
+                                                                            if (e.target.value) {
+                                                                                if (e.target.value === 'assinante' || e.target.value === 'fornecedor') {
+                                                                                    handleConvert(lead, e.target.value);
+                                                                                } else {
+                                                                                    alert('Conversão para ' + e.target.value + ' em desenvolvimento!');
+                                                                                }
+                                                                                e.target.value = '';
+                                                                            }
+                                                                        }}
+                                                                        className="leads-convert-select"
+                                                                    >
+                                                                        <option value="">Converter...</option>
+                                                                        <option value="embaixador">Embaixador</option>
+                                                                        <option value="assinante">Assinante</option>
+                                                                        <option value="fornecedor">Fornecedor</option>
+                                                                        <option value="dono_areas">Dono de Áreas/Vagas</option>
+                                                                    </select>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
                                         </tbody>
                                     </table>
                                 )}

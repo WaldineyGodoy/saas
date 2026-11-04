@@ -28,6 +28,33 @@ import RateioList from './dashboards/RateioList';
 import Arrendamento from './dashboards/Arrendamento';
 import ProtocolList from './dashboards/ProtocolList';
 
+const ROLE_LABELS = {
+    super_admin: 'Super admin',
+    admin: 'Administrador',
+    manager: 'Gestor',
+    coordinator: 'Coordenador',
+    originator: 'Originador',
+    broker: 'Corretor',
+    supplier: 'Fornecedor',
+    subscriber: 'Assinante',
+    lead: 'Lead'
+};
+
+function iniciaisPerfil(nome) {
+    if (!nome) return 'U';
+    const partes = String(nome).trim().split(/\s+/).filter(Boolean);
+    if (partes.length === 0) return 'U';
+    if (partes.length === 1) return partes[0].slice(0, 2).toUpperCase();
+    return (partes[0][0] + partes[partes.length - 1][0]).toUpperCase();
+}
+
+function rotuloPapel(role) {
+    if (!role) return 'Usuário';
+    if (ROLE_LABELS[role]) return ROLE_LABELS[role];
+    const limpo = String(role).replace(/_/g, ' ').toLowerCase();
+    return limpo.charAt(0).toUpperCase() + limpo.slice(1);
+}
+
 export default function Dashboard() {
     const { profile, signOut } = useAuth();
     const { branding } = useBranding();
@@ -38,8 +65,20 @@ export default function Dashboard() {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     // Desktop sidebar state
     const [isDesktopCollapsed, setIsDesktopCollapsed] = useState(false);
+    // Fallback if external logo URL is blocked by OpaqueResponseBlocking
+    const [logoFailed, setLogoFailed] = useState(false);
+    // Theme state (light | dark) persisted in localStorage
+    const [theme, setTheme] = useState(() => localStorage.getItem('crm_theme') || 'light');
 
-    // Reset view when profile loads
+    useEffect(() => {
+        document.documentElement.setAttribute('data-theme', theme);
+        localStorage.setItem('crm_theme', theme);
+    }, [theme]);
+
+    useEffect(() => {
+        setLogoFailed(false);
+    }, [branding?.logo_url]);
+
     // Reset view when profile loads (only if checking for the first time)
     useEffect(() => {
         if (profile && activeView === 'default') {
@@ -82,37 +121,37 @@ export default function Dashboard() {
 
         // 0. Graph Node View (Obsidian Graph View)
         if (role !== 'subscriber' && role !== 'supplier' && role !== 'lead') {
-            items.push({ id: 'graph_node_view', label: 'Graph Node View', icon: 'bi-share' });
+            items.push({ id: 'graph_node_view', label: 'Graph Node View', icon: 'bi-share', group: 'Comercial' });
         }
 
         // 1. Leads
         if (role !== 'subscriber') {
-            items.push({ id: 'leads', label: 'Leads', icon: 'bi-megaphone' });
+            items.push({ id: 'leads', label: 'Leads', icon: 'bi-megaphone', group: 'Comercial' });
         }
 
         // 2. Originadores
         const originatorsAllowed = ['originator', 'coordinator', 'manager', 'admin', 'super_admin'];
         if (originatorsAllowed.includes(role)) {
             if (role === 'originator') {
-                items.push({ id: 'originator_dashboard', label: 'Minhas Comissões', icon: 'bi-speedometer2' });
-                items.push({ id: 'originators_list', label: 'Equipe', icon: 'bi-briefcase' });
+                items.push({ id: 'originator_dashboard', label: 'Minhas Comissões', icon: 'bi-speedometer2', group: 'Comercial' });
+                items.push({ id: 'originators_list', label: 'Equipe', icon: 'bi-briefcase', group: 'Comercial' });
             } else {
-                items.push({ id: 'originators_list', label: 'Originadores', icon: 'bi-briefcase' });
+                items.push({ id: 'originators_list', label: 'Originadores', icon: 'bi-briefcase', group: 'Comercial' });
             }
         }
 
         // 3. Assinantes
         if (role !== 'lead') {
             if (role === 'subscriber') {
-                items.push({ id: 'subscriber_dashboard', label: 'Meu Painel', icon: 'bi-speedometer2' });
+                items.push({ id: 'subscriber_dashboard', label: 'Meu Painel', icon: 'bi-speedometer2', group: 'Comercial' });
             } else {
-                items.push({ id: 'subscribers_list', label: 'Assinantes', icon: 'bi-person-check' });
+                items.push({ id: 'subscribers_list', label: 'Assinantes', icon: 'bi-person-check', group: 'Comercial' });
             }
         }
 
         // 4. Unidades Consumidoras
         if (role !== 'lead' && role !== 'subscriber') {
-            items.push({ id: 'consumer_units', label: 'Unidades Consumidoras', icon: 'bi-house' });
+            items.push({ id: 'consumer_units', label: 'Unidades Consumidoras', icon: 'bi-house', group: 'Faturamento' });
         }
 
         // 5 e 6. Contas de Energia e Faturas (InvoiceListManager)
@@ -126,54 +165,62 @@ export default function Dashboard() {
         // nao pode usa-la. O assinante continua vendo as proprias faturas em
         // "Meu Painel" (SubscriberDashboard), que e a tela feita para isso.
         if (ehPapelInterno(role)) {
-            items.push({ id: 'energy_bills', label: 'Contas de Energia', icon: 'bi-file-earmark-text' });
-            items.push({ id: 'invoices', label: 'Faturas', icon: 'bi-receipt' });
+            items.push({ id: 'energy_bills', label: 'Contas de Energia', icon: 'bi-file-earmark-text', group: 'Faturamento' });
+            items.push({ id: 'invoices', label: 'Faturas', icon: 'bi-receipt', group: 'Faturamento' });
             // Posicao de cobranca do assinante: doze ciclos por UC, so leitura.
             // Nao substitui "Meu Painel", que e a tela do proprio assinante.
-            items.push({ id: 'subscriber_billing', label: 'Posição do Assinante', icon: 'bi-table' });
+            items.push({ id: 'subscriber_billing', label: 'Posição do Assinante', icon: 'bi-table', group: 'Faturamento' });
         }
 
         // 6. Fornecedores
         const suppliersAllowed = ['supplier', 'manager', 'admin', 'super_admin'];
         if (suppliersAllowed.includes(role)) {
             if (role === 'supplier') {
-                items.push({ id: 'supplier_dashboard', label: 'Meu Painel', icon: 'bi-speedometer2' });
+                items.push({ id: 'supplier_dashboard', label: 'Meu Painel', icon: 'bi-speedometer2', group: 'Ativos e rede' });
             } else {
-                items.push({ id: 'suppliers_list', label: 'Fornecedores', icon: 'bi-truck' });
+                items.push({ id: 'suppliers_list', label: 'Fornecedores', icon: 'bi-truck', group: 'Ativos e rede' });
             }
         }
 
         // 7. Usinas
         if (suppliersAllowed.includes(role)) {
-            items.push({ id: 'power_plants', label: 'Usinas', icon: 'bi-lightning-charge' });
-            items.push({ id: 'eletropostos', label: 'Eletropostos', icon: 'bi-ev-station' });
-            items.push({ id: 'rateio_list', label: 'Lista de Rateio', icon: 'bi-list-check' });
-            items.push({ id: 'protocols', label: 'Protocolos', icon: 'bi-clipboard-check' });
-            items.push({ id: 'grid_map', label: 'Rede (Mapa)', icon: 'bi-map' });
+            items.push({ id: 'power_plants', label: 'Usinas', icon: 'bi-lightning-charge', group: 'Ativos e rede' });
+            items.push({ id: 'eletropostos', label: 'Eletropostos', icon: 'bi-ev-station', group: 'Ativos e rede' });
+            items.push({ id: 'rateio_list', label: 'Lista de Rateio', icon: 'bi-list-check', group: 'Ativos e rede' });
+            items.push({ id: 'protocols', label: 'Protocolos', icon: 'bi-clipboard-check', group: 'Ativos e rede' });
+            items.push({ id: 'grid_map', label: 'Rede (Mapa)', icon: 'bi-map', group: 'Ativos e rede' });
         }
-
 
         // 8. Billing
         const billingAllowed = ['supplier', 'manager', 'admin', 'super_admin'];
         if (billingAllowed.includes(role)) {
-            items.push({ id: 'billing', label: 'Billing', icon: 'bi-currency-dollar' });
+            items.push({ id: 'billing', label: 'Billing', icon: 'bi-currency-dollar', group: 'Faturamento' });
         }
 
         // 9. Repasse de arrendamento — move dinheiro, e a pay-asaas-bill exige
         //    admin do lado do servidor de qualquer forma.
         if (['admin', 'super_admin'].includes(role)) {
-            items.push({ id: 'arrendamento_pagamentos', label: 'Arrendamento', icon: 'bi-signpost-2' });
+            items.push({ id: 'arrendamento_pagamentos', label: 'Arrendamento', icon: 'bi-signpost-2', group: 'Faturamento' });
         }
 
         // 10. Gestão de Usuários
         if (['admin', 'super_admin'].includes(role)) {
-            items.push({ id: 'settings', label: 'Configurações', icon: 'bi-gear' });
+            items.push({ id: 'settings', label: 'Configurações', icon: 'bi-gear', group: 'Sistema' });
         }
 
         return items;
     };
 
     const currentMenu = getMenuItems(profile?.role);
+
+    // Agrupa os itens preservando a ordem natural das seções
+    const GROUP_ORDER = ['Comercial', 'Faturamento', 'Ativos e rede', 'Sistema'];
+    const groupedMenu = GROUP_ORDER
+        .map(groupName => ({
+            group: groupName,
+            items: currentMenu.filter(item => (item.group || 'Comercial') === groupName)
+        }))
+        .filter(section => section.items.length > 0);
 
     const renderContent = () => {
         if (!profile) return <p>Carregando perfil...</p>;
@@ -222,83 +269,160 @@ export default function Dashboard() {
         <div className="dashboard-container">
             {/* Mobile Menu Toggle */}
             <button
+                type="button"
                 className="menu-toggle"
                 onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                aria-label={isSidebarOpen ? 'Fechar menu lateral' : 'Abrir menu lateral'}
             >
-                <i className="bi bi-list" style={{ fontSize: '24px' }}></i>
+                <i className="bi bi-list" style={{ fontSize: '22px' }}></i>
             </button>
 
             {/* Mobile Overlay */}
             {isSidebarOpen && (
                 <div
                     className="modal-overlay"
-                    style={{ zIndex: 999, backdropFilter: 'none' }} /* Lower z-index than modal but high enough */
+                    style={{ zIndex: 999, backdropFilter: 'none' }}
                     onClick={() => setIsSidebarOpen(false)}
                 />
             )}
 
             {/* Sidebar */}
             <aside className={`sidebar ${isSidebarOpen ? 'open' : ''} ${isDesktopCollapsed ? 'collapsed' : ''}`}>
-                <div className="sidebar-header" style={{ justifyContent: isDesktopCollapsed ? 'center' : 'space-between' }}>
-                    {!isDesktopCollapsed && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <img
-                                src={branding.logo_url}
-                                alt={branding.company_name}
-                                style={{ height: '35px', objectFit: 'contain' }}
-                            />
-                            <span style={{ color: 'white', fontWeight: 'bold', fontSize: '1.2rem' }}>{branding.company_name}</span>
+                <div className="sidebar-header">
+                    <div className="sidebar-brand-group" title={branding.company_name || 'B2W Energia'}>
+                        <div className="sidebar-brand-mark">
+                            {branding?.logo_url && !logoFailed ? (
+                                <img
+                                    src={branding.logo_url}
+                                    alt={branding.company_name || 'B2W Energia'}
+                                    onError={() => setLogoFailed(true)}
+                                    style={{ width: '22px', height: '22px', objectFit: 'contain' }}
+                                />
+                            ) : (
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                    <path
+                                        d="M13 2L4 14h7l-1 8 9-12h-7l1-8z"
+                                        fill="var(--color-orange)"
+                                        stroke="var(--color-blue)"
+                                        strokeWidth="1.5"
+                                        strokeLinejoin="round"
+                                    />
+                                </svg>
+                            )}
                         </div>
-                    )}
+                        {!isDesktopCollapsed && (
+                            <div className="sidebar-brand-text">
+                                <span className="sidebar-brand-title">{branding.company_name || 'B2W Energia'}</span>
+                                <span className="sidebar-brand-scope">CRM Operacional</span>
+                            </div>
+                        )}
+                    </div>
 
                     {/* Desktop Collapse Button */}
                     <button
+                        type="button"
                         onClick={() => setIsDesktopCollapsed(!isDesktopCollapsed)}
-                        style={{ background: 'transparent', color: 'white', border: 'none', cursor: 'pointer', display: isSidebarOpen ? 'none' : 'block' }} // Hide on mobile open
-                        className="desktop-only-btn" // Add class if needed for media query, or keep inline for now since media query handles sidebar width
+                        style={{ display: isSidebarOpen ? 'none' : 'inline-flex' }}
+                        className="sidebar-collapse-btn"
+                        title={isDesktopCollapsed ? 'Expandir menu lateral' : 'Recolher menu lateral'}
+                        aria-label={isDesktopCollapsed ? 'Expandir menu lateral' : 'Recolher menu lateral'}
                     >
-                        {isDesktopCollapsed ? <i className="bi bi-chevron-right"></i> : <i className="bi bi-chevron-left"></i>}
+                        <i className={`bi ${isDesktopCollapsed ? 'bi-chevron-right' : 'bi-chevron-left'}`} style={{ fontSize: '12px' }}></i>
                     </button>
                 </div>
 
-                <nav style={{ flex: 1, overflowY: 'auto' }}>
-                    <ul style={{ listStyle: 'none' }}>
-                        {currentMenu.map(item => {
-                            const Icon = item.icon;
-                            return (
-                                <li key={item.id} style={{ marginBottom: '0.25rem' }}>
-                                    <button
-                                        onClick={() => {
-                                            setActiveView(item.id);
-                                            setIsSidebarOpen(false);
-                                        }}
-                                        title={isDesktopCollapsed ? item.label : ''}
-                                        className={`sidebar-link ${activeView === item.id ? 'active' : ''}`}
-                                        style={{ justifyContent: isDesktopCollapsed ? 'center' : 'flex-start' }}
-                                    >
-                                        <i className={`bi ${item.icon}`} style={{ marginRight: isDesktopCollapsed ? 0 : '0.75rem', flexShrink: 0 }}></i>
-                                        {!isDesktopCollapsed && <span>{item.label}</span>}
-                                    </button>
-                                </li>
-                            );
-                        })}
-                    </ul>
+                <nav className="sidebar-nav" aria-label="Menu principal do CRM">
+                    {groupedMenu.map((section, idx) => (
+                        <div key={section.group} className="sidebar-group">
+                            {!isDesktopCollapsed ? (
+                                groupedMenu.length > 1 && (
+                                    <div className="sidebar-group-label">{section.group}</div>
+                                )
+                            ) : (
+                                idx > 0 && <div className="sidebar-group-rule" aria-hidden />
+                            )}
+                            <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                {section.items.map(item => (
+                                    <li key={item.id}>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setActiveView(item.id);
+                                                setIsSidebarOpen(false);
+                                            }}
+                                            title={isDesktopCollapsed ? item.label : undefined}
+                                            aria-label={isDesktopCollapsed ? item.label : undefined}
+                                            aria-current={activeView === item.id ? 'page' : undefined}
+                                            className={`sidebar-link ${activeView === item.id ? 'active' : ''}`}
+                                        >
+                                            <i className={`bi ${item.icon}`} aria-hidden="true"></i>
+                                            {!isDesktopCollapsed && <span>{item.label}</span>}
+                                        </button>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    ))}
                 </nav>
 
                 <div className="sidebar-footer">
-                    {!isDesktopCollapsed && (
-                        <div style={{ marginBottom: '1rem', padding: '0 0.5rem' }}>
-                            <p style={{ fontWeight: 'bold', fontSize: '0.9rem' }}>{profile?.name}</p>
-                            <p style={{ opacity: 0.7, fontSize: '0.75rem' }}>{profile?.role?.replace('_', ' ').toUpperCase()}</p>
+                    {!isDesktopCollapsed ? (
+                        <div className="sidebar-theme-switch" role="group" aria-label="Tema de aparência">
+                            <button
+                                type="button"
+                                onClick={() => setTheme('light')}
+                                className={`sidebar-theme-btn ${theme === 'light' ? 'is-active' : ''}`}
+                                aria-pressed={theme === 'light'}
+                            >
+                                <i className="bi bi-sun" aria-hidden="true"></i>
+                                <span>Claro</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setTheme('dark')}
+                                className={`sidebar-theme-btn ${theme === 'dark' ? 'is-active' : ''}`}
+                                aria-pressed={theme === 'dark'}
+                            >
+                                <i className="bi bi-moon-stars" aria-hidden="true"></i>
+                                <span>Escuro</span>
+                            </button>
                         </div>
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                            className="sidebar-theme-compact-btn"
+                            title={theme === 'dark' ? 'Alternar para modo claro' : 'Alternar para modo escuro'}
+                            aria-label={theme === 'dark' ? 'Alternar para modo claro' : 'Alternar para modo escuro'}
+                        >
+                            <i className={`bi ${theme === 'dark' ? 'bi-sun' : 'bi-moon-stars'}`} aria-hidden="true"></i>
+                        </button>
                     )}
+
+                    <div
+                        className="sidebar-user-row"
+                        style={{ justifyContent: isDesktopCollapsed ? 'center' : 'flex-start' }}
+                        title={isDesktopCollapsed ? `${profile?.name || ''} · ${rotuloPapel(profile?.role)}` : undefined}
+                    >
+                        <span className="sidebar-user-avatar" aria-hidden="true">
+                            {iniciaisPerfil(profile?.name)}
+                        </span>
+                        {!isDesktopCollapsed && (
+                            <div className="sidebar-user-meta">
+                                <span className="sidebar-user-name">{profile?.name || 'Usuário'}</span>
+                                <span className="sidebar-user-role">{rotuloPapel(profile?.role)}</span>
+                            </div>
+                        )}
+                    </div>
                     <button
+                        type="button"
                         onClick={handleLogout}
                         title="Sair"
+                        aria-label="Sair da conta"
                         className="sidebar-footer-btn"
                         style={{ justifyContent: isDesktopCollapsed ? 'center' : 'flex-start' }}
                     >
-                        <i className="bi bi-box-arrow-right" style={{ marginRight: isDesktopCollapsed ? 0 : '0.5rem' }}></i>
+                        <i className="bi bi-box-arrow-right" aria-hidden="true"></i>
                         {!isDesktopCollapsed && <span>Sair</span>}
                     </button>
                 </div>
