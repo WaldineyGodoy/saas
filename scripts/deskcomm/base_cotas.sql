@@ -43,7 +43,7 @@ Desvios:
 - Nenhuma usina com cota livre: diga que o consultor avisa quando abrir a próxima e grave lista_espera = true. Não passe para humano por isso: continue tirando as dúvidas (modelo, rentabilidade, pagamento) e só passe para humano se o cliente pedir.
 - Tributação: "a associação repassa a cada cotista; a tributação é orientada pelo contador."
 
-Etapas: informou valor e interesse → "Qualificando". Recebeu preço e link → "Simulação / Proposta enviada". Quer fechar → "Contrato enviado" (passe para humano).$r$;
+Etapas: informou valor e interesse → "Qualificando". Recebeu preço e link → "Simulação". Quer fechar → "Contrato Enviado" (passe para humano).$r$;
 
     v_comum constant text := $c$
 ## Regras de todo atendimento da B2W Energia

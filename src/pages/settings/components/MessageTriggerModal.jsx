@@ -45,10 +45,11 @@ export default function MessageTriggerModal({ isOpen, onClose, onSave, trigger }
         // 'em_negociacao' nunca dispararia: a comparação é com NEW.status.
         lead: [
             { id: 'indicado', label: 'Indicado' },
-            { id: 'simulacao', label: 'Simulação' },
             { id: 'sem_interacao', label: 'Sem Interação' },
+            { id: 'qualificando', label: 'Qualificando' },
+            { id: 'simulacao', label: 'Simulação' },
             { id: 'negociacao', label: 'Negociação' },
-            { id: 'reuniao_agendada', label: 'Reunião Agendada/Apresentação' },
+            { id: 'reuniao_agendada', label: 'Reunião Agendada' },
             { id: 'contrato_enviado', label: 'Contrato Enviado' },
             { id: 'ativacao', label: 'Ativação' },
             { id: 'ativo', label: 'Ativo' },

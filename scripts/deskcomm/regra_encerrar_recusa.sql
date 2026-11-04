@@ -5,9 +5,9 @@
 -- "Simulação" e uma retomada automática saiu horas depois. Regra do dono, para todos
 -- os atendentes: conversa encerrada = conversa fechada + status de perdido no CRM.
 --
--- O agente registra a recusa movendo o card para "Não fechou" (crm_move_lead_stage).
+-- O agente registra a recusa movendo o card para "Negócio Perdido" (crm_move_lead_stage).
 -- O resto é da ponte (migrations 20261029d/e, trg_ponte_card_perdido_encerra): fecha
--- a conversa, leva os outros cards do contato para "Não fechou" e o CRM para
+-- a conversa, leva os outros cards do contato para "Negócio Perdido" e o CRM para
 -- "Negócio Perdido". O Deskcomm só aceita motivo da lista fixa
 -- (fn_validate_lost_reason_required), por isso a regra dá os códigos.
 --
@@ -25,7 +25,7 @@ declare
     v_ancora constant text :=
         '- Não fale de concorrentes, política ou assuntos fora da B2W. Não peça senha nem dados bancários.';
     v_regra constant text :=
-        E'\n- Se o cliente recusar de vez (não tem interesse, achou caro, está fora do orçamento, "não, obrigado"): responda numa única mensagem curta, agradecendo e deixando a porta aberta, sem insistir, sem oferecer outro produto e sem fazer pergunta. Em seguida mova o negócio para a etapa "Não fechou" (crm_move_lead_stage) com o motivo price (preço ou orçamento), requested_by_customer (não quer ou desistiu) ou other. Isso fecha a conversa e registra a perda no CRM. Dúvida ou objeção ainda não é recusa: responda antes de encerrar.';
+        E'\n- Se o cliente recusar de vez (não tem interesse, achou caro, está fora do orçamento, "não, obrigado"): responda numa única mensagem curta, agradecendo e deixando a porta aberta, sem insistir, sem oferecer outro produto e sem fazer pergunta. Em seguida mova o negócio para a etapa "Negócio Perdido" (crm_move_lead_stage) com o motivo price (preço ou orçamento), requested_by_customer (não quer ou desistiu) ou other. Isso fecha a conversa e registra a perda no CRM. Dúvida ou objeção ainda não é recusa: responda antes de encerrar.';
 begin
     if v_org is null then raise exception 'sem organizacao'; end if;
 
