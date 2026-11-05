@@ -167,6 +167,11 @@ export const paraNumero = (valor) => {
 
     // "17,5" e "1.234,56" vêm do teclado brasileiro; "17.5" vem de quem
     // digitou no teclado numérico ou colou de uma planilha em inglês.
+    // "3.000" e "1.234.567" são milhares: ponto seguido de exatamente três
+    // dígitos, em grupos. O CRM mostra o valor gravado já formatado ("3.000"),
+    // e ao reabrir a tela isso virava 3 — o setup de R$ 3.000 saía "R$ 3,00".
+    if (!texto.includes(',') && /^-?\d{1,3}(\.\d{3})+$/.test(texto)) return Number(texto.replace(/\./g, ''));
+
     const normalizado = texto.includes(',')
         ? texto.replace(/\./g, '').replace(',', '.')
         : texto;
