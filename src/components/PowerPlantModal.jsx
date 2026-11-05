@@ -417,7 +417,8 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete, init
         previsao_entrega: '',
         modelo_venda: 'integral',
         cotas_vendidas: 0,
-        modalidade: 'geracao_compartilhada',
+        // Padrao de usina nova: Auto Consumo Remoto, enquadramento GD2.
+        modalidade: 'auto_consumo_remoto',
         valor_investido: '', // Stored as string for formatting
         qtd_modulos: '',
         potencia_modulos_w: '',
@@ -444,7 +445,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete, init
         grupo_tarifario: 'B1 Residencial',
         portal_credentials: { url: '', login: '' },
         short_url: '',
-        modalidade_gd: 'GD1'
+        modalidade_gd: 'GD2'
     });
 
     const [availableUCs, setAvailableUCs] = useState([]);
@@ -1968,6 +1969,67 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
             service_values: { ...prev.service_values, [service]: number }
         }));
     };
+
+    // --- UG da usina ----------------------------------------------------
+    // UGs candidatas da aba Geral: por padrao so as cujo titular (ou CPF/CNPJ
+    // da fatura) e o do fornecedor; a UG ja escolhida ou vinculada sempre entra.
+    const soDigitos = (v) => String(v || '').replace(/\D/g, '');
+    const fornecedorDaUsina = suppliers.find(s => s.id === formData.supplier_id) || null;
+    const docFornecedor = soDigitos(fornecedorDaUsina?.cnpj);
+    const todasGeradoras = Array.from(new Map([...availableUCs, ...selectedUCs].map(uc => [uc.id, uc])).values())
+        .filter(uc => uc.tipo_unidade === 'geradora');
+    const ugEhDoFornecedor = (uc) => {
+        const titular = subscribers.find(s => s.id === uc.titular_fatura_id);
+        return [titular?.cpf_cnpj, uc.cpf_cnpj_fatura].some(d => soDigitos(d) && soDigitos(d) === docFornecedor);
+    };
+    const ugJaDaUsina = (uc) =>
+        (usina?.id && uc.usina_id === usina.id) ||
+        (formData.unidade_geradora && normUG(formData.unidade_geradora) === normUG(uc.numero_uc));
+    const filtrarUGs = !mostrarTodasUGs && !!docFornecedor;
+    const geradorasListadas = filtrarUGs
+        ? todasGeradoras.filter(uc => ugEhDoFornecedor(uc) || ugJaDaUsina(uc))
+        : todasGeradoras;
+
+    // Escolher a UG: vira a Unidade Geradora Principal, entra no topo das
+    // vinculadas (aba UCs & Rateio) e a planta herda endereco e concessionaria
+    // dela -- so nos campos ainda vazios, para nao sobrescrever o que ja foi digitado.
+    const selecionarUG = async (uc) => {
+        const titular = subscribers.find(s => s.id === uc.titular_fatura_id);
+        const end = uc.address || {};
+        setSelectedUCs(prev => [uc, ...prev.filter(u => u.id !== uc.id)]);
+        setIsUCsModified(true);
+        setFormData(prev => ({
+            ...prev,
+            unidade_geradora: uc.numero_uc,
+            cnpj_cpf: uc.cpf_cnpj_fatura || titular?.cpf_cnpj || prev.cnpj_cpf || '',
+            cep: prev.cep || end.cep || '',
+            rua: prev.rua || end.rua || '',
+            numero: prev.numero || end.numero || '',
+            bairro: prev.bairro || end.bairro || '',
+            cidade: prev.cidade || end.cidade || '',
+            uf: prev.uf || end.uf || '',
+            ibge_code: prev.ibge_code || end.ibge || '',
+            concessionaria: prev.concessionaria || uc.concessionaria || ''
+        }));
+        // O codigo IBGE alimenta a estimativa de geracao; a UC nem sempre o tem.
+        const cep = soDigitos(end.cep);
+        if (!end.ibge && cep.length === 8) {
+            try {
+                const addr = await fetchAddressByCep(cep);
+                if (addr?.ibge) setFormData(prev => ({ ...prev, ibge_code: prev.ibge_code || addr.ibge }));
+            } catch (e) {
+                console.error('Erro CEP da UG', e);
+            }
+        }
+    };
+
+    // Usina nova com uma unica UG do fornecedor: ja vem escolhida e vinculada.
+    const ugUnicaId = filtrarUGs && geradorasListadas.length === 1 ? geradorasListadas[0].id : null;
+    useEffect(() => {
+        if (usina?.id || formData.unidade_geradora || !ugUnicaId) return;
+        const uc = geradorasListadas.find(u => u.id === ugUnicaId);
+        if (uc) selecionarUG(uc);
+    }, [ugUnicaId, usina?.id]);
 
     const handleCepBlur = async () => {
         const rawCep = formData.cep.replace(/\D/g, '');
@@ -3999,23 +4061,9 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                     </div>
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))', gap: '1rem', maxHeight: '500px', overflowY: 'auto', padding: '1rem', border: '1px solid #f1f5f9', borderRadius: '12px', background: '#f8fafc' }}>
                                         {(() => {
-                                            const allUCs = [...availableUCs, ...selectedUCs];
-                                            const uniqueUCs = Array.from(new Map(allUCs.map(uc => [uc.id, uc])).values());
-                                            const todasGeradoras = uniqueUCs.filter(uc => uc.tipo_unidade === 'geradora');
-                                            const selectedSupplier = suppliers.find(s => s.id === formData.supplier_id);
-                                            const soDigitos = (v) => String(v || '').replace(/\D/g, '');
-                                            const docFornecedor = soDigitos(selectedSupplier?.cnpj);
-                                            const ehDoFornecedor = (uc) => {
-                                                const titular = subscribers.find(s => s.id === uc.titular_fatura_id);
-                                                return [titular?.cpf_cnpj, uc.cpf_cnpj_fatura].some(d => soDigitos(d) && soDigitos(d) === docFornecedor);
-                                            };
-                                            const jaDaUsina = (uc) =>
-                                                (usina?.id && uc.usina_id === usina.id) ||
-                                                (formData.unidade_geradora && normUG(formData.unidade_geradora) === normUG(uc.numero_uc));
-                                            const filtrar = !mostrarTodasUGs && !!docFornecedor;
-                                            const geradoras = filtrar
-                                                ? todasGeradoras.filter(uc => ehDoFornecedor(uc) || jaDaUsina(uc))
-                                                : todasGeradoras;
+                                            const selectedSupplier = fornecedorDaUsina;
+                                            const filtrar = filtrarUGs;
+                                            const geradoras = geradorasListadas;
                                             const ocultas = todasGeradoras.length - geradoras.length;
 
                                             return (
@@ -4110,7 +4158,9 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                                         </div>
                                                     ) : (
                                                         geradoras.map(uc => {
-                                                            const isSelected = formData.unidade_geradora ? normUG(formData.unidade_geradora) === normUG(uc.numero_uc) : (geradoras.length === 1);
+                                                            // So marca o que esta escolhido de fato: antes, uma UG
+                                                            // sozinha aparecia marcada sem estar vinculada.
+                                                            const isSelected = !!formData.unidade_geradora && normUG(formData.unidade_geradora) === normUG(uc.numero_uc);
                                                             const subscriber = subscribers.find(s => s.id === uc.titular_fatura_id);
 
                                                             return (
@@ -4121,9 +4171,7 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                                                             setFormData({ ...formData, unidade_geradora: '', cnpj_cpf: '' });
                                                                             setIsUCsModified(true);
                                                                         } else {
-                                                                            setFormData({ ...formData, unidade_geradora: uc.numero_uc, cnpj_cpf: uc.cpf_cnpj_fatura || subscriber?.cpf_cnpj || '' });
-                                                                            setSelectedUCs(prev => [uc, ...prev.filter(u => u.id !== uc.id)]);
-                                                                            setIsUCsModified(true);
+                                                                            selecionarUG(uc);
                                                                         }
                                                                     }}
                                                                     style={{
@@ -4663,7 +4711,21 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                         <select
                                             className="crm-input"
                                             value={formData.plano_usina_id || ''}
-                                            onChange={e => setFormData({ ...formData, plano_usina_id: e.target.value })}
+                                            onChange={e => {
+                                                // Escolher o plano liga a Gestao e sugere a taxa percentual
+                                                // de recorrencia dele; o campo continua editavel.
+                                                const plano = planosUsina.find(pl => pl.id === e.target.value);
+                                                setFormData(prev => ({
+                                                    ...prev,
+                                                    plano_usina_id: e.target.value,
+                                                    ...(plano ? {
+                                                        gestao_percentual: plano.percentual_recorrente != null ? String(Number(plano.percentual_recorrente)) : prev.gestao_percentual,
+                                                        servicos_contratados: prev.servicos_contratados.includes('Gestão')
+                                                            ? prev.servicos_contratados
+                                                            : [...prev.servicos_contratados, 'Gestão']
+                                                    } : {})
+                                                }));
+                                            }}
                                             style={seletor}
                                         >
                                             <option value="">Sem plano de usina</option>
