@@ -343,8 +343,14 @@ const CAMPOS_COMPRA_VENDA = [
     { key: 'parcela3', label: '3a parcela, vistoria (R$)' },
     { key: 'prazoExecucao', label: 'Prazo de execução (dias)' },
     { key: 'amperagem', label: 'Padrão de entrada (A)' },
-    { key: 'limiteReforco', label: 'Limite de reforço de rede (R$)' },
-    { key: 'valorOpcaoImovel', label: 'Opção de compra do imóvel (R$)' },
+    { key: 'limiteReforco', label: 'Limite de reforço de rede (R$)' }
+];
+
+/** Opção de compra do imóvel: mora na subseção Arrendamento, e vale também na cláusula 15 do compra e venda. */
+const CAMPO_OPCAO_IMOVEL = { key: 'valorOpcaoImovel', label: 'Opção de compra do imóvel (R$)' };
+
+/** Campos próprios do O&M (o gerador multiplica os inversores pelo valor por inversor). */
+const CAMPOS_OM = [
     { key: 'qtdInversores', label: 'Quantidade de inversores' }
 ];
 
@@ -723,7 +729,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete, init
         // Compra e venda sem preço é contrato de compra por R$ 0,00 — e este
         // sai assinado pela Autentique, sem ninguém reler antes.
         if (tipoContrato === 'compra_venda' && valorInvestidoNumero() <= 0) {
-            showAlert('Preencha o Valor Investido na aba Financeiro: o contrato de compra e venda sairia com preço de R$ 0,00.', 'warning');
+            showAlert('Preencha o Valor total do empreendimento em Contratos, Compra e Venda: o contrato sairia com preço de R$ 0,00.', 'warning');
             return;
         }
 
@@ -4294,6 +4300,27 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                     {/* Tab Content: Técnico */}
                     {activeTab === 'tecnico' && (
                         <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
+                            {(() => {
+                                // Só informativo: a manutenção é editada em Contratos, O&M.
+                                const contratada = (formData.servicos_contratados || []).includes('Manutenção');
+                                return (
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', padding: '0.85rem 1.1rem', border: '1px solid #f1f5f9', borderRadius: '12px', background: '#f8fafc' }}>
+                                        <div>
+                                            <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#64748b' }}>Valor da manutenção (O&amp;M)</div>
+                                            <div style={{ fontSize: '1rem', fontWeight: 700, color: contratada ? '#1e293b' : '#94a3b8' }}>
+                                                {contratada ? `${formatCurrency(Number(formData.service_values?.['Manutenção']) || 0)} / mês` : 'não contratada'}
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => { setActiveTab('contratos'); setTipoContrato('om'); setContractDraft(''); }}
+                                            style={{ padding: '0.45rem 0.85rem', border: '1px solid #bfdbfe', borderRadius: '8px', background: 'white', color: '#2563eb', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer' }}
+                                        >
+                                            Editar em Contratos, O&amp;M
+                                        </button>
+                                    </div>
+                                );
+                            })()}
 
                             <div style={{ gridColumn: '1 / -1', marginTop: '1.5rem', border: '1px solid #f1f5f9', borderRadius: '16px', padding: '1.5rem', background: '#fff' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: '#166534', fontWeight: 700, marginBottom: '1rem' }}>
@@ -4331,14 +4358,17 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem' }}>
                                 <div>
                                     <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.5rem', color: '#475569', fontWeight: 600 }}>Valor Investido</label>
-                                    <div style={{ position: 'relative' }}>
-                                        <input
-                                            value={formData.valor_investido}
-                                            onChange={handleValorInvestidoChange}
-                                            placeholder="R$ 0,00"
-                                            style={{ width: '100%', padding: '0.8rem 1rem', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '1rem', outline: 'none', fontWeight: 700, color: '#1e293b' }}
-                                        />
+                                    {/* Só leitura: é o Valor total do empreendimento, editado em Contratos, Compra e Venda. */}
+                                    <div style={{ width: '100%', padding: '0.8rem 1rem', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '1rem', fontWeight: 700, color: formData.valor_investido ? '#1e293b' : '#94a3b8', background: '#f8fafc', boxSizing: 'border-box' }}>
+                                        {formData.valor_investido || 'não informado'}
                                     </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => { setActiveTab('contratos'); setTipoContrato('compra_venda'); setContractDraft(''); }}
+                                        style={{ marginTop: '0.4rem', padding: 0, border: 'none', background: 'none', color: '#2563eb', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer' }}
+                                    >
+                                        Editar em Contratos, Compra e Venda
+                                    </button>
                                 </div>
                                 <div>
                                     <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.5rem', color: '#475569', fontWeight: 600 }}>Classificação Tarifária</label>
@@ -4638,6 +4668,8 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '1rem' }}>
                                             {serviceOptions.filter(s => s !== 'Gestão').map(s => {
                                                 const isSelected = formData.servicos_contratados.includes(s);
+                                                // Manutenção é editada em Contratos, O&M: aqui só aparece.
+                                                const soLeitura = s === 'Manutenção';
                                                 return (
                                                     <div key={s} style={{
                                                         border: isSelected ? '2px solid #16a34a' : '1px solid #e2e8f0',
@@ -4647,10 +4679,11 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                                         transition: 'all 0.2s',
                                                         boxShadow: isSelected ? '0 4px 6px -1px rgba(22, 163, 74, 0.1)' : 'none'
                                                     }}>
-                                                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', marginBottom: isSelected ? '0.75rem' : '0' }}>
+                                                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: soLeitura ? 'default' : 'pointer', marginBottom: isSelected || soLeitura ? '0.75rem' : '0' }}>
                                                             <input
                                                                 type="checkbox"
                                                                 checked={isSelected}
+                                                                disabled={soLeitura}
                                                                 onChange={() => handleServiceChange(s)}
                                                                 style={{ width: '1.2rem', height: '1.2rem', accentColor: '#16a34a' }}
                                                             />
@@ -4663,12 +4696,22 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                                                     <span style={{ position: 'absolute', left: '0.75rem', top: '0.6rem', fontSize: '0.8rem', color: '#166534', fontWeight: 600 }}>R$</span>
                                                                     <input
                                                                         placeholder="0,00"
+                                                                        readOnly={soLeitura}
                                                                         value={formatCurrency(formData.service_values?.[s]).replace('R$', '').trim()}
-                                                                        onChange={(e) => handleServiceValueChange(s, e.target.value)}
-                                                                        style={{ width: '100%', padding: '0.5rem 0.5rem 0.5rem 2rem', border: '1px solid #bbf7d0', borderRadius: '8px', fontSize: '0.9rem', outline: 'none', background: 'white' }}
+                                                                        onChange={(e) => { if (!soLeitura) handleServiceValueChange(s, e.target.value); }}
+                                                                        style={{ width: '100%', padding: '0.5rem 0.5rem 0.5rem 2rem', border: '1px solid #bbf7d0', borderRadius: '8px', fontSize: '0.9rem', outline: 'none', background: soLeitura ? '#f8fafc' : 'white' }}
                                                                     />
                                                                 </div>
                                                             </div>
+                                                        )}
+                                                        {soLeitura && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => { setActiveTab('contratos'); setTipoContrato('om'); setContractDraft(''); }}
+                                                                style={{ marginTop: '0.5rem', padding: 0, border: 'none', background: 'none', color: '#2563eb', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}
+                                                            >
+                                                                Editar em Contratos, O&amp;M
+                                                            </button>
                                                         )}
                                                     </div>
                                                 );
@@ -5660,186 +5703,264 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                     {/* Tab Content: Comunicados / Histórico */}
                     {activeTab === 'contratos' && (
                         <div className="no-print" style={{ animation: 'fadeIn 0.3s ease-out' }}>
-                            <div style={{ background: 'white', padding: '1.5rem', borderRadius: '16px', border: '1px solid #f1f5f9', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', marginBottom: '1.5rem' }}>
-                                <h4 style={{ margin: '0 0 0.35rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b' }}>
-                                    <DollarSign size={20} color="#3b82f6" /> Venda ao investidor
-                                </h4>
-                                <p style={{ margin: '0 0 1rem 0', fontSize: '0.78rem', color: '#94a3b8' }}>
-                                    Usina marcada como à venda entra em "Usinas à venda" do Agente Investidor no WhatsApp, com estágio, previsão, preço (Valor Investido) e o link da página da usina. Desmarque quando for vendida.
-                                </p>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', alignItems: 'end' }}>
-                                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.88rem', fontWeight: 600, color: '#475569', cursor: 'pointer', paddingBottom: '0.65rem' }}>
+                            {(() => {
+                                // Campos de contrato digitados em texto: o campo numérico
+                                // do navegador recusa a vírgula do teclado brasileiro.
+                                const estiloCampoContrato = { width: '100%', padding: '0.65rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.88rem', outline: 'none', boxSizing: 'border-box' };
+                                const rotuloContrato = { display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#475569', marginBottom: '0.35rem' };
+                                const subBloco = { marginTop: '1.25rem', padding: '1rem 1.1rem', border: '1px solid #e2e8f0', borderRadius: '12px', background: '#fcfdff' };
+                                const tituloSubBloco = { margin: '0 0 0.35rem 0', display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.92rem', color: '#1e293b' };
+                                const reais = (v) => `R$ ${Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                                const campoContrato = (campo) => (
+                                    <div key={campo.key}>
+                                        <label style={rotuloContrato}>{campo.label}</label>
                                         <input
-                                            type="checkbox"
-                                            checked={!!formData.a_venda}
-                                            onChange={e => setFormData({ ...formData, a_venda: e.target.checked })}
-                                        />
-                                        À venda
-                                    </label>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#475569', marginBottom: '0.35rem' }}>Previsão de entrega</label>
-                                        <input
-                                            type="date"
-                                            style={{ width: '100%', padding: '0.65rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.88rem', outline: 'none', boxSizing: 'border-box' }}
-                                            value={formData.previsao_entrega || ''}
-                                            onChange={e => setFormData({ ...formData, previsao_entrega: e.target.value })}
+                                            type="text"
+                                            inputMode="decimal"
+                                            style={estiloCampoContrato}
+                                            value={contractOpts[campo.key] ?? ''}
+                                            onChange={e => {
+                                                setContractOpts({ ...contractOpts, [campo.key]: e.target.value.replace(/[^\d.,]/g, '') });
+                                                setContractDraft('');
+                                            }}
                                         />
                                     </div>
+                                );
+                                const seletorArea = (
                                     <div>
-                                        <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#475569', marginBottom: '0.35rem' }}>Modelo de venda</label>
+                                        <label style={rotuloContrato}>Área arrendada desta usina</label>
                                         <select
-                                            style={{ width: '100%', padding: '0.65rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.88rem', outline: 'none', boxSizing: 'border-box' }}
-                                            value={formData.modelo_venda || 'integral'}
-                                            onChange={e => setFormData({ ...formData, modelo_venda: e.target.value })}
+                                            style={estiloCampoContrato}
+                                            value={formData.leased_area_id || ''}
+                                            onChange={e => { setFormData({ ...formData, leased_area_id: e.target.value }); setContractDraft(''); }}
                                         >
-                                            <option value="integral">Integral</option>
-                                            <option value="cotas">Cotas</option>
+                                            <option value="">— nenhuma vinculada —</option>
+                                            {areasDisponiveis.map(a => <option key={a.id} value={a.id}>{a.nome}</option>)}
                                         </select>
+                                        <p style={{ margin: '0.4rem 0 0 0', fontSize: '0.78rem', color: '#94a3b8' }}>
+                                            Cadastre em Configurações, Áreas Arrendadas. Salve a usina para gravar o vínculo.
+                                        </p>
                                     </div>
-                                    {formData.modelo_venda === 'cotas' && (
-                                        <div>
-                                            <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#475569', marginBottom: '0.35rem' }}>Cotas vendidas (de 10)</label>
-                                            <input
-                                                type="number" min="0" max="10" step="1"
-                                                style={{ width: '100%', padding: '0.65rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.88rem', outline: 'none', boxSizing: 'border-box' }}
-                                                value={formData.cotas_vendidas ?? 0}
-                                                onChange={e => setFormData({ ...formData, cotas_vendidas: e.target.value })}
-                                            />
-                                        </div>
-                                    )}
-                                </div>
-                                {formData.a_venda && !formData.short_url && (
-                                    <p style={{ margin: '0.75rem 0 0 0', fontSize: '0.78rem', color: '#92400e' }}>
-                                        Sem link da página da usina: o agente vai dizer que o consultor envia o material.
-                                    </p>
-                                )}
-                            </div>
-                            {!usina ? (
-                                <div style={{ background: 'white', padding: '1.5rem', borderRadius: '16px', border: '1px solid #f1f5f9', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', marginBottom: '1.5rem' }}>Salve a usina para gerar contratos.</div>
-                            ) : (
-                                <>
-                                    <div style={{ background: 'white', padding: '1.5rem', borderRadius: '16px', border: '1px solid #f1f5f9', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', marginBottom: '1.5rem' }}>
-                                        <h4 style={{ margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b' }}>
-                                            <FileSignature size={20} color="#3b82f6" /> Contrato a gerar
-                                        </h4>
-                                        <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
-                                            {CONTRATOS_USINA.map(c => (
-                                                <button
-                                                    key={c.tipo}
-                                                    type="button"
-                                                    onClick={() => { setTipoContrato(c.tipo); setContractDraft(''); }}
-                                                    style={{
-                                                        padding: '0.6rem 1.1rem', borderRadius: '10px', cursor: 'pointer', fontSize: '0.85rem',
-                                                        border: tipoContrato === c.tipo ? '1px solid #3b82f6' : '1px solid #e2e8f0',
-                                                        background: tipoContrato === c.tipo ? '#eff6ff' : 'white',
-                                                        color: tipoContrato === c.tipo ? '#1d4ed8' : '#64748b',
-                                                        fontWeight: tipoContrato === c.tipo ? 700 : 500
-                                                    }}
-                                                >
-                                                    {c.rotulo}
-                                                </button>
-                                            ))}
-                                            {/*
-                                              O contrato de gestão é do fornecedor, não da usina: tem
-                                              condições comerciais e minuta próprias, em
-                                              ContratoGestaoUsina, e não passa pelo fluxo dos três
-                                              acima.
-                                            */}
-                                            <button
-                                                type="button"
-                                                onClick={() => { setTipoContrato('gestao'); setContractDraft(''); }}
-                                                style={{
-                                                    padding: '0.6rem 1.1rem', borderRadius: '10px', cursor: 'pointer', fontSize: '0.85rem',
-                                                    border: tipoContrato === 'gestao' ? '1px solid #3b82f6' : '1px solid #e2e8f0',
-                                                    background: tipoContrato === 'gestao' ? '#eff6ff' : 'white',
-                                                    color: tipoContrato === 'gestao' ? '#1d4ed8' : '#64748b',
-                                                    fontWeight: tipoContrato === 'gestao' ? 700 : 500
-                                                }}
-                                            >
-                                                Gestão de Créditos
-                                            </button>
-                                        </div>
+                                );
+                                const avisoSemArea = (texto) => (
+                                    <div style={{ marginTop: '1rem', padding: '0.85rem 1rem', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '10px', fontSize: '0.83rem', color: '#92400e', display: 'flex', gap: '0.5rem' }}>
+                                        <AlertCircle size={18} style={{ flexShrink: 0 }} />
+                                        {texto}
+                                    </div>
+                                );
 
-                                        {tipoContrato !== 'gestao' && (<>
-                                        <div>
-                                            <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#475569', marginBottom: '0.35rem' }}>Área arrendada desta usina</label>
-                                            <select
-                                                style={{ width: '100%', padding: '0.65rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.88rem', outline: 'none', boxSizing: 'border-box' }}
-                                                value={formData.leased_area_id || ''}
-                                                onChange={e => { setFormData({ ...formData, leased_area_id: e.target.value }); setContractDraft(''); }}
-                                            >
-                                                <option value="">— nenhuma vinculada —</option>
-                                                {areasDisponiveis.map(a => <option key={a.id} value={a.id}>{a.nome}</option>)}
-                                            </select>
-                                            <p style={{ margin: '0.4rem 0 0 0', fontSize: '0.78rem', color: '#94a3b8' }}>
-                                                Cadastre em Configurações, Áreas Arrendadas. O contrato de arrendamento sai daqui; salve a usina para gravar o vínculo.
+                                return (
+                            <div style={{ background: 'white', padding: '1.5rem', borderRadius: '16px', border: '1px solid #f1f5f9', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', marginBottom: '1.5rem' }}>
+                                <h4 style={{ margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b' }}>
+                                    <FileSignature size={20} color="#3b82f6" /> Contrato a gerar
+                                </h4>
+                                <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', marginBottom: '0.25rem' }}>
+                                    {/*
+                                      Gestão de Créditos é do fornecedor, não da usina: condições
+                                      e minuta próprias em ContratoGestaoUsina, fora do fluxo dos
+                                      três contratos da usina.
+                                    */}
+                                    {[...CONTRATOS_USINA, { tipo: 'gestao', rotulo: 'Gestão de Créditos' }].map(c => (
+                                        <button
+                                            key={c.tipo}
+                                            type="button"
+                                            onClick={() => { setTipoContrato(c.tipo); setContractDraft(''); }}
+                                            style={{
+                                                padding: '0.6rem 1.1rem', borderRadius: '10px', cursor: 'pointer', fontSize: '0.85rem',
+                                                border: tipoContrato === c.tipo ? '1px solid #3b82f6' : '1px solid #e2e8f0',
+                                                background: tipoContrato === c.tipo ? '#eff6ff' : 'white',
+                                                color: tipoContrato === c.tipo ? '#1d4ed8' : '#64748b',
+                                                fontWeight: tipoContrato === c.tipo ? 700 : 500
+                                            }}
+                                        >
+                                            {c.rotulo}
+                                        </button>
+                                    ))}
+                                </div>
+
+                                {/* ---------- Compra e Venda ---------- */}
+                                {tipoContrato === 'compra_venda' && (() => {
+                                    const total = valorInvestidoNumero();
+                                    const somaParcelas = parseCurrency(contractOpts.parcela1) + parseCurrency(contractOpts.parcela2) + parseCurrency(contractOpts.parcela3);
+                                    // Diferença de centavo é arredondamento, não erro de digitação.
+                                    const divergeParcelas = total > 0 && somaParcelas > 0 && Math.abs(somaParcelas - total) > 0.01;
+                                    return (
+                                <>
+                                    <div style={subBloco}>
+                                        <h5 style={tituloSubBloco}>
+                                            <DollarSign size={17} color="#3b82f6" /> Venda ao investidor
+                                        </h5>
+                                        <p style={{ margin: '0 0 1rem 0', fontSize: '0.78rem', color: '#94a3b8' }}>
+                                            Usina marcada como à venda entra em "Usinas à venda" do Agente Investidor no WhatsApp, com estágio, previsão, preço (Valor total do empreendimento) e o link da página da usina. Desmarque quando for vendida.
+                                        </p>
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', alignItems: 'end' }}>
+                                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.88rem', fontWeight: 600, color: '#475569', cursor: 'pointer', paddingBottom: '0.65rem' }}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={!!formData.a_venda}
+                                                    onChange={e => setFormData({ ...formData, a_venda: e.target.checked })}
+                                                />
+                                                À venda
+                                            </label>
+                                            <div>
+                                                <label style={rotuloContrato}>Previsão de entrega</label>
+                                                <input
+                                                    type="date"
+                                                    style={estiloCampoContrato}
+                                                    value={formData.previsao_entrega || ''}
+                                                    onChange={e => setFormData({ ...formData, previsao_entrega: e.target.value })}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label style={rotuloContrato}>Modelo de venda</label>
+                                                <select
+                                                    style={estiloCampoContrato}
+                                                    value={formData.modelo_venda || 'integral'}
+                                                    onChange={e => setFormData({ ...formData, modelo_venda: e.target.value })}
+                                                >
+                                                    <option value="integral">Integral</option>
+                                                    <option value="cotas">Cotas</option>
+                                                </select>
+                                            </div>
+                                            {formData.modelo_venda === 'cotas' && (
+                                                <div>
+                                                    <label style={rotuloContrato}>Cotas vendidas (de 10)</label>
+                                                    <input
+                                                        type="number" min="0" max="10" step="1"
+                                                        style={estiloCampoContrato}
+                                                        value={formData.cotas_vendidas ?? 0}
+                                                        onChange={e => setFormData({ ...formData, cotas_vendidas: e.target.value })}
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
+                                        {formData.a_venda && !formData.short_url && (
+                                            <p style={{ margin: '0.75rem 0 0 0', fontSize: '0.78rem', color: '#92400e' }}>
+                                                Sem link da página da usina: o agente vai dizer que o consultor envia o material.
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    <div style={subBloco}>
+                                        <h5 style={tituloSubBloco}>Valores do contrato</h5>
+                                        <div style={{ maxWidth: '360px', marginTop: '0.75rem' }}>
+                                            <label style={rotuloContrato}>Valor total do empreendimento</label>
+                                            {/*
+                                              É o Valor Investido da usina (`valor_investido`), editado
+                                              só aqui. A aba Financeiro apenas mostra: dois lugares
+                                              editando o mesmo número viravam duas verdades.
+                                            */}
+                                            <input
+                                                value={formData.valor_investido}
+                                                onChange={e => { handleValorInvestidoChange(e); setContractDraft(''); }}
+                                                placeholder="R$ 0,00"
+                                                style={{ ...estiloCampoContrato, fontSize: '1.05rem', fontWeight: 700, color: '#0f172a', borderColor: total > 0 ? '#e2e8f0' : '#fde68a', background: total > 0 ? 'white' : '#fffbeb' }}
+                                            />
+                                            <p style={{ margin: '0.4rem 0 0 0', fontSize: '0.78rem', color: total > 0 ? '#94a3b8' : '#92400e' }}>
+                                                {total > 0
+                                                    ? 'É o Valor Investido da usina: aparece na aba Financeiro e é o preço do Agente Investidor.'
+                                                    : 'Sem o valor total o contrato de compra e venda não é enviado.'}
                                             </p>
                                         </div>
 
-                                        {tipoContrato === 'compra_venda' && (() => {
-                                            const total = valorInvestidoNumero();
-                                            const somaParcelas = parseCurrency(contractOpts.parcela1) + parseCurrency(contractOpts.parcela2) + parseCurrency(contractOpts.parcela3);
-                                            // Diferença de centavo é arredondamento, não erro de digitação.
-                                            const divergeParcelas = total > 0 && somaParcelas > 0 && Math.abs(somaParcelas - total) > 0.01;
-                                            return (
-                                        <>
-                                            <div style={{ marginTop: '1.25rem', padding: '0.85rem 1rem', background: total > 0 ? '#f8fafc' : '#fffbeb', border: `1px solid ${total > 0 ? '#e2e8f0' : '#fde68a'}`, borderRadius: '10px' }}>
-                                                <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>Valor total do empreendimento</div>
-                                                <div style={{ fontSize: '1.15rem', fontWeight: 700, color: total > 0 ? '#0f172a' : '#92400e', margin: '0.2rem 0' }}>
-                                                    {total > 0 ? `R$ ${total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'não informado'}
-                                                </div>
-                                                <p style={{ margin: 0, fontSize: '0.78rem', color: total > 0 ? '#94a3b8' : '#92400e' }}>
-                                                    {total > 0
-                                                        ? 'Vem de Valor Investido, na aba Financeiro. Para mudar o valor do contrato, mude lá.'
-                                                        : 'Preencha Valor Investido na aba Financeiro: sem ele o contrato de compra e venda não é enviado.'}
+                                        {divergeParcelas && (
+                                            <div style={{ marginTop: '0.75rem', padding: '0.85rem 1rem', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '10px', fontSize: '0.83rem', color: '#92400e', display: 'flex', gap: '0.5rem' }}>
+                                                <AlertCircle size={18} style={{ flexShrink: 0 }} />
+                                                As três parcelas somam {reais(somaParcelas)} e o valor total é {reais(total)}. O contrato sai com as duas contas.
+                                            </div>
+                                        )}
+
+                                        <div style={{ marginTop: '1rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
+                                            {CAMPOS_COMPRA_VENDA.map(campoContrato)}
+                                        </div>
+                                    </div>
+
+                                    {!areaArrendada && avisoSemArea('Sem área vinculada (subseção Arrendamento), as cláusulas 14 e 15 do compra e venda saem com o imóvel, o proprietário e o aluguel em branco.')}
+                                    {areaArrendada && (
+                                        <p style={{ margin: '0.85rem 0 0 0', fontSize: '0.78rem', color: '#64748b' }}>
+                                            Cláusulas 14 e 15 (imóvel e opção de compra) saem da área "{areaArrendada.nome}", definida em Arrendamento.
+                                        </p>
+                                    )}
+                                </>
+                                    );
+                                })()}
+
+                                {/* ---------- Arrendamento ---------- */}
+                                {tipoContrato === 'arrendamento' && (
+                                    <div style={subBloco}>
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', alignItems: 'start' }}>
+                                            {seletorArea}
+                                            <div>
+                                                {campoContrato(CAMPO_OPCAO_IMOVEL)}
+                                                <p style={{ margin: '0.4rem 0 0 0', fontSize: '0.78rem', color: '#94a3b8' }}>
+                                                    {Number(areaArrendada?.valor_opcao_imovel) > 0
+                                                        ? `Em branco ou zero, vale o da área: ${reais(areaArrendada.valor_opcao_imovel)}. `
+                                                        : ''}
+                                                    Também entra na cláusula 15 do compra e venda.
                                                 </p>
                                             </div>
-
-                                            {divergeParcelas && (
-                                                <div style={{ marginTop: '0.75rem', padding: '0.85rem 1rem', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '10px', fontSize: '0.83rem', color: '#92400e', display: 'flex', gap: '0.5rem' }}>
-                                                    <AlertCircle size={18} style={{ flexShrink: 0 }} />
-                                                    As três parcelas somam R$ {somaParcelas.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} e o valor total é R$ {total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}. O contrato sai com as duas contas.
-                                                </div>
-                                            )}
-
-                                            <div style={{ marginTop: '1rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
-                                                {CAMPOS_COMPRA_VENDA.map(campo => (
-                                                    <div key={campo.key}>
-                                                        <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#475569', marginBottom: '0.35rem' }}>{campo.label}</label>
-                                                        <input
-                                                            type="text"
-                                                            inputMode="decimal"
-                                                            style={{ width: '100%', padding: '0.65rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.88rem', outline: 'none', boxSizing: 'border-box' }}
-                                                            value={contractOpts[campo.key] ?? ''}
-                                                            onChange={e => {
-                                                                setContractOpts({ ...contractOpts, [campo.key]: e.target.value.replace(/[^\d.,]/g, '') });
-                                                                setContractDraft('');
-                                                            }}
-                                                        />
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </>
-                                            );
-                                        })()}
-
-                                        {tipoContrato === 'om' && (
-                                            <div style={{ marginTop: '1rem', padding: '0.85rem 1rem', background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '10px', fontSize: '0.83rem', color: '#0369a1' }}>
-                                                Os valores do O&amp;M vêm de Configurações, seção Serviços
-                                                {servicoOM ? ' (R$ ' + Number(servicoOM.valorModulo || 0).toFixed(2).replace('.', ',') + ' por módulo).' : '.'}
-                                            </div>
-                                        )}
-
-                                        {tipoContrato !== 'om' && !areaArrendada && (
-                                            <div style={{ marginTop: '1rem', padding: '0.85rem 1rem', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '10px', fontSize: '0.83rem', color: '#92400e', display: 'flex', gap: '0.5rem' }}>
-                                                <AlertCircle size={18} style={{ flexShrink: 0 }} />
-                                                {tipoContrato === 'arrendamento'
-                                                    ? 'Sem área vinculada, o contrato de arrendamento sai com os campos do imóvel em branco.'
-                                                    : 'Sem área vinculada, as cláusulas 14 e 15 do compra e venda saem com o imóvel, o proprietário e o aluguel em branco.'}
-                                            </div>
-                                        )}
-                                        </>)}
+                                        </div>
+                                        {!areaArrendada && avisoSemArea('Sem área vinculada, o contrato de arrendamento sai com os campos do imóvel em branco.')}
                                     </div>
+                                )}
+
+                                {/* ---------- O&M ---------- */}
+                                {tipoContrato === 'om' && (() => {
+                                    const contratada = (formData.servicos_contratados || []).includes('Manutenção');
+                                    const valorManutencao = Number(formData.service_values?.['Manutenção']) || 0;
+                                    const modulos = Number(formData.qtd_modulos) || 0;
+                                    const inversoresDigitados = paraNumero(contractOpts.qtdInversores);
+                                    const qtdInv = Number.isFinite(inversoresDigitados) && inversoresDigitados > 0 ? inversoresDigitados : 1;
+                                    const mensalContrato = modulos * (Number(servicoOM?.valorModulo) || 0) + qtdInv * (Number(servicoOM?.valorInversor) || 0);
+                                    const diverge = contratada && valorManutencao > 0 && mensalContrato > 0 && Math.abs(valorManutencao - mensalContrato) > 0.01;
+                                    return (
+                                    <div style={subBloco}>
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', alignItems: 'end' }}>
+                                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.88rem', fontWeight: 600, color: '#475569', cursor: 'pointer', paddingBottom: '0.65rem' }}>
+                                                <input type="checkbox" checked={contratada} onChange={() => handleServiceChange('Manutenção')} />
+                                                Manutenção contratada
+                                            </label>
+                                            <div>
+                                                <label style={rotuloContrato}>Valor da manutenção (R$/mês)</label>
+                                                <input
+                                                    placeholder="0,00"
+                                                    disabled={!contratada}
+                                                    value={formatCurrency(formData.service_values?.['Manutenção']).replace('R$', '').trim()}
+                                                    onChange={e => handleServiceValueChange('Manutenção', e.target.value)}
+                                                    style={{ ...estiloCampoContrato, background: contratada ? 'white' : '#f8fafc' }}
+                                                />
+                                            </div>
+                                            {CAMPOS_OM.map(campoContrato)}
+                                        </div>
+                                        <p style={{ margin: '0.6rem 0 0 0', fontSize: '0.78rem', color: '#94a3b8' }}>
+                                            O valor da manutenção é o lançado no fechamento mensal da usina. A aba Técnico e os Serviços Contratados do Financeiro só mostram.
+                                        </p>
+                                        <div style={{ marginTop: '1rem', padding: '0.85rem 1rem', background: diverge ? '#fffbeb' : '#f0f9ff', border: `1px solid ${diverge ? '#fde68a' : '#bae6fd'}`, borderRadius: '10px', fontSize: '0.83rem', color: diverge ? '#92400e' : '#0369a1', display: 'flex', gap: '0.5rem' }}>
+                                            <AlertCircle size={18} style={{ flexShrink: 0 }} />
+                                            <span>
+                                                O contrato de O&amp;M calcula o valor pela tabela de Configurações, Serviços
+                                                {servicoOM ? ` (${reais(servicoOM.valorModulo)} por módulo, ${reais(servicoOM.valorInversor)} por inversor): ${modulos} módulos e ${qtdInv} inversor(es) dão ${reais(mensalContrato)}/mês.` : '.'}
+                                                {diverge && ` A manutenção lançada na usina é ${reais(valorManutencao)}/mês: confira antes de enviar.`}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    );
+                                })()}
+
+                                {/* ---------- Gestão de Créditos ---------- */}
+                                {tipoContrato === 'gestao' && (
+                                    <p style={{ margin: '1rem 0 0 0', fontSize: '0.8rem', color: '#64748b' }}>
+                                        O contrato de gestão é do fornecedor: condições comerciais, prazo de fidelidade e setup ficam no cadastro dele e valem para todas as usinas do mesmo fornecedor.
+                                    </p>
+                                )}
+                            </div>
+                                );
+                            })()}
+
+                            {!usina ? (
+                                <div style={{ background: 'white', padding: '1.5rem', borderRadius: '16px', border: '1px solid #f1f5f9', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', marginBottom: '1.5rem' }}>Salve a usina para gerar a minuta e enviar contratos.</div>
+                            ) : (
+                                <>
 
                                     {tipoContrato === 'gestao' ? (
                                         <ContratoGestaoUsina
