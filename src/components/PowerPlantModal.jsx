@@ -6509,13 +6509,21 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                 <ConsumerUnitModal
                     consumerUnit={editingUC}
                     onClose={() => setEditingUC(null)}
+                    // Usina nova ainda nao tem id: so a lista de livres e recarregada.
+                    // Sem essa guarda, excluir a UC apagava no banco e depois quebrava
+                    // em "usina is null", exibindo "Erro ao excluir" sobre uma exclusao feita.
                     onSave={() => {
-                        fetchLinkedUCs(usina.id);
+                        if (usina?.id) fetchLinkedUCs(usina.id);
                         fetchAvailableUCs();
                         setEditingUC(null);
                     }}
-                    onDelete={() => {
-                        fetchLinkedUCs(usina.id);
+                    onDelete={(ucId) => {
+                        const excluida = editingUC;
+                        setSelectedUCs(prev => prev.filter(u => u.id !== ucId));
+                        if (excluida && normUG(formData.unidade_geradora) === normUG(excluida.numero_uc)) {
+                            setFormData(prev => ({ ...prev, unidade_geradora: '', cnpj_cpf: '' }));
+                        }
+                        if (usina?.id) fetchLinkedUCs(usina.id);
                         fetchAvailableUCs();
                         setEditingUC(null);
                     }}
