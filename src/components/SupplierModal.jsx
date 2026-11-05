@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import HistoryTimeline from './HistoryTimeline';
 import ConvidarAppButton from './ConvidarAppButton';
+import SubscriberModal from './SubscriberModal';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import autoTable from 'jspdf-autotable';
@@ -29,6 +30,15 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
     const [loading, setLoading] = useState(false);
     const [searchingCep, setSearchingCep] = useState(false);
     const [activeTab, setActiveTab] = useState('geral');
+    // Busca pelo CPF/CNPJ: fornecedor repetido bloqueia o cadastro; assinante
+    // ou lead do mesmo documento pré-preenchem contato e endereço.
+    const [fornecedorDuplicado, setFornecedorDuplicado] = useState(null);
+    const [leadHerdado, setLeadHerdado] = useState(null);
+    const [origemHerdada, setOrigemHerdada] = useState('');
+    // Fornecedor que nasce de um lead sem assinante abre o "Novo Assinante"
+    // já preenchido antes de fechar (o titular da UG é sempre assinante).
+    const [assinanteDoLead, setAssinanteDoLead] = useState(null);
+    const [fornecedorSalvo, setFornecedorSalvo] = useState(null);
     const [usinas, setUsinas] = useState([]);
     const [ledgerEntries, setLedgerEntries] = useState([]);
     const [repasseOrigins, setRepasseOrigins] = useState({});
@@ -599,35 +609,112 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
         }
     };
 
+    // Os cadastros guardam o documento ora só com dígitos, ora mascarado.
+    const variantesDocumento = (doc) => [doc, maskCpfCnpj(doc)];
+
+    // Copia só contato e endereço, e só para campo ainda vazio: o que já foi
+    // digitado no fornecedor nunca é sobrescrito. Credenciais não vêm.
+    const herdarContatoEEndereco = (origem) => {
+        const end = origem.address || {};
+        setFormData(prev => ({
+            ...prev,
+            name: prev.name || origem.name || '',
+            email: prev.email || origem.email || '',
+            phone: prev.phone || origem.phone || '',
+            cep: prev.cep || origem.cep || end.cep || '',
+            rua: prev.rua || origem.rua || end.rua || end.logradouro || '',
+            numero: prev.numero || origem.numero || end.numero || '',
+            complemento: prev.complemento || origem.complemento || end.complemento || '',
+            bairro: prev.bairro || origem.bairro || end.bairro || '',
+            cidade: prev.cidade || origem.cidade || end.cidade || end.municipio || '',
+            uf: prev.uf || origem.uf || end.uf || ''
+        }));
+    };
+
+    /**
+     * Ao sair do CPF/CNPJ, procura nesta ordem: fornecedor com o mesmo
+     * documento (bloqueia o duplicado), assinante, lead e, para CNPJ, a
+     * Receita. Assinante e lead só pré-preenchem cadastro novo.
+     */
     const handleCnpjBlur = async () => {
-        const cleanDoc = formData.cnpj.replace(/\D/g, '');
-        if (cleanDoc.length === 14) {
-            setLoading(true);
-            try {
+        const cleanDoc = cleanDigits(formData.cnpj || '');
+        if (cleanDoc.length !== 11 && cleanDoc.length !== 14) return;
+        const variantes = variantesDocumento(cleanDoc);
+
+        setLoading(true);
+        try {
+            const { data: iguais, error: erroIguais } = await supabase
+                .from('suppliers').select('id, name').in('cnpj', variantes);
+            if (erroIguais) throw erroIguais;
+            const outro = (iguais || []).find(s => s.id !== supplier?.id) || null;
+            setFornecedorDuplicado(outro);
+            if (outro) {
+                showAlert(`Já existe o fornecedor "${outro.name}" com este CPF/CNPJ. Abra o cadastro dele na lista de Fornecedores.`, 'warning');
+                return;
+            }
+
+            let herdou = false;
+            if (!supplier?.id) {
+                setLeadHerdado(null);
+                setOrigemHerdada('');
+
+                const { data: assinantes } = await supabase
+                    .from('subscribers').select('*').in('cpf_cnpj', variantes).limit(1);
+                if (assinantes?.length) {
+                    herdarContatoEEndereco(assinantes[0]);
+                    setOrigemHerdada(`assinante "${assinantes[0].name}"`);
+                    herdou = true;
+                } else if (!supplier?.lead_id) {
+                    const { data: leads } = await supabase
+                        .from('leads').select('*').in('cpf_cnpj', variantes)
+                        .order('created_at', { ascending: false }).limit(1);
+                    const lead = leads?.[0];
+                    if (lead) {
+                        // Lead que já virou outro fornecedor não é reaproveitado.
+                        const { data: dono } = await supabase
+                            .from('suppliers').select('id').eq('lead_id', lead.id).limit(1);
+                        if (!dono?.length) {
+                            herdarContatoEEndereco(lead);
+                            // O banco copia o originador do lead no INSERT; aqui
+                            // ele só aparece na tela.
+                            setFormData(prev => ({ ...prev, originator_id: prev.originator_id || lead.originator_id || '' }));
+                            setLeadHerdado(lead);
+                            setOrigemHerdada(`lead "${lead.name}"`);
+                            herdou = true;
+                        }
+                    }
+                }
+            }
+
+            if (cleanDoc.length === 14) {
                 const data = await fetchCpfCnpjData(cleanDoc);
                 if (data) {
+                    // Depois de herdar, a Receita só completa o que faltou
+                    // (o sócio, em geral); sem herança, mantém o comportamento
+                    // de sempre e traz os dados dela.
+                    const valor = (atual, receita) => herdou ? (atual || receita || '') : (receita || atual);
                     setFormData(prev => ({
                         ...prev,
-                        name: data.nome || prev.name,
-                        email: data.email || prev.email,
-                        phone: data.telefone || prev.phone,
-                        legal_partner_name: data.legal_partner?.nome || prev.legal_partner_name,
-                        legal_partner_cpf: data.legal_partner?.cpf || prev.legal_partner_cpf,
-                        cep: data.address?.cep || prev.cep,
-                        rua: data.address?.logradouro || prev.rua,
-                        numero: data.address?.numero || prev.numero,
-                        complemento: data.address?.complemento || prev.complemento,
-                        bairro: data.address?.bairro || prev.bairro,
-                        cidade: data.address?.municipio || prev.cidade,
-                        uf: data.address?.uf || prev.uf
+                        name: valor(prev.name, data.nome),
+                        email: valor(prev.email, data.email),
+                        phone: valor(prev.phone, data.telefone),
+                        legal_partner_name: valor(prev.legal_partner_name, data.legal_partner?.nome),
+                        legal_partner_cpf: valor(prev.legal_partner_cpf, data.legal_partner?.cpf),
+                        cep: valor(prev.cep, data.address?.cep),
+                        rua: valor(prev.rua, data.address?.logradouro),
+                        numero: valor(prev.numero, data.address?.numero),
+                        complemento: valor(prev.complemento, data.address?.complemento),
+                        bairro: valor(prev.bairro, data.address?.bairro),
+                        cidade: valor(prev.cidade, data.address?.municipio),
+                        uf: valor(prev.uf, data.address?.uf)
                     }));
                 }
-            } catch (e) {
-                console.error('Erro CNPJ', e);
-                showAlert('Erro ao buscar CNPJ. Verifique se o número está correto.', 'error');
-            } finally {
-                setLoading(false);
             }
+        } catch (e) {
+            console.error('Erro na busca por CPF/CNPJ', e);
+            showAlert('Erro ao buscar o CPF/CNPJ. Verifique se o número está correto.', 'error');
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -720,8 +807,50 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
             cidade: formData.cidade,
             uf: formData.uf
         },
-        ...(supplier?.lead_id ? { lead_id: supplier.lead_id } : {})
+        ...((supplier?.lead_id || leadHerdado?.id) ? { lead_id: supplier?.lead_id || leadHerdado.id } : {})
     });
+
+    /**
+     * Fornecedor novo que veio de um lead: se ainda não houver assinante com
+     * o mesmo documento, devolve o rascunho do "Novo Assinante" com os dados
+     * que acabaram de ser gravados. Sem `lead_id` no assinante de propósito:
+     * o gatilho do assinante grava o status do lead sem a trava de "só
+     * avança" e desfaria o que o fornecedor já levou adiante.
+     */
+    const rascunhoAssinanteDoLead = async () => {
+        const leadId = supplier?.id ? null : (supplier?.lead_id || leadHerdado?.id);
+        if (!leadId) return null;
+
+        const doc = cleanDigits(formData.cnpj || '');
+        if (doc) {
+            const { data: jaExiste } = await supabase
+                .from('subscribers').select('id').in('cpf_cnpj', variantesDocumento(doc)).limit(1);
+            if (jaExiste?.length) return null;
+        }
+
+        const lead = leadHerdado?.id === leadId
+            ? leadHerdado
+            : (await supabase.from('leads').select('*').eq('id', leadId).single()).data;
+        if (!lead) return null;
+
+        return {
+            ...lead,
+            id: null,
+            status: 'ativacao',
+            name: formData.name,
+            cpf_cnpj: formData.cnpj,
+            email: formData.email,
+            phone: formData.phone,
+            cep: formData.cep,
+            rua: formData.rua,
+            numero: formData.numero,
+            complemento: formData.complemento,
+            bairro: formData.bairro,
+            cidade: formData.cidade,
+            uf: formData.uf,
+            originator_id: formData.originator_id || lead.originator_id || ''
+        };
+    };
 
     // O campo `cnpj` guarda CPF ou CNPJ: os rótulos e o bloco do sócio
     // seguem a quantidade de dígitos (até 11 é pessoa física).
@@ -741,6 +870,10 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
         }
         if (formData.phone && !validatePhone(formData.phone)) {
             showAlert('Telefone inválido!', 'warning');
+            return;
+        }
+        if (fornecedorDuplicado) {
+            showAlert(`Já existe o fornecedor "${fornecedorDuplicado.name}" com este CPF/CNPJ. Abra o cadastro dele em vez de criar outro.`, 'warning');
             return;
         }
 
@@ -768,6 +901,23 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                     name: formData.name,
                     status: 'created'
                 }, 'Novo fornecedor cadastrado');
+            }
+
+            // O fornecedor já está gravado: falha aqui não pode virar "erro ao
+            // salvar fornecedor".
+            let rascunho = null;
+            try {
+                rascunho = await rascunhoAssinanteDoLead();
+            } catch (erroRascunho) {
+                console.error('Erro ao preparar o assinante do lead:', erroRascunho);
+            }
+            if (rascunho) {
+                // Fecha só depois do assinante: salvar ou fechar o modal dele
+                // conclui o cadastro do fornecedor do mesmo jeito.
+                setFornecedorSalvo(result.data);
+                setAssinanteDoLead(rascunho);
+                showAlert('Fornecedor salvo. Confira e salve o assinante criado a partir do lead.', 'success');
+                return;
             }
 
             onSave(result.data);
@@ -1236,10 +1386,23 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                             <input
                                                 style={{ ...inputStyle, borderStyle: 'dashed', borderWidth: '2px' }}
                                                 value={formData.cnpj}
-                                                onChange={e => setFormData({ ...formData, cnpj: maskCpfCnpj(e.target.value) })}
+                                                onChange={e => {
+                                                    setFormData({ ...formData, cnpj: maskCpfCnpj(e.target.value) });
+                                                    setFornecedorDuplicado(null);
+                                                }}
                                                 onBlur={handleCnpjBlur}
                                                 placeholder="000.000.000-00 ou 00.000.000/0000-00"
                                             />
+                                            {fornecedorDuplicado && (
+                                                <p style={{ margin: '0.4rem 0 0', fontSize: '0.75rem', fontWeight: 700, color: '#b91c1c' }}>
+                                                    Já existe o fornecedor "{fornecedorDuplicado.name}" com este CPF/CNPJ.
+                                                </p>
+                                            )}
+                                            {!fornecedorDuplicado && origemHerdada && (
+                                                <p style={{ margin: '0.4rem 0 0', fontSize: '0.75rem', color: '#2563eb' }}>
+                                                    Contato e endereço trazidos do {origemHerdada}. Confira antes de salvar.
+                                                </p>
+                                            )}
                                         </div>
                                         <div style={{ gridColumn: '1 / -1' }}>
                                             <label style={labelStyle}>{rotuloNome}</label>
@@ -2360,6 +2523,21 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                     {renderHiddenExtratoDetail()}
                 </div>
             </div>
+
+            {assinanteDoLead && (
+                <SubscriberModal
+                    subscriber={assinanteDoLead}
+                    // Criar o assinante não fecha o modal dele (segue para
+                    // Documentos); o cadastro do fornecedor termina quando
+                    // o modal do assinante for fechado, salvo ou não.
+                    onClose={() => {
+                        setAssinanteDoLead(null);
+                        onSave(fornecedorSalvo);
+                        onClose();
+                    }}
+                    onSave={() => {}}
+                />
+            )}
 
         </div>
         </>
