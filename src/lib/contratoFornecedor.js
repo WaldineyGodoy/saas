@@ -88,6 +88,39 @@ export const montarTextoContratoFornecedor = (supplier, usinas = [], opts = {}) 
     const prazoTransferencia = numero(p.prazoTransferencia, DEFAULTS_FORNECEDOR.prazoTransferencia);
     const prazoHonorarios = numero(p.prazoHonorarios, DEFAULTS_FORNECEDOR.prazoHonorarios);
 
+    // Fidelidade, setup e faturas retidas são opcionais: ausente ou zero quer
+    // dizer "não há", e a cláusula correspondente nem entra no texto. Por isso
+    // não têm padrão em DEFAULTS_FORNECEDOR.
+    const inteiroPositivo = (valor) => {
+        const n = paraNumero(valor);
+        return Number.isFinite(n) && n >= 1 ? Math.floor(n) : 0;
+    };
+    const fidelidade = inteiroPositivo(p.prazoFidelidadeMeses);
+    const faturasRetidas = inteiroPositivo(p.faturasRetidas);
+    const setup = paraNumero(p.valorSetup);
+    const temSetup = Number.isFinite(setup) && setup > 0;
+    // "fatura" é feminino: o extenso de 1 e 2 sai "uma" e "duas".
+    const extensoFeminino = (n) => ({ 1: 'uma', 2: 'duas' }[n] || percentualExtenso(n));
+    const faturasRetidasExtenso = `${faturasRetidas} (${extensoFeminino(faturasRetidas)})`;
+
+    const clausulaSetup = temSetup ? `
+5.10. Setup. O CONTRATANTE pagará diretamente à GESTORA, a título de setup, em pagamento inicial e parcela única, na assinatura deste Contrato, o valor de ${valorEmReais(setup)} (${percentualExtenso(Math.floor(setup))} reais${Math.round((setup % 1) * 100) ? ` e ${percentualExtenso(Math.round((setup % 1) * 100))} centavos` : ''}), destinado à estruturação jurídica da usina dentro da ASSOCIAÇÃO e aos custos de aquisição de clientes, compreendidos campanhas de marketing e equipe comercial.
+5.10.1. O setup remunera custos já incorridos ou comprometidos pela GESTORA, tem natureza não reembolsável e não será restituído, no todo ou em parte, em hipótese alguma, inclusive em caso de rescisão deste Contrato, de vacância de vagas no rateio ou de não ocupação da capacidade da usina.
+5.10.2. O setup é pagamento autônomo do CONTRATANTE: não se vincula aos repasses, aos descontos concedidos aos CONSUMIDORES nem às Faturas Retidas, não é deduzido do Valor de Repasse e não o reduz.` : '';
+
+    const clausulaFaturasRetidas = faturasRetidas ? `
+5.${temSetup ? '11' : '10'}. Faturas Retidas. ${faturasRetidas === 1 ? 'A primeira fatura da ASSOCIAÇÃO paga por cada CONSUMIDOR alocado à(s) central(is) geradora(s) do CONTRATANTE fica retida pela GESTORA, não integra o Valor de Repasse e será destinada' : 'As ' + faturasRetidasExtenso + ' primeiras faturas da ASSOCIAÇÃO pagas por cada CONSUMIDOR alocado à(s) central(is) geradora(s) do CONTRATANTE ficam retidas pela GESTORA, não integram o Valor de Repasse e serão destinadas'} ao pagamento de comissões aos corretores de energia, abrangendo a Remuneração Inicial prevista no item 5.1(a), com a qual não se acumulam.
+5.${temSetup ? '11' : '10'}.1. A retenção incide sobre as faturas efetivamente pagas pelo CONSUMIDOR, com Compensação Financeira. Fatura retida não paga não gera crédito da GESTORA contra o CONTRATANTE, nem este tem direito ao repasse da fatura retida.
+5.${temSetup ? '11' : '10'}.2. Substituído o CONSUMIDOR por outro, a retenção recomeça em relação ao novo CONSUMIDOR.` : '';
+
+    const clausulaFidelidade = fidelidade ? `
+13.5. Fidelidade. O CONTRATANTE obriga-se a manter este Contrato por ${fidelidade} (${percentualExtenso(fidelidade)}) ${fidelidade === 1 ? 'mês' : 'meses'} (o "Período de Fidelidade"), contados da primeira Compensação Financeira.
+13.5.1. Rescindido este Contrato pelo CONTRATANTE, ou por culpa dele, antes do término do Período de Fidelidade, será devida à GESTORA multa rescisória equivalente a 50% (cinquenta por cento) da geração em reais sobre os meses restantes do Período de Fidelidade, calculada como: Multa = 50% x Geração Mensal Média em Reais x número de meses restantes.
+13.5.2. Geração Mensal Média em Reais é a média mensal do valor da energia gerada e compensada na(s) central(is) geradora(s) do CONTRATANTE, apurada na forma do item 5.3 (Tarifa de Aplicação x (1 – Desconto %) x Volume de Energia Gerada x % Efetivamente Compensado), nos últimos 12 (doze) ciclos de apuração anteriores à comunicação da rescisão ou, havendo menos de 12 (doze) ciclos, nos ciclos decorridos. Fração de mês restante conta como mês inteiro.
+13.5.3. A multa será paga em até 30 (trinta) dias da comunicação da rescisão, podendo ser deduzida dos repasses pendentes.
+13.5.4. Não é devida a multa na rescisão por culpa da GESTORA, na repactuação não aceita nos termos da Cláusula 12, nem na alienação da usina com a assunção deste Contrato pelo adquirente na forma da Cláusula 4.5.
+13.5.5. Cumprido o Período de Fidelidade, vigora a Cláusula 13.1, sem multa rescisória.` : '';
+
     // A Cláusula 7.2.1 afirma que a fatura recuperada rende mais ao
     // CONTRATANTE do que a paga em dia. Isso é verdade enquanto o desconto
     // perdido pelo consumidor superar a taxa de recuperação, líquida da
@@ -159,7 +192,7 @@ CLÁUSULA 5 – DA REMUNERAÇÃO DA GESTORA
 (b) a Remuneração Recorrente será paga mensalmente, a partir do mês subsequente ao segundo pagamento do CONSUMIDOR à ASSOCIAÇÃO.
 5.7. A partir da assinatura do Termo de Adesão, via procuração em nome do CONSUMIDOR, e do envio do rateio pela GESTORA, a Remuneração Inicial é considerada apta para faturamento, independentemente de qualquer formalidade adicional.
 5.8. A Taxa de Administração será reajustada anualmente pelo IPCA/IBGE, ou índice que o substitua, na data-base de assinatura deste Contrato.
-5.9. A GESTORA terá direito à Remuneração enquanto houver parceria, nos termos deste Contrato.
+5.9. A GESTORA terá direito à Remuneração enquanto houver parceria, nos termos deste Contrato.${clausulaSetup}${clausulaFaturasRetidas}
 
 CAPÍTULO IV — DA INADIMPLÊNCIA E DA COBRANÇA
 
@@ -192,7 +225,7 @@ CLÁUSULA 9 – DO CICLO DE APURAÇÃO E DOS REPASSES
 (a) Ciclo de Apuração — período de leitura da distribuidora ao qual se refere a energia compensada nas unidades consumidoras do rateio;
 (b) Compensação Financeira — data em que o pagamento do CONSUMIDOR é efetivamente liquidado e disponibilizado, livre e desembaraçado, em conta de titularidade da GESTORA;
 (c) Data de Corte — dia ${diaCorte} (${percentualExtenso(diaCorte)}) de cada mês;
-(d) Valor de Repasse — total compensado financeiramente no ciclo, deduzidos: Remuneração Inicial, Remuneração Recorrente, Taxa de Administração, Taxa de Recuperação de Crédito, os encargos da distribuidora relativos à unidade geradora na forma da Cláusula 9.9, tributos retidos na fonte, tarifas bancárias e de meio de pagamento, estornos e ajustes de ciclos anteriores.
+(d) Valor de Repasse — total compensado financeiramente no ciclo, deduzidos: Remuneração Inicial, Remuneração Recorrente, Taxa de Administração, Taxa de Recuperação de Crédito,${faturasRetidas ? ' as Faturas Retidas (item 5.'+(temSetup ? '11' : '10')+'),' : ''} os encargos da distribuidora relativos à unidade geradora na forma da Cláusula 9.9, tributos retidos na fonte, tarifas bancárias e de meio de pagamento, estornos e ajustes de ciclos anteriores.
 9.2. A GESTORA efetuará o repasse até o dia ${diaRepasse} (${percentualExtenso(diaRepasse)}) de cada mês, considerando exclusivamente os pagamentos com Compensação Financeira ocorrida até a Data de Corte. Pagamentos compensados após a Data de Corte integram o ciclo seguinte.
 9.3. Nenhum repasse será devido antes da Compensação Financeira. Boleto emitido, fatura vencida, energia injetada ou energia compensada na distribuidora não constituem, isolada ou conjuntamente, fato gerador do repasse.
 9.4. Junto ao repasse, a GESTORA enviará Demonstrativo de Repasse contendo, por unidade consumidora: energia injetada e efetivamente compensada, tarifa de aplicação, desconto, valor faturado, valor pago, data da compensação financeira e memória de todas as deduções.
@@ -215,12 +248,12 @@ CLÁUSULA 12 – DO REEQUILÍBRIO REGULATÓRIO
 Alteração legal ou regulatória que modifique de forma relevante a economicidade do arranjo — notadamente a incidência escalonada da TUSD Fio B nos termos da Lei nº 14.300/2022, mudanças de enquadramento GD I / GD II ou de tratamento tributário — autoriza qualquer das Partes a solicitar repactuação, em 30 (trinta) dias, mantidas as condições vigentes enquanto durar a negociação.
 
 CLÁUSULA 13 – DO PRAZO E DA RESCISÃO
-13.1. O presente Contrato vige por prazo indeterminado, sem multa rescisória para qualquer das Partes, bastando comunicado com 30 (trinta) dias de antecedência.
+${fidelidade ? '13.1. O presente Contrato vige por prazo indeterminado, bastando comunicado com 30 (trinta) dias de antecedência, ressalvados o Período de Fidelidade e a multa rescisória da Cláusula 13.5.' : '13.1. O presente Contrato vige por prazo indeterminado, sem multa rescisória para qualquer das Partes, bastando comunicado com 30 (trinta) dias de antecedência.'}
 13.2. Comunicada a rescisão, a GESTORA reserva-se o direito de: (a) dispor de até ${prazoTransferencia} (${percentualExtenso(prazoTransferencia)}) dias para a transferência dos CONSUMIDORES vinculados à central geradora; (b) receber os honorários referentes à energia compensada no período anterior à data da rescisão, em até ${prazoHonorarios} (${percentualExtenso(prazoHonorarios)}) dias.
 13.2.1. O prazo da alínea (a) destina-se à alocação dos CONSUMIDORES em outra central geradora, à sua comunicação prévia e ao processamento da alteração de rateio pela distribuidora, que produz efeito apenas no ciclo de leitura subsequente. Protege igualmente o CONSUMIDOR, que não pode ser retirado da compensação sem destino, e o CONTRATANTE, que não responde por reclamações decorrentes de desligamento abrupto.
 13.2.2. O prazo da alínea (b) compõe-se do ciclo de faturamento e cobrança ordinária, correspondente ao prazo da alínea (a), somado ao período de recuperação de crédito dos CONSUMIDORES que se tornarem inadimplentes. Esgotado esse prazo, extinguem-se todos os vínculos entre as Partes decorrentes deste Contrato.
 13.3. Durante os ${prazoTransferencia} (${percentualExtenso(prazoTransferencia)}) dias de transição permanecem integralmente vigentes as obrigações de faturamento, cobrança, repasse e remuneração previstas neste Contrato.
-13.4. Encerrado o Contrato, os créditos de energia eventualmente gerados e ainda não compensados permanecem de titularidade do CONTRATANTE, que poderá alocá-los livremente a partir do encerramento do período de transição. A GESTORA prestará as informações e providências junto à distribuidora necessárias ao remanejamento do rateio, não lhe cabendo qualquer obrigação de aquisição, indenização ou pagamento pelos créditos não compensados.
+13.4. Encerrado o Contrato, os créditos de energia eventualmente gerados e ainda não compensados permanecem de titularidade do CONTRATANTE, que poderá alocá-los livremente a partir do encerramento do período de transição. A GESTORA prestará as informações e providências junto à distribuidora necessárias ao remanejamento do rateio, não lhe cabendo qualquer obrigação de aquisição, indenização ou pagamento pelos créditos não compensados.${clausulaFidelidade}
 
 CLÁUSULA 14 – DA ASSINATURA ELETRÔNICA
 As Partes reconhecem a validade da assinatura eletrônica deste Contrato, nos termos da MP nº 2.200-2/2001 e da Lei nº 14.063/2020, aceitando como prova hábil os registros de auditoria da plataforma utilizada.
