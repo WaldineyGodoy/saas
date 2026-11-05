@@ -51,6 +51,19 @@ const CAMPOS_CONDICOES = [
 ];
 
 /**
+ * Fidelidade e setup do contrato de gestão (05/11/2026).
+ *
+ * Opcionais, fora de CAMPOS_CONDICOES de propósito: em branco quer dizer
+ * "sem fidelidade" / "sem setup", e não pode barrar o envio como barram as
+ * condições obrigatórias. Ficam gravados em `suppliers.contract_terms`; a
+ * forma como entram na minuta é decidida no gerador (contratoFornecedor.js).
+ */
+const CAMPOS_FIDELIDADE_SETUP = [
+    { key: 'prazoFidelidadeMeses', label: 'Prazo de fidelidade (meses)' },
+    { key: 'valorSetup', label: 'Setup (R$)' }
+];
+
+/**
  * Condições vindas do banco no formato da tela.
  *
  * O jsonb guarda número (17.5) e os campos são texto em pt-BR; sem esta
@@ -187,7 +200,7 @@ export default function ContratoGestaoUsina({ usina, supplierId, registrarHistor
      */
     const condicoesParaGravar = () => {
         const gravar = { foro: opts.foro };
-        for (const campo of CAMPOS_CONDICOES) {
+        for (const campo of [...CAMPOS_CONDICOES, ...CAMPOS_FIDELIDADE_SETUP]) {
             const n = paraNumero(opts[campo.key]);
             if (Number.isFinite(n)) gravar[campo.key] = n;
         }
@@ -573,6 +586,23 @@ export default function ContratoGestaoUsina({ usina, supplierId, registrarHistor
                             onChange={e => { setOpts({ ...opts, foro: e.target.value }); setDraft(''); }}
                         />
                     </div>
+
+                    {CAMPOS_FIDELIDADE_SETUP.map(campo => (
+                        <div key={campo.key}>
+                            <label style={rotuloCampo}>{campo.label}</label>
+                            <input
+                                type="text"
+                                inputMode="decimal"
+                                placeholder={campo.key === 'valorSetup' ? 'sem setup' : 'sem fidelidade'}
+                                style={estiloCampo}
+                                value={opts[campo.key] ?? ''}
+                                onChange={e => {
+                                    setOpts({ ...opts, [campo.key]: e.target.value.replace(/[^\d.,]/g, '') });
+                                    setDraft('');
+                                }}
+                            />
+                        </div>
+                    ))}
                 </div>
 
                 <div style={{ marginTop: '1rem', padding: '0.8rem 1rem', background: usinas.length ? '#f0f9ff' : '#fffbeb', border: `1px solid ${usinas.length ? '#bae6fd' : '#fde68a'}`, borderRadius: '10px', fontSize: '0.83rem', color: usinas.length ? '#0369a1' : '#92400e', display: 'flex', gap: '0.5rem' }}>
