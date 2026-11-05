@@ -103,15 +103,21 @@ export const montarTextoContratoFornecedor = (supplier, usinas = [], opts = {}) 
     const extensoFeminino = (n) => ({ 1: 'uma', 2: 'duas' }[n] || percentualExtenso(n));
     const faturasRetidasExtenso = `${faturasRetidas} (${extensoFeminino(faturasRetidas)})`;
 
+    // Com mais de uma fatura retida, a Remuneração Inicial deixa de ser "a
+    // primeira fatura": o texto da Cláusula 5 inteira passa a falar das
+    // Faturas Retidas, senão 5.1(a) contradiz o item 5.10/5.11.
+    const varias = faturasRetidas > 1;
+    const itemRetidas = `5.${temSetup ? '11' : '10'}`;
+
     const clausulaSetup = temSetup ? `
 5.10. Setup. O CONTRATANTE pagará diretamente à GESTORA, a título de setup, em pagamento inicial e parcela única, na assinatura deste Contrato, o valor de ${valorEmReais(setup)} (${percentualExtenso(Math.floor(setup))} reais${Math.round((setup % 1) * 100) ? ` e ${percentualExtenso(Math.round((setup % 1) * 100))} centavos` : ''}), destinado à estruturação jurídica da usina dentro da ASSOCIAÇÃO e aos custos de aquisição de clientes, compreendidos campanhas de marketing e equipe comercial.
 5.10.1. O setup remunera custos já incorridos ou comprometidos pela GESTORA, tem natureza não reembolsável e não será restituído, no todo ou em parte, em hipótese alguma, inclusive em caso de rescisão deste Contrato, de vacância de vagas no rateio ou de não ocupação da capacidade da usina.
 5.10.2. O setup é pagamento autônomo do CONTRATANTE: não se vincula aos repasses, aos descontos concedidos aos CONSUMIDORES nem às Faturas Retidas, não é deduzido do Valor de Repasse e não o reduz.` : '';
 
     const clausulaFaturasRetidas = faturasRetidas ? `
-5.${temSetup ? '11' : '10'}. Faturas Retidas. ${faturasRetidas === 1 ? 'A primeira fatura da ASSOCIAÇÃO paga por cada CONSUMIDOR alocado à(s) central(is) geradora(s) do CONTRATANTE fica retida pela GESTORA, não integra o Valor de Repasse e será destinada' : 'As ' + faturasRetidasExtenso + ' primeiras faturas da ASSOCIAÇÃO pagas por cada CONSUMIDOR alocado à(s) central(is) geradora(s) do CONTRATANTE ficam retidas pela GESTORA, não integram o Valor de Repasse e serão destinadas'} ao pagamento de comissões aos corretores de energia, abrangendo a Remuneração Inicial prevista no item 5.1(a), com a qual não se acumulam.
-5.${temSetup ? '11' : '10'}.1. A retenção incide sobre as faturas efetivamente pagas pelo CONSUMIDOR, com Compensação Financeira. Fatura retida não paga não gera crédito da GESTORA contra o CONTRATANTE, nem este tem direito ao repasse da fatura retida.
-5.${temSetup ? '11' : '10'}.2. Substituído o CONSUMIDOR por outro, a retenção recomeça em relação ao novo CONSUMIDOR.` : '';
+${itemRetidas}. Faturas Retidas. ${faturasRetidas === 1 ? 'A primeira fatura da ASSOCIAÇÃO paga por cada CONSUMIDOR alocado à(s) central(is) geradora(s) do CONTRATANTE fica retida pela GESTORA, não integra o Valor de Repasse e será destinada' : 'As ' + faturasRetidasExtenso + ' primeiras faturas da ASSOCIAÇÃO pagas por cada CONSUMIDOR alocado à(s) central(is) geradora(s) do CONTRATANTE ficam retidas pela GESTORA, não integram o Valor de Repasse e serão destinadas'} ao pagamento de comissões aos corretores de energia, correspondendo ao valor que compõe a Remuneração Inicial prevista no item 5.1(a), com a qual não se acumulam.
+${itemRetidas}.1. A retenção incide sobre as faturas efetivamente pagas pelo CONSUMIDOR, com Compensação Financeira. Fatura retida não paga não gera crédito da GESTORA contra o CONTRATANTE, nem este tem direito ao repasse da fatura retida.
+${itemRetidas}.2. Substituído o CONSUMIDOR por outro, a retenção recomeça em relação ao novo CONSUMIDOR.` : '';
 
     const clausulaFidelidade = fidelidade ? `
 13.5. Fidelidade. O CONTRATANTE obriga-se a manter este Contrato por ${fidelidade} (${percentualExtenso(fidelidade)}) ${fidelidade === 1 ? 'mês' : 'meses'} (o "Período de Fidelidade"), contados da primeira Compensação Financeira.
@@ -177,19 +183,19 @@ CAPÍTULO III — DA REMUNERAÇÃO
 
 CLÁUSULA 5 – DA REMUNERAÇÃO DA GESTORA
 5.1. A GESTORA fará jus a:
-(a) Remuneração Inicial — 100% (cem por cento) do Valor Integral da Primeira Fatura da Associação, devida apenas quanto a CONSUMIDORES captados pela GESTORA ou por seus corretores;
+(a) Remuneração Inicial — 100% (cem por cento) do ${varias ? `Valor Integral de cada uma das ${faturasRetidasExtenso} primeiras faturas da Associação de cada CONSUMIDOR (as Faturas Retidas, item ${itemRetidas})` : 'Valor Integral da Primeira Fatura da Associação'}, devida apenas quanto a CONSUMIDORES captados pela GESTORA ou por seus corretores;
 (b) Remuneração Recorrente — ${numeroBr(recorrente)}% (${percentualExtenso(recorrente)} por cento) sobre as faturas da Associação pagas pelo CONSUMIDOR;
 (c) Taxa de Administração — ${valorEmReais(taxaAdmin)} por CONSUMIDOR ativo, incluindo emissão e envio de boleto.
 5.2. Definição de "captado pela GESTORA". Considera-se captado pela GESTORA o CONSUMIDOR cujo cadastro tenha sido originado por canal, link de indicação ou corretor da GESTORA, conforme registro do sistema de CRM da GESTORA na data da adesão.
-5.3. Cálculo do Valor Integral da Primeira Fatura: Tarifa de Aplicação x (1 – Desconto %) x Volume de Energia Gerada x % Efetivamente Compensado.
+5.3. Cálculo do Valor Integral ${varias ? 'de cada Fatura Retida' : 'da Primeira Fatura'}: Tarifa de Aplicação x (1 – Desconto %) x Volume de Energia Gerada x % Efetivamente Compensado.
 5.4. Cálculo da Remuneração Recorrente: [Tarifa de Aplicação x (1 – Desconto %) x Volume de Energia Gerada x % Efetivamente Compensado, no período de apuração] x Percentual Recorrente.
 5.5. Definições:
 (a) Tarifa de Aplicação — todas as componentes da tarifa de energia elétrica, incluindo impostos e tributos cobrados pela distribuidora na área de concessão;
 (b) Desconto — ${numeroBr(desconto)}% (${percentualExtenso(desconto)} por cento) aplicado sobre a Tarifa de Aplicação, praticado para a área de concessão, conforme Anexo I;
 (c) % Efetivamente Compensado — apurado pela fatura da distribuidora da unidade consumidora referente ao ciclo, documento que prevalece sobre qualquer relatório, portal ou estimativa em caso de divergência.
 5.6. Marcos de pagamento:
-(a) a Remuneração Inicial será paga integralmente na primeira fatura do CONSUMIDOR ou, sendo esta parcial, distribuída entre a primeira e a segunda, de forma que o total corresponda ao Valor Integral da Primeira Fatura;
-(b) a Remuneração Recorrente será paga mensalmente, a partir do mês subsequente ao segundo pagamento do CONSUMIDOR à ASSOCIAÇÃO.
+(a) ${varias ? 'a Remuneração Inicial será paga integralmente em cada uma das Faturas Retidas ou, sendo alguma delas parcial, distribuída entre as faturas seguintes, de forma que o total corresponda ao Valor Integral das Faturas Retidas;' : 'a Remuneração Inicial será paga integralmente na primeira fatura do CONSUMIDOR ou, sendo esta parcial, distribuída entre a primeira e a segunda, de forma que o total corresponda ao Valor Integral da Primeira Fatura;'}
+(b) a Remuneração Recorrente será paga mensalmente, a partir do mês subsequente ${varias ? 'ao pagamento da última das Faturas Retidas' : 'ao segundo pagamento'} do CONSUMIDOR à ASSOCIAÇÃO.
 5.7. A partir da assinatura do Termo de Adesão, via procuração em nome do CONSUMIDOR, e do envio do rateio pela GESTORA, a Remuneração Inicial é considerada apta para faturamento, independentemente de qualquer formalidade adicional.
 5.8. A Taxa de Administração será reajustada anualmente pelo IPCA/IBGE, ou índice que o substitua, na data-base de assinatura deste Contrato.
 5.9. A GESTORA terá direito à Remuneração enquanto houver parceria, nos termos deste Contrato.${clausulaSetup}${clausulaFaturasRetidas}
@@ -225,7 +231,7 @@ CLÁUSULA 9 – DO CICLO DE APURAÇÃO E DOS REPASSES
 (a) Ciclo de Apuração — período de leitura da distribuidora ao qual se refere a energia compensada nas unidades consumidoras do rateio;
 (b) Compensação Financeira — data em que o pagamento do CONSUMIDOR é efetivamente liquidado e disponibilizado, livre e desembaraçado, em conta de titularidade da GESTORA;
 (c) Data de Corte — dia ${diaCorte} (${percentualExtenso(diaCorte)}) de cada mês;
-(d) Valor de Repasse — total compensado financeiramente no ciclo, deduzidos: Remuneração Inicial, Remuneração Recorrente, Taxa de Administração, Taxa de Recuperação de Crédito,${faturasRetidas ? ' as Faturas Retidas (item 5.'+(temSetup ? '11' : '10')+'),' : ''} os encargos da distribuidora relativos à unidade geradora na forma da Cláusula 9.9, tributos retidos na fonte, tarifas bancárias e de meio de pagamento, estornos e ajustes de ciclos anteriores.
+(d) Valor de Repasse — total compensado financeiramente no ciclo, deduzidos: Remuneração Inicial, Remuneração Recorrente, Taxa de Administração, Taxa de Recuperação de Crédito,${faturasRetidas ? ` as Faturas Retidas (item ${itemRetidas}),` : ''} os encargos da distribuidora relativos à unidade geradora na forma da Cláusula 9.9, tributos retidos na fonte, tarifas bancárias e de meio de pagamento, estornos e ajustes de ciclos anteriores.
 9.2. A GESTORA efetuará o repasse até o dia ${diaRepasse} (${percentualExtenso(diaRepasse)}) de cada mês, considerando exclusivamente os pagamentos com Compensação Financeira ocorrida até a Data de Corte. Pagamentos compensados após a Data de Corte integram o ciclo seguinte.
 9.3. Nenhum repasse será devido antes da Compensação Financeira. Boleto emitido, fatura vencida, energia injetada ou energia compensada na distribuidora não constituem, isolada ou conjuntamente, fato gerador do repasse.
 9.4. Junto ao repasse, a GESTORA enviará Demonstrativo de Repasse contendo, por unidade consumidora: energia injetada e efetivamente compensada, tarifa de aplicação, desconto, valor faturado, valor pago, data da compensação financeira e memória de todas as deduções.
