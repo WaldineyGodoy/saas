@@ -320,11 +320,20 @@ async function abrirTT(page) {
     await clicarTexto(page, 'Troca de Titularidade');
     await espera(page, 3000);
     await clicarTexto(page, 'Iniciar', { ultimo: true });
-    await espera(page, 4000);
 
-    const texto = await textoDaTela(page);
-    if (/d[ée]bito/i.test(texto) && await passoAtual(page) === null) {
-        return { debito: true, valor: valorDoDebito(texto), texto: texto.slice(0, 600) };
+    // O aviso de débito pode demorar mais que o passo 1 (04/11/2026: chegou depois
+    // de 4 s e o filler caiu em "não cheguei ao passo 1"). Espera um OU outro.
+    // Texto real: "Troca de titularidade não permitida. Identificamos débito em
+    // aberto junto à distribuidora para o documento fiscal informado..."
+    const ate = Date.now() + 20000;
+    while (Date.now() < ate) {
+        await espera(page, 1000);
+        const texto = await textoDaTela(page);
+        if (/n[ãa]o permitida|d[ée]bito em aberto/i.test(texto)) {
+            const aviso = (texto.match(/Troca de titularidade n[ãa]o permitida.{0,400}/i) || [texto.slice(0, 600)])[0];
+            return { debito: true, valor: valorDoDebito(texto), texto: aviso };
+        }
+        if (await passoAtual(page) !== null) return { debito: false };
     }
     return { debito: false };
 }
