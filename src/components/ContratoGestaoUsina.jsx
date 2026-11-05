@@ -57,10 +57,19 @@ const CAMPOS_CONDICOES = [
  * "sem fidelidade" / "sem setup", e não pode barrar o envio como barram as
  * condições obrigatórias. Ficam gravados em `suppliers.contract_terms`; a
  * forma como entram na minuta é decidida no gerador (contratoFornecedor.js).
+ *
+ * Faturas retidas: quantas faturas pagas no início por cada assinante não
+ * geram repasse ao fornecedor — o valor vai à Associação para pagar a
+ * comissão dos corretores de energia. Só é gravado aqui; o fechamento e o
+ * split ainda não aplicam a retenção.
  */
 const CAMPOS_FIDELIDADE_SETUP = [
-    { key: 'prazoFidelidadeMeses', label: 'Prazo de fidelidade (meses)' },
-    { key: 'valorSetup', label: 'Setup (R$)' }
+    { key: 'prazoFidelidadeMeses', label: 'Prazo de fidelidade (meses)', vazio: 'sem fidelidade' },
+    { key: 'valorSetup', label: 'Setup (R$)', vazio: 'sem setup' },
+    {
+        key: 'faturasRetidas', label: 'Faturas retidas', vazio: 'nenhuma',
+        dica: 'Faturas pagas no início por cada assinante sem repasse ao fornecedor: vão à Associação para a comissão dos corretores de energia.'
+    }
 ];
 
 /**
@@ -593,14 +602,20 @@ export default function ContratoGestaoUsina({ usina, supplierId, registrarHistor
                             <input
                                 type="text"
                                 inputMode="decimal"
-                                placeholder={campo.key === 'valorSetup' ? 'sem setup' : 'sem fidelidade'}
+                                placeholder={campo.vazio}
+                                title={campo.dica}
                                 style={estiloCampo}
                                 value={opts[campo.key] ?? ''}
                                 onChange={e => {
-                                    setOpts({ ...opts, [campo.key]: e.target.value.replace(/[^\d.,]/g, '') });
+                                    // Faturas retidas é contagem: só dígitos.
+                                    const filtro = campo.key === 'faturasRetidas' ? /\D/g : /[^\d.,]/g;
+                                    setOpts({ ...opts, [campo.key]: e.target.value.replace(filtro, '') });
                                     setDraft('');
                                 }}
                             />
+                            {campo.dica && (
+                                <p style={{ margin: '0.35rem 0 0 0', fontSize: '0.72rem', color: '#94a3b8', lineHeight: 1.35 }}>{campo.dica}</p>
+                            )}
                         </div>
                     ))}
                 </div>
