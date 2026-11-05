@@ -32,8 +32,9 @@ export const CAMPOS_CONDICOES = [
  *
  * Faturas retidas: quantas faturas pagas no início por cada assinante não
  * geram repasse ao fornecedor — o valor vai à Associação para pagar a
- * comissão dos corretores de energia. Só é gravado aqui; o fechamento e o
- * split ainda não aplicam a retenção.
+ * comissão dos corretores de energia. Contagem por UC: o gatilho de fatura
+ * paga (migração 20261105a) manda a parte do fornecedor das N primeiras
+ * faturas pagas de cada UC à conta 2.1.7, e o relatório da usina desconta.
  */
 export const CAMPOS_FIDELIDADE_SETUP = [
     { key: 'prazoFidelidadeMeses', label: 'Prazo de fidelidade (meses)', vazio: 'sem fidelidade' },
