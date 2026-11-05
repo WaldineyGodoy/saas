@@ -1527,6 +1527,10 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
             let totalCompensada = 0;
             let totalFaturamento = 0;
             let faturamentoPago = 0;
+            // Faturas retidas do contrato de Gestão: o razão (20261105a) manda a
+            // parte do fornecedor à Associação, e o relatório desconta igual.
+            let faturamentoRetido = 0;
+            let faturasRetidasQtd = 0;
             let faturamentoAVencer = 0;
             let faturamentoSemFaturamento = 0;
             let faturamentoAtrasado = 0;
@@ -1539,7 +1543,7 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                 try {
                     let invQuery = supabase
                         .from('invoices')
-                        .select('id, uc_id, mes_referencia, data_leitura, consumo_compensado, valor_concessionaria, valor_a_pagar, status')
+                        .select('id, uc_id, mes_referencia, data_leitura, consumo_compensado, valor_concessionaria, valor_a_pagar, status, recompensas_aplicadas')
                         .in('uc_id', beneficiariaIds)
                         .neq('status', 'cancelado');
 
@@ -1575,6 +1579,10 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
 
                         if (inv.status === 'pago') {
                             faturamentoPago += val;
+                            if (inv.recompensas_aplicadas?.retencao_associacao?.aplicado) {
+                                faturamentoRetido += val - concVal;
+                                faturasRetidasQtd += 1;
+                            }
                         } else if (inv.status === 'a_vencer' || inv.status === 'ag_emissao_boleto' || inv.status === 'confirmado') {
                             faturamentoAVencer += val;
                         } else if (inv.status === 'sem_faturamento') {
@@ -1663,6 +1671,8 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                     energia_compensada: totalCompensada,
                     faturamento_mensal: totalFaturamento,
                     faturamento_pago: faturamentoPago,
+                    faturamento_retido: faturamentoRetido,
+                    faturas_retidas_qtd: faturasRetidasQtd,
                     faturamento_a_vencer: faturamentoAVencer,
                     faturamento_sem_faturamento: faturamentoSemFaturamento,
                     faturamento_atrasado: faturamentoAtrasado,
@@ -1697,6 +1707,8 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                     energia_compensada: totalCompensada || Number(prodData.energia_compensada) || 0,
                     faturamento_mensal: totalFaturamento,
                     faturamento_pago: faturamentoPago,
+                    faturamento_retido: faturamentoRetido,
+                    faturas_retidas_qtd: faturasRetidasQtd,
                     faturamento_a_vencer: faturamentoAVencer,
                     faturamento_sem_faturamento: faturamentoSemFaturamento,
                     faturamento_atrasado: faturamentoAtrasado,
@@ -1739,6 +1751,8 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                     energia_compensada: totalCompensada || 0,
                     faturamento_mensal: totalFaturamento,
                     faturamento_pago: faturamentoPago,
+                    faturamento_retido: faturamentoRetido,
+                    faturas_retidas_qtd: faturasRetidasQtd,
                     faturamento_a_vencer: faturamentoAVencer,
                     faturamento_sem_faturamento: faturamentoSemFaturamento,
                     faturamento_atrasado: faturamentoAtrasado,
@@ -3498,6 +3512,8 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                         geracao_real, 
                         updated_at, 
                         faturamento_pago,
+                        faturamento_retido: _faturamentoRetido,
+                        faturas_retidas_qtd: _faturasRetidasQtd,
                         faturamento_a_vencer,
                         faturamento_sem_faturamento,
                         faturamento_atrasado,
@@ -4751,7 +4767,8 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                         {(() => {
                                             const faturamentoPago = monthlyDetails?.faturamento_pago || 0;
                                             const totalContasEnergia = monthlyDetails?.custo_disponibilidade || 0;
-                                            const subtotal = faturamentoPago - totalContasEnergia;
+                                            const faturamentoRetido = monthlyDetails?.faturamento_retido || 0;
+                                            const subtotal = faturamentoPago - totalContasEnergia - faturamentoRetido;
                                             const gestaoPercentual = Number(formData.gestao_percentual) || 0;
                                             const gestaoTaxa = subtotal * (gestaoPercentual / 100);
                                             const outrosServicos = (monthlyDetails?.manutencao || 0) + 
@@ -5021,6 +5038,18 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                                                         <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#991b1b' }}>(-) Contas de Energia no Período:</span>
                                                                         <span style={{ fontSize: '0.95rem', fontWeight: 900, color: '#991b1b' }}>{formatCurrency(totalContasEnergia)}</span>
                                                                     </div>
+
+                                                                    {faturamentoRetido !== 0 && (
+                                                                        <div
+                                                                            title="Primeiras faturas pagas de cada UC, retidas pelo contrato de Gestão: a parte do fornecedor vai à Associação para a comissão dos corretores de energia."
+                                                                            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.6rem 0.75rem', background: '#fff7ed', borderRadius: '10px', border: '1px dashed #fdba74' }}
+                                                                        >
+                                                                            <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#9a3412' }}>
+                                                                                (-) Faturas retidas para a Associação ({monthlyDetails?.faturas_retidas_qtd || 0}):
+                                                                            </span>
+                                                                            <span style={{ fontSize: '0.95rem', fontWeight: 900, color: '#9a3412' }}>{formatCurrency(faturamentoRetido)}</span>
+                                                                        </div>
+                                                                    )}
                                                                 </div>
                                                             </div>
                                                         </div>
