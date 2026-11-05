@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useUI } from '../contexts/UIContext';
 import { useBranding } from '../contexts/BrandingContext';
@@ -14,6 +14,7 @@ import {
 } from '../lib/contratoFornecedor';
 import { numeroBr, paraNumero } from '../lib/contratoBase';
 import { condicoesIniciaisGestao } from '../lib/planoUsina';
+import { CAMPOS_CONDICOES, CAMPOS_FIDELIDADE_SETUP, condicoesGestaoParaGravar } from '../lib/condicoesGestao';
 
 /**
  * Contrato de Administração e Gestão de Créditos Energéticos, na aba
@@ -32,45 +33,6 @@ import { condicoesIniciaisGestao } from '../lib/planoUsina';
  * webhook da Autentique, que reconhece este contrato por
  * `signatures.document_type = 'gestao'`.
  */
-
-/**
- * Condições comerciais do contrato de gestão.
- *
- * A validação de envio e o formulário usam a mesma lista: duas cópias é
- * como um campo novo entra na tela sem entrar na checagem.
- */
-const CAMPOS_CONDICOES = [
-    { key: 'desconto', label: 'Desconto ao consumidor (%)' },
-    { key: 'percentualRecorrente', label: 'Remuneração recorrente (%)' },
-    { key: 'taxaAdmin', label: 'Taxa de administração (R$)' },
-    { key: 'taxaRecuperacao', label: 'Taxa de recuperação (%)' },
-    { key: 'diaCorte', label: 'Dia de corte' },
-    { key: 'diaRepasse', label: 'Dia do repasse' },
-    { key: 'prazoTransferencia', label: 'Prazo de transferência (dias)' },
-    { key: 'prazoHonorarios', label: 'Prazo de honorários (dias)' }
-];
-
-/**
- * Fidelidade e setup do contrato de gestão (05/11/2026).
- *
- * Opcionais, fora de CAMPOS_CONDICOES de propósito: em branco quer dizer
- * "sem fidelidade" / "sem setup", e não pode barrar o envio como barram as
- * condições obrigatórias. Ficam gravados em `suppliers.contract_terms`; a
- * forma como entram na minuta é decidida no gerador (contratoFornecedor.js).
- *
- * Faturas retidas: quantas faturas pagas no início por cada assinante não
- * geram repasse ao fornecedor — o valor vai à Associação para pagar a
- * comissão dos corretores de energia. Só é gravado aqui; o fechamento e o
- * split ainda não aplicam a retenção.
- */
-const CAMPOS_FIDELIDADE_SETUP = [
-    { key: 'prazoFidelidadeMeses', label: 'Prazo de fidelidade (meses)', vazio: 'sem fidelidade' },
-    { key: 'valorSetup', label: 'Setup (R$)', vazio: 'sem setup' },
-    {
-        key: 'faturasRetidas', label: 'Faturas retidas', vazio: 'nenhuma',
-        dica: 'Faturas pagas no início por cada assinante sem repasse ao fornecedor: vão à Associação para a comissão dos corretores de energia.'
-    }
-];
 
 /**
  * Condições vindas do banco no formato da tela.
@@ -95,7 +57,14 @@ const resumoEnvio = (envio) => `WhatsApp: ${envio.whatsapp} · E-mail: ${envio.e
 const algumCanalFalhou = (envio) =>
     String(envio.whatsapp).startsWith('falhou') || String(envio.email).startsWith('falhou');
 
-export default function ContratoGestaoUsina({ usina, supplierId, registrarHistorico, planoUsina }) {
+/**
+ * `rascunho` / `onRascunho`: as condições digitadas sobem para o
+ * PowerPlantModal, que as grava em `suppliers.contract_terms` no Salvar da
+ * usina. Sem isso elas só eram gravadas ao gerar a minuta ou enviar o
+ * contrato, e o Salvar as perdia (05/11/2026). O rascunho também
+ * sobrevive à troca de aba, que desmonta este painel.
+ */
+export default function ContratoGestaoUsina({ usina, supplierId, registrarHistorico, planoUsina, rascunho, onRascunho }) {
     const { showAlert, showConfirm } = useUI();
     const { branding } = useBranding();
 
@@ -109,6 +78,8 @@ export default function ContratoGestaoUsina({ usina, supplierId, registrarHistor
     const [gerandoMinuta, setGerandoMinuta] = useState(false);
     const [enviando, setEnviando] = useState(false);
     const [cancelando, setCancelando] = useState(null);
+    // Liga quando alguém edita uma condição; só então o rascunho sobe ao modal.
+    const editado = useRef(false);
 
     const lerFornecedor = useCallback(async () => {
         const { data, error } = await supabase.from('suppliers').select('*').eq('id', supplierId).maybeSingle();
@@ -171,7 +142,11 @@ export default function ContratoGestaoUsina({ usina, supplierId, registrarHistor
                     gravados: forn?.contract_terms,
                     gestaoUsina: (lista.find(u => u.id === usina?.id) || lista[0])?.gestao_percentual
                 }));
-                setOpts(tela);
+                // Condição digitada e ainda não salva vence o banco: o painel
+                // remonta a cada troca de aba.
+                const doRascunho = rascunho?.supplierId === supplierId ? rascunho.opts : null;
+                editado.current = !!doRascunho;
+                setOpts(doRascunho ? { ...doRascunho, minutas: tela.minutas } : tela);
                 setDraft('');
             } catch (e) {
                 console.error('Erro ao carregar o contrato de gestão:', e);
@@ -183,6 +158,11 @@ export default function ContratoGestaoUsina({ usina, supplierId, registrarHistor
         return () => { cancelado = true; };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [supplierId, usina?.id, planoUsina?.id]);
+
+    useEffect(() => {
+        if (editado.current && supplierId) onRascunho?.({ supplierId, opts });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [opts]);
 
     // Memoizado porque cada tecla digitada chega aqui, e remontar 16 mil
     // caracteres a cada uma não tem por quê.
@@ -207,17 +187,7 @@ export default function ContratoGestaoUsina({ usina, supplierId, registrarHistor
      * 17.5 antes de gravar. Campo ilegível não é gravado: o gerador cai no
      * padrão.
      */
-    const condicoesParaGravar = () => {
-        const gravar = { foro: opts.foro };
-        for (const campo of [...CAMPOS_CONDICOES, ...CAMPOS_FIDELIDADE_SETUP]) {
-            const n = paraNumero(opts[campo.key]);
-            if (Number.isFinite(n)) gravar[campo.key] = n;
-        }
-        // A minuta editada à mão não está em CAMPOS_CONDICOES e seria apagada
-        // por quem reescreve `contract_terms` inteiro.
-        if (opts.minutas && Object.keys(opts.minutas).length) gravar.minutas = opts.minutas;
-        return gravar;
-    };
+    const condicoesParaGravar = () => condicoesGestaoParaGravar(opts);
 
     const nomeArquivo = (sufixo) =>
         `Contrato_Gestao_${(supplier?.name || 'fornecedor').replace(/\s+/g, '_')}_${sufixo}.pdf`;
@@ -577,6 +547,7 @@ export default function ContratoGestaoUsina({ usina, supplierId, registrarHistor
                                     // Só dígitos, vírgula e ponto: barra letra digitada por
                                     // engano sem brigar com quem está no meio de "17,".
                                     const limpo = e.target.value.replace(/[^\d.,]/g, '');
+                                    editado.current = true;
                                     setOpts({ ...opts, [campo.key]: limpo });
                                     // Condição alterada invalida o rascunho: o texto precisa
                                     // ser remontado com o número novo.
@@ -592,7 +563,7 @@ export default function ContratoGestaoUsina({ usina, supplierId, registrarHistor
                             type="text"
                             style={estiloCampo}
                             value={opts.foro ?? ''}
-                            onChange={e => { setOpts({ ...opts, foro: e.target.value }); setDraft(''); }}
+                            onChange={e => { editado.current = true; setOpts({ ...opts, foro: e.target.value }); setDraft(''); }}
                         />
                     </div>
 
@@ -609,6 +580,7 @@ export default function ContratoGestaoUsina({ usina, supplierId, registrarHistor
                                 onChange={e => {
                                     // Faturas retidas é contagem: só dígitos.
                                     const filtro = campo.key === 'faturasRetidas' ? /\D/g : /[^\d.,]/g;
+                                    editado.current = true;
                                     setOpts({ ...opts, [campo.key]: e.target.value.replace(filtro, '') });
                                     setDraft('');
                                 }}

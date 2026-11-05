@@ -20,6 +20,7 @@ import {
 import HistoryTimeline from './HistoryTimeline';
 import ContratoUsina from './ContratoUsina';
 import ContratoGestaoUsina from './ContratoGestaoUsina';
+import { mesclarCondicoesGestao } from '../lib/condicoesGestao';
 import { baixarPdfContratoUsina, CONTRATOS_USINA, DEFAULTS_USINA, gerarPdfContratoUsinaBase64 } from '../lib/contratosUsina';
 import { termosContratoDoPlano, CHAVES_CONTRATO_DO_PLANO, planoAceitaUsina } from '../lib/planoUsina';
 import { paraNumero } from '../lib/contratoBase';
@@ -482,6 +483,9 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete, init
     // Compra e venda, arrendamento e O&M são cada um sobre ESTA usina. O
     // signatário continua sendo o fornecedor (a SPE); o que muda é o objeto.
     const [tipoContrato, setTipoContrato] = useState('compra_venda');
+    // Condições da Gestão de Créditos digitadas e ainda não salvas
+    // ({ supplierId, opts }); o handleSubmit as grava no fornecedor.
+    const [rascunhoGestao, setRascunhoGestao] = useState(null);
     const [contractOpts, setContractOpts] = useState(DEFAULTS_USINA);
     const [contractDraft, setContractDraft] = useState('');
     const [areaArrendada, setAreaArrendada] = useState(null);
@@ -1200,6 +1204,8 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
     useEffect(() => {
         fetchAvailableUCs();
     }, [usina?.id]);
+
+    useEffect(() => { setRascunhoGestao(null); }, [usina?.id]);
 
     const fetchLinkedUCs = async (usinaId) => {
         const { data } = await supabase.from('consumer_units')
@@ -3450,6 +3456,26 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
             }
 
             if (operationError) throw operationError;
+
+            // Condições do contrato de Gestão digitadas na aba Contratos. São
+            // do fornecedor (`suppliers.contract_terms`), não da usina, e o
+            // update acima não as leva. Relidas antes para não apagar chave
+            // que a tela não conhece.
+            if (rascunhoGestao && rascunhoGestao.supplierId === formData.supplier_id) {
+                const { data: forn, error: lerErr } = await supabase.from('suppliers')
+                    .select('contract_terms').eq('id', rascunhoGestao.supplierId).maybeSingle();
+                if (lerErr) throw lerErr;
+                // `.select` porque update barrado pela RLS volta sem erro e
+                // sem linha — a mesma perda silenciosa que este bloco corrige.
+                const { data: gravado, error: gestaoErr } = await supabase.from('suppliers')
+                    .update({ contract_terms: mesclarCondicoesGestao(forn?.contract_terms, rascunhoGestao.opts) })
+                    .eq('id', rascunhoGestao.supplierId)
+                    .select('id');
+                if (gestaoErr || !gravado?.length) {
+                    throw new Error('usina salva, mas as condições da Gestão de Créditos não: ' + (gestaoErr?.message || 'sem permissão para alterar o fornecedor'));
+                }
+                setRascunhoGestao(null);
+            }
 
             if (usinaId && isUCsModified) {
                 // Uma transação só, com a diferença: sai quem foi removido,
@@ -5968,6 +5994,8 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                             supplierId={formData.supplier_id}
                                             registrarHistorico={addHistory}
                                             planoUsina={planoUsinaSel}
+                                            rascunho={rascunhoGestao}
+                                            onRascunho={setRascunhoGestao}
                                         />
                                     ) : (
                                     <>
