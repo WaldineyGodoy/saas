@@ -1899,36 +1899,11 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
                 showAlert('Cliente salvo APENAS LOCALMENTE (Erro Asaas ignorado).', 'warning');
             }
 
-            // 4. Sync Lead Status
-            try {
-                let newLeadStatus = null;
-                if (dataToSave.status === 'ativacao') {
-                    newLeadStatus = 'ativacao';
-                } else if (dataToSave.status === 'ativo') {
-                    newLeadStatus = 'ativo';
-                }
-
-                if (newLeadStatus && dataToSave.email) {
-                    const { data: leadsComp } = await supabase
-                        .from('leads')
-                        .select('id, status')
-                        .eq('email', dataToSave.email)
-                        .order('created_at', { ascending: false })
-                        .limit(1);
-
-                    if (leadsComp && leadsComp.length > 0) {
-                        const targetLead = leadsComp[0];
-                        if (targetLead.status !== newLeadStatus) {
-                            await supabase
-                                .from('leads')
-                                .update({ status: newLeadStatus })
-                                .eq('id', targetLead.id);
-                        }
-                    }
-                }
-            } catch (syncErr) {
-                console.error('Lead sync error:', syncErr);
-            }
+            // O status do lead não é gravado daqui: ele é derivado do
+            // assinante pelo gatilho `trg_sync_lead_status`, só para o lead
+            // ligado por `lead_id`. A antiga busca pelo e-mail gravava
+            // 'ativacao' sem contrato assinado e alcançava lead de outra
+            // pessoa com o mesmo e-mail.
 
             onSave(result.data);
 
