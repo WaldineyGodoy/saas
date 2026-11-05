@@ -948,6 +948,10 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
     const [ucForInvoices, setUcForInvoices] = useState(null);
     const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
     const [editingUC, setEditingUC] = useState(null);
+    // Lista de UGs da aba Geral: por padrao so as do fornecedor escolhido
+    // (titular com o mesmo CPF/CNPJ). "Mostrar todas" cobre titular de terceiro,
+    // como a Associacao B2W.
+    const [mostrarTodasUGs, setMostrarTodasUGs] = useState(false);
 
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
@@ -3997,11 +4001,41 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                         {(() => {
                                             const allUCs = [...availableUCs, ...selectedUCs];
                                             const uniqueUCs = Array.from(new Map(allUCs.map(uc => [uc.id, uc])).values());
-                                            const geradoras = uniqueUCs.filter(uc => uc.tipo_unidade === 'geradora');
+                                            const todasGeradoras = uniqueUCs.filter(uc => uc.tipo_unidade === 'geradora');
                                             const selectedSupplier = suppliers.find(s => s.id === formData.supplier_id);
+                                            const soDigitos = (v) => String(v || '').replace(/\D/g, '');
+                                            const docFornecedor = soDigitos(selectedSupplier?.cnpj);
+                                            const ehDoFornecedor = (uc) => {
+                                                const titular = subscribers.find(s => s.id === uc.titular_fatura_id);
+                                                return [titular?.cpf_cnpj, uc.cpf_cnpj_fatura].some(d => soDigitos(d) && soDigitos(d) === docFornecedor);
+                                            };
+                                            const jaDaUsina = (uc) =>
+                                                (usina?.id && uc.usina_id === usina.id) ||
+                                                (formData.unidade_geradora && normUG(formData.unidade_geradora) === normUG(uc.numero_uc));
+                                            const filtrar = !mostrarTodasUGs && !!docFornecedor;
+                                            const geradoras = filtrar
+                                                ? todasGeradoras.filter(uc => ehDoFornecedor(uc) || jaDaUsina(uc))
+                                                : todasGeradoras;
+                                            const ocultas = todasGeradoras.length - geradoras.length;
 
                                             return (
                                                 <>
+                                                    {(filtrar || mostrarTodasUGs) && (
+                                                        <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem', color: '#64748b' }}>
+                                                            <span>
+                                                                {mostrarTodasUGs
+                                                                    ? 'Mostrando todas as UGs livres do sistema.'
+                                                                    : `Mostrando só as UGs com titular de CPF/CNPJ igual ao do fornecedor${ocultas > 0 ? ` (${ocultas} de outros titulares oculta${ocultas > 1 ? 's' : ''})` : ''}.`}
+                                                            </span>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setMostrarTodasUGs(v => !v)}
+                                                                style={{ background: 'none', border: 'none', color: '#2563eb', fontWeight: 600, cursor: 'pointer', fontSize: '0.8rem' }}
+                                                            >
+                                                                {mostrarTodasUGs ? 'Só do fornecedor' : 'Mostrar todas'}
+                                                            </button>
+                                                        </div>
+                                                    )}
                                                     {selectedSupplier && (
                                                         <div
                                                             onClick={() => setActiveSupplierForModal(selectedSupplier)}
@@ -6509,13 +6543,21 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                 <ConsumerUnitModal
                     consumerUnit={editingUC}
                     onClose={() => setEditingUC(null)}
+                    // Usina nova ainda nao tem id: so a lista de livres e recarregada.
+                    // Sem essa guarda, excluir a UC apagava no banco e depois quebrava
+                    // em "usina is null", exibindo "Erro ao excluir" sobre uma exclusao feita.
                     onSave={() => {
-                        fetchLinkedUCs(usina.id);
+                        if (usina?.id) fetchLinkedUCs(usina.id);
                         fetchAvailableUCs();
                         setEditingUC(null);
                     }}
-                    onDelete={() => {
-                        fetchLinkedUCs(usina.id);
+                    onDelete={(ucId) => {
+                        const excluida = editingUC;
+                        setSelectedUCs(prev => prev.filter(u => u.id !== ucId));
+                        if (excluida && normUG(formData.unidade_geradora) === normUG(excluida.numero_uc)) {
+                            setFormData(prev => ({ ...prev, unidade_geradora: '', cnpj_cpf: '' }));
+                        }
+                        if (usina?.id) fetchLinkedUCs(usina.id);
                         fetchAvailableUCs();
                         setEditingUC(null);
                     }}
