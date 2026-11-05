@@ -723,11 +723,20 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
         ...(supplier?.lead_id ? { lead_id: supplier.lead_id } : {})
     });
 
+    // O campo `cnpj` guarda CPF ou CNPJ: os rótulos e o bloco do sócio
+    // seguem a quantidade de dígitos (até 11 é pessoa física).
+    const docDigitos = cleanDigits(formData.cnpj || '');
+    const docEhCpf = docDigitos.length > 0 && docDigitos.length <= 11;
+    const docEhCnpj = docDigitos.length > 11;
+    const rotuloNome = docEhCpf ? 'Nome Completo *'
+        : docEhCnpj ? 'Razão Social / Nome Fantasia *'
+            : 'Nome Completo ou Razão Social *';
+
     const handleSubmit = async (e) => {
         e.preventDefault();
 
         if (formData.cnpj && !validateDocument(formData.cnpj)) {
-            showAlert('CNPJ inválido!', 'warning');
+            showAlert('CPF/CNPJ inválido!', 'warning');
             return;
         }
         if (formData.phone && !validatePhone(formData.phone)) {
@@ -1219,21 +1228,21 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                             <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
                                 <div style={sectionStyle}>
                                     <h4 style={{ margin: '0 0 1.5rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b' }}>
-                                        <User size={20} color="#3b82f6" /> Dados da Empresa
+                                        <User size={20} color="#3b82f6" /> Dados do Fornecedor
                                     </h4>
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
                                         <div style={{ gridColumn: '1 / -1' }}>
-                                            <label style={labelStyle}>CNPJ (Busca Automática)</label>
+                                            <label style={labelStyle}>CPF/CNPJ (busca automática no CNPJ)</label>
                                             <input
                                                 style={{ ...inputStyle, borderStyle: 'dashed', borderWidth: '2px' }}
                                                 value={formData.cnpj}
                                                 onChange={e => setFormData({ ...formData, cnpj: maskCpfCnpj(e.target.value) })}
                                                 onBlur={handleCnpjBlur}
-                                                placeholder="00.000.000/0000-00"
+                                                placeholder="000.000.000-00 ou 00.000.000/0000-00"
                                             />
                                         </div>
                                         <div style={{ gridColumn: '1 / -1' }}>
-                                            <label style={labelStyle}>Razão Social / Nome Fantasia *</label>
+                                            <label style={labelStyle}>{rotuloNome}</label>
                                             <input
                                                 style={inputStyle}
                                                 required
@@ -1244,6 +1253,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                     </div>
                                 </div>
 
+                                {docEhCnpj && (
                                 <div style={sectionStyle}>
                                     <h4 style={{ margin: '0 0 1.5rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b' }}>
                                         <CheckCircle size={20} color="#34d399" /> Sócio Administrador
@@ -1267,6 +1277,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                         </div>
                                     </div>
                                 </div>
+                                )}
 
                                 <div style={sectionStyle}>
                                     <h4 style={{ margin: '0 0 1.5rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b' }}>
