@@ -236,22 +236,32 @@ async function escolherOpcao(page, trechoRotulo, opcao) {
 function conferirEndereco(mascarado, endereco) {
     const tela = normalizar(mascarado);
     const palavrasTela = tela.split(' ');
-    const achados = [];
-    const numero = so(endereco?.numero);
-    if (numero) achados.push({ item: `número ${numero}`, ok: palavrasTela.some((p) => so(p) === numero) });
+    const ultima = palavrasTela.length - 1;
+    // A última palavra da tela pode vir cortada: "SA* GO***LO DO AM****" é
+    // São Gonçalo do AMARANTE (19/10/2026). Nela, basta casar o começo.
+    const casa = (palavra, padrao, cortada) =>
+        (palavra.length === padrao.length || (cortada && padrao.length < palavra.length)) &&
+        [...padrao].every((c, i) => c === '*' || c === palavra[i]);
+    // Todas as palavras (mais de 2 letras) do campo do cadastro aparecem na tela.
+    const confere = (valor) => {
+        const pals = normalizar(valor).split(' ').filter((p) => p.length > 2);
+        return pals.length > 0 && pals.every((p) => palavrasTela.some((t, i) => casa(p, t, i === ultima)));
+    };
 
-    const cidade = normalizar(endereco?.cidade);
-    if (cidade) {
-        // A última palavra da tela pode vir cortada: "SA* GO***LO DO AM****" é
-        // São Gonçalo do AMARANTE (19/10/2026). Nela, basta casar o começo.
-        const ultima = palavrasTela.length - 1;
-        const casa = (palavra, padrao, cortada) =>
-            (palavra.length === padrao.length || (cortada && padrao.length < palavra.length)) &&
-            [...padrao].every((c, i) => c === '*' || c === palavra[i]);
-        const pals = cidade.split(' ').filter((p) => p.length > 2);
-        achados.push({ item: `cidade ${endereco.cidade}`, ok: pals.every((p) => palavrasTela.some((t, i) => casa(p, t, i === ultima))) });
-    }
-    return { tela: mascarado, ok: achados.length > 0 && achados.every((a) => a.ok), achados };
+    const numero = so(endereco?.numero);
+    const achadoNumero = numero ? { item: `número ${numero}`, ok: palavrasTela.some((p) => so(p) === numero) } : null;
+
+    // O portal corta o fim do endereço e às vezes a cidade nem aparece
+    // ("AV OL*VO LA***DA MO******RO 3640 PA**UE DA* AR***", 06/11/2026: rua,
+    // número e bairro batiam e a cidade acusava divergência). Por isso o local
+    // vale se QUALQUER UM entre rua, bairro e cidade confere.
+    const locais = [['rua', endereco?.rua], ['bairro', endereco?.bairro], ['cidade', endereco?.cidade]]
+        .filter(([, v]) => normalizar(v))
+        .map(([rot, v]) => ({ item: `${rot} ${v}`, ok: confere(v) }));
+
+    const achados = [achadoNumero, ...locais].filter(Boolean);
+    const ok = !!achadoNumero?.ok && locais.some((l) => l.ok);
+    return { tela: mascarado, ok, achados };
 }
 
 /** Das datas oferecidas, a mais próxima do dia 15 (empate: a anterior). */
