@@ -1,6 +1,6 @@
 /**
  * Um ciclo de coleta: lê da SAJ o estado de cada inversor, a geração de cada
- * usina e os alarmes das últimas 24 h, e monta o pacote que o banco grava.
+ * usina e os alarmes das últimas 24 h de cada usina, e monta o pacote que o banco grava.
  *
  * Quem decide o que entra em cada tabela é `fn_monitor_registrar` no Supabase.
  * Aqui só se traduz o formato da SAJ para o nosso, sem descartar nada: o JSON
@@ -76,18 +76,28 @@ export async function coletar(saj, agora = new Date()) {
     }
   }
 
-  let alarmes = [];
-  try {
-    alarmes = (await saj.alarmes(inicioAlarmes, clientDate)).map((a) => ({
-      device_sn: a.deviceSn,
-      codigo: a.alarmCode != null ? String(a.alarmCode) : null,
-      nome: a.alarmName ?? null,
-      nivel: num(a.alarmLevel),
-      estado: num(a.status),
-      inicio: paraIso(a.alarmTime),
-    })).filter((a) => a.device_sn && a.codigo && a.inicio);
-  } catch (err) {
-    erros.push(`alarmes: ${err.message}`);
+  // Um pedido por usina. A doc da SAJ mostra dois formatos de resposta
+  // (alarmCode/status/alarmTime e alarmID/alarmState/alarmStartTime), por isso
+  // os dois são aceitos. Falha numa usina não esconde os alarmes das outras.
+  const alarmes = [];
+  for (const plantId of nomes.keys()) {
+    if (!plantId) continue;
+    try {
+      for (const a of await saj.alarmes(plantId, inicioAlarmes, clientDate)) {
+        const codigo = a.alarmCode ?? a.alarmID ?? a.alarmId;
+        const alarme = {
+          device_sn: a.deviceSn || a.optSn || null,
+          codigo: codigo != null && codigo !== '' ? String(codigo) : null,
+          nome: a.alarmName ?? null,
+          nivel: num(a.alarmLevel),
+          estado: num(a.status ?? a.alarmState),
+          inicio: paraIso(a.alarmTime ?? a.alarmStartTime),
+        };
+        if (alarme.device_sn && alarme.codigo && alarme.inicio) alarmes.push(alarme);
+      }
+    } catch (err) {
+      erros.push(`alarmes ${plantId}: ${err.message}`);
+    }
   }
 
   return { coletado_em: agora.toISOString(), dispositivos, plantas, alarmes, erros };

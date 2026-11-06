@@ -136,10 +136,13 @@ export function criarClienteSaj({ appId, appSecret, base = BASE_PADRAO, fetchImp
     return r.data ?? null;
   }
 
-  /** Alarmes do app inteiro (todas as usinas autorizadas) na janela pedida. */
-  async function alarmes(startTime, endTime) {
-    const r = await chamar('GET', '/open/api/device/alarmList', { appId, startTime, endTime, status: '1,4' });
-    return r.data ?? [];
+  /**
+   * Alarmes de UMA usina na janela pedida. A SAJ recusa a chamada sem
+   * deviceSn nem plantId (erro 200005), então não há consulta do app inteiro.
+   */
+  async function alarmes(plantId, startTime, endTime) {
+    const r = await chamar('GET', '/open/api/device/alarmList', { appId, plantId, startTime, endTime, status: '1,4' });
+    return Array.isArray(r.data) ? r.data : (r.data?.rows ?? r.rows ?? []);
   }
 
   return { obterToken, chamar, plantas, dispositivos, estatisticas, alarmes };

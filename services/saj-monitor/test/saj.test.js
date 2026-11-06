@@ -82,6 +82,7 @@ test('datas: horário local das usinas e conversão para ISO', () => {
 });
 
 test('coleta junta inversores, usinas e alarmes; falha de uma usina não derruba o ciclo', async () => {
+  const pedidos = [];
   const saj = {
     dispositivos: async () => [
       { deviceSn: 'SN1', deviceType: 'C6', plantId: 161369, plantName: 'UFV Bom Jesus', isOnline: 1, isAlarm: 0 },
@@ -91,10 +92,16 @@ test('coleta junta inversores, usinas e alarmes; falha de uma usina não derruba
       if (id === 'P2') throw new Error('SAJ x: 10001');
       return { powerNow: 52000, todayPvEnergy: '310.5', totalPvEnergy: 120000, updateDate: '2026-10-31 09:55:00' };
     },
-    alarmes: async () => [
-      { deviceSn: 'SN2', alarmCode: 17, alarmName: 'Grid lost', alarmLevel: 2, status: 1, alarmTime: '2026-10-31 08:00:00' },
-      { deviceSn: 'SN2', alarmCode: null, alarmTime: null },
-    ],
+    alarmes: async (plantId) => {
+      pedidos.push(plantId);
+      if (plantId === 'P2') {
+        return [
+          { deviceSn: 'SN2', alarmCode: 17, alarmName: 'Grid lost', alarmLevel: 2, status: 1, alarmTime: '2026-10-31 08:00:00' },
+          { deviceSn: 'SN2', alarmCode: null, alarmTime: null },
+        ];
+      }
+      return [{ deviceSn: 'SN1', alarmID: 'A9', alarmName: 'Isolation', alarmLevel: 3, alarmState: 4, alarmStartTime: '2026-10-31 07:00:00' }];
+    },
   };
   const p = await coletar(saj, new Date('2026-10-31T13:00:00Z'));
   assert.equal(p.dispositivos.length, 2);
@@ -102,7 +109,28 @@ test('coleta junta inversores, usinas e alarmes; falha de uma usina não derruba
   assert.equal(p.plantas.length, 1);
   assert.equal(p.plantas[0].energia_hoje_kwh, 310.5);
   assert.equal(p.plantas[0].dados_em, '2026-10-31T12:55:00.000Z');
-  assert.equal(p.alarmes.length, 1);
-  assert.equal(p.alarmes[0].codigo, '17');
+  assert.deepEqual(pedidos, ['161369', 'P2']);
+  assert.equal(p.alarmes.length, 2);
+  assert.deepEqual(p.alarmes[0], { device_sn: 'SN1', codigo: 'A9', nome: 'Isolation', nivel: 3, estado: 4, inicio: '2026-10-31T10:00:00.000Z' });
+  assert.equal(p.alarmes[1].codigo, '17');
+  assert.equal(p.alarmes[1].estado, 1);
   assert.deepEqual(p.erros, ['planta P2: SAJ x: 10001']);
+});
+
+test('alarme de uma usina que falha não derruba as outras', async () => {
+  const saj = {
+    dispositivos: async () => [
+      { deviceSn: 'SN1', plantId: 'P1', isOnline: 1 },
+      { deviceSn: 'SN2', plantId: 'P2', isOnline: 1 },
+    ],
+    estatisticas: async () => null,
+    alarmes: async (plantId) => {
+      if (plantId === 'P1') throw new Error('SAJ /open/api/device/alarmList: 200005 x');
+      return [{ deviceSn: 'SN2', alarmCode: 5, alarmLevel: 2, status: 1, alarmTime: '2026-10-31 08:00:00' }];
+    },
+  };
+  const p = await coletar(saj, new Date('2026-10-31T13:00:00Z'));
+  assert.equal(p.alarmes.length, 1);
+  assert.equal(p.alarmes[0].device_sn, 'SN2');
+  assert.deepEqual(p.erros, ['alarmes P1: SAJ /open/api/device/alarmList: 200005 x']);
 });
