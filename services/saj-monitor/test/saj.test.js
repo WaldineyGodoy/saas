@@ -134,3 +134,22 @@ test('alarme de uma usina que falha não derruba as outras', async () => {
   assert.equal(p.alarmes[0].device_sn, 'SN2');
   assert.deepEqual(p.erros, ['alarmes P1: SAJ /open/api/device/alarmList: 200005 x']);
 });
+
+test('tempo real de cada inversor vai cru em dados.tempo_real da usina', async () => {
+  const saj = {
+    dispositivos: async () => [
+      { deviceSn: 'SN1', plantId: 'P1', isOnline: 1 },
+      { deviceSn: 'SN2', plantId: 'P1', isOnline: 1 },
+    ],
+    estatisticas: async () => ({ powerNow: '0', todayPvEnergy: '491.86', dataTime: '2026-11-06 15:25:00' }),
+    alarmes: async () => [],
+    tempoReal: async (sn) => {
+      if (sn === 'SN2') throw new Error('SAJ realtime: 200006');
+      return { deviceSn: sn, totalPVPower: '28120' };
+    },
+  };
+  const p = await coletar(saj, new Date('2026-11-06T18:30:00Z'));
+  assert.deepEqual(p.plantas[0].dados.tempo_real, { SN1: { deviceSn: 'SN1', totalPVPower: '28120' } });
+  assert.equal(p.plantas[0].dados.powerNow, '0');
+  assert.deepEqual(p.erros, ['tempo real SN2: SAJ realtime: 200006']);
+});

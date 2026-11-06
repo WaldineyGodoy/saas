@@ -410,6 +410,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete, init
         inversores_sn: [],
         alertas_whatsapp: [],
         alertas_tipos: ['offline'],
+        alertas_pausados: false,
         compra_venda_assinada_em: '',
         // Venda ao investidor: alimenta "Usinas à venda" na base do Agente
         // Investidor do Deskcomm (supabase/functions/deskcomm-base).
@@ -1165,6 +1166,7 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                 inversores_sn: usina.inversores_sn || [],
                 alertas_whatsapp: usina.alertas_whatsapp || [],
                 alertas_tipos: usina.alertas_tipos || ['offline'],
+                alertas_pausados: !!usina.alertas_pausados,
                 compra_venda_assinada_em: usina.compra_venda_assinada_em
                     ? usina.compra_venda_assinada_em.slice(0, 10) : '',
                 a_venda: !!usina.a_venda,
@@ -3453,6 +3455,7 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
             inversores_sn: inversoresParaGravar(formData.inversores_sn),
             alertas_whatsapp: alertasParaGravar(formData.alertas_whatsapp),
             alertas_tipos: formData.alertas_tipos || [],
+            alertas_pausados: !!formData.alertas_pausados,
             // Só grava a data se ela mudou: a da Autentique tem hora, e
             // regravar o dia puro a truncaria a cada salvamento.
             ...((formData.compra_venda_assinada_em || '') !== (usina?.compra_venda_assinada_em?.slice(0, 10) || '')
@@ -4472,6 +4475,9 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                     tipos={formData.alertas_tipos}
                                     onChangeNumeros={numeros => setFormData(prev => ({ ...prev, alertas_whatsapp: numeros }))}
                                     onChangeTipos={tipos => setFormData(prev => ({ ...prev, alertas_tipos: tipos }))}
+                                    pausados={formData.alertas_pausados}
+                                    pausadosEm={usina?.alertas_pausados_em}
+                                    onChangePausados={v => setFormData(prev => ({ ...prev, alertas_pausados: v }))}
                                 />
                             </div>
                         )}

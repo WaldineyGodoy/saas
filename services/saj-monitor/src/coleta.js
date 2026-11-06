@@ -76,6 +76,24 @@ export async function coletar(saj, agora = new Date()) {
     }
   }
 
+  // Tempo real de cada inversor. O powerNow de getPlantStatisticsData veio "0"
+  // com a usina gerando cerca de 28 kW (06/11/2026). A resposta crua fica em
+  // dados.tempo_real[SN] para achar o campo da potência de saída CA. Uma falha
+  // aqui não derruba o resto do ciclo.
+  if (saj.tempoReal) {
+    const porPlanta = new Map(plantas.map((p) => [p.plant_id, p]));
+    for (const d of dispositivos) {
+      const p = porPlanta.get(d.plant_id);
+      if (!p || !d.device_sn) continue;
+      try {
+        const t = await saj.tempoReal(d.device_sn);
+        if (t) p.dados = { ...p.dados, tempo_real: { ...(p.dados?.tempo_real ?? {}), [d.device_sn]: t } };
+      } catch (err) {
+        erros.push(`tempo real ${d.device_sn}: ${err.message}`);
+      }
+    }
+  }
+
   // Um pedido por usina. A doc da SAJ mostra dois formatos de resposta
   // (alarmCode/status/alarmTime e alarmID/alarmState/alarmStartTime), por isso
   // os dois são aceitos. Falha numa usina não esconde os alarmes das outras.

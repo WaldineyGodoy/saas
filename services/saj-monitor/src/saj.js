@@ -145,5 +145,11 @@ export function criarClienteSaj({ appId, appSecret, base = BASE_PADRAO, fetchImp
     return Array.isArray(r.data) ? r.data : (r.data?.rows ?? r.rows ?? []);
   }
 
-  return { obterToken, chamar, plantas, dispositivos, estatisticas, alarmes };
+  /** Dados em tempo real de um inversor (potência de saída CA, tensões, correntes...). */
+  async function tempoReal(deviceSn) {
+    const r = await chamar('GET', '/open/api/device/realtimeDataCommon', { deviceSn });
+    return r.data ?? null;
+  }
+
+  return { obterToken, chamar, plantas, dispositivos, estatisticas, alarmes, tempoReal };
 }
