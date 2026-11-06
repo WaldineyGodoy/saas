@@ -3,7 +3,7 @@
 Robô que lê os inversores SAJ das usinas pela Elekeeper Open Platform e grava no Supabase (`monitor_*`). A cada ciclo ele traz:
 
 - o estado online/alarme de cada inversor;
-- a potência e a energia do dia, do mês, do ano e o total de cada usina;
+- a potência de saída CA (em W, soma do `totalGridPowerWatt` de cada inversor, o mesmo número da curva do Elekeeper) e a energia do dia, do mês, do ano e o total de cada usina;
 - os alarmes das últimas 24 h, pedidos usina por usina (a SAJ exige plantId ou deviceSn).
 
 Os dados servem para acompanhar as usinas e para a tela do investidor. Eles **não** substituem o fechamento em `generation_production`.
