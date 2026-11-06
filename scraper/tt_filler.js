@@ -236,22 +236,32 @@ async function escolherOpcao(page, trechoRotulo, opcao) {
 function conferirEndereco(mascarado, endereco) {
     const tela = normalizar(mascarado);
     const palavrasTela = tela.split(' ');
-    const achados = [];
-    const numero = so(endereco?.numero);
-    if (numero) achados.push({ item: `número ${numero}`, ok: palavrasTela.some((p) => so(p) === numero) });
+    const ultima = palavrasTela.length - 1;
+    // A última palavra da tela pode vir cortada: "SA* GO***LO DO AM****" é
+    // São Gonçalo do AMARANTE (19/10/2026). Nela, basta casar o começo.
+    const casa = (palavra, padrao, cortada) =>
+        (palavra.length === padrao.length || (cortada && padrao.length < palavra.length)) &&
+        [...padrao].every((c, i) => c === '*' || c === palavra[i]);
+    // Todas as palavras (mais de 2 letras) do campo do cadastro aparecem na tela.
+    const confere = (valor) => {
+        const pals = normalizar(valor).split(' ').filter((p) => p.length > 2);
+        return pals.length > 0 && pals.every((p) => palavrasTela.some((t, i) => casa(p, t, i === ultima)));
+    };
 
-    const cidade = normalizar(endereco?.cidade);
-    if (cidade) {
-        // A última palavra da tela pode vir cortada: "SA* GO***LO DO AM****" é
-        // São Gonçalo do AMARANTE (19/10/2026). Nela, basta casar o começo.
-        const ultima = palavrasTela.length - 1;
-        const casa = (palavra, padrao, cortada) =>
-            (palavra.length === padrao.length || (cortada && padrao.length < palavra.length)) &&
-            [...padrao].every((c, i) => c === '*' || c === palavra[i]);
-        const pals = cidade.split(' ').filter((p) => p.length > 2);
-        achados.push({ item: `cidade ${endereco.cidade}`, ok: pals.every((p) => palavrasTela.some((t, i) => casa(p, t, i === ultima))) });
-    }
-    return { tela: mascarado, ok: achados.length > 0 && achados.every((a) => a.ok), achados };
+    const numero = so(endereco?.numero);
+    const achadoNumero = numero ? { item: `número ${numero}`, ok: palavrasTela.some((p) => so(p) === numero) } : null;
+
+    // O portal corta o fim do endereço e às vezes a cidade nem aparece
+    // ("AV OL*VO LA***DA MO******RO 3640 PA**UE DA* AR***", 06/11/2026: rua,
+    // número e bairro batiam e a cidade acusava divergência). Por isso o local
+    // vale se QUALQUER UM entre rua, bairro e cidade confere.
+    const locais = [['rua', endereco?.rua], ['bairro', endereco?.bairro], ['cidade', endereco?.cidade]]
+        .filter(([, v]) => normalizar(v))
+        .map(([rot, v]) => ({ item: `${rot} ${v}`, ok: confere(v) }));
+
+    const achados = [achadoNumero, ...locais].filter(Boolean);
+    const ok = !!achadoNumero?.ok && locais.some((l) => l.ok);
+    return { tela: mascarado, ok, achados };
 }
 
 /** Das datas oferecidas, a mais próxima do dia 15 (empate: a anterior). */
@@ -320,11 +330,20 @@ async function abrirTT(page) {
     await clicarTexto(page, 'Troca de Titularidade');
     await espera(page, 3000);
     await clicarTexto(page, 'Iniciar', { ultimo: true });
-    await espera(page, 4000);
 
-    const texto = await textoDaTela(page);
-    if (/d[ée]bito/i.test(texto) && await passoAtual(page) === null) {
-        return { debito: true, valor: valorDoDebito(texto), texto: texto.slice(0, 600) };
+    // O aviso de débito pode demorar mais que o passo 1 (04/11/2026: chegou depois
+    // de 4 s e o filler caiu em "não cheguei ao passo 1"). Espera um OU outro.
+    // Texto real: "Troca de titularidade não permitida. Identificamos débito em
+    // aberto junto à distribuidora para o documento fiscal informado..."
+    const ate = Date.now() + 20000;
+    while (Date.now() < ate) {
+        await espera(page, 1000);
+        const texto = await textoDaTela(page);
+        if (/n[ãa]o permitida|d[ée]bito em aberto/i.test(texto)) {
+            const aviso = (texto.match(/Troca de titularidade n[ãa]o permitida.{0,400}/i) || [texto.slice(0, 600)])[0];
+            return { debito: true, valor: valorDoDebito(texto), texto: aviso };
+        }
+        if (await passoAtual(page) !== null) return { debito: false };
     }
     return { debito: false };
 }
