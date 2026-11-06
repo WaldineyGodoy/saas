@@ -80,18 +80,28 @@ export async function coletar(saj, agora = new Date()) {
   // com a usina gerando cerca de 28 kW (06/11/2026). A resposta crua fica em
   // dados.tempo_real[SN] para achar o campo da potência de saída CA. Uma falha
   // aqui não derruba o resto do ciclo.
+  //
+  // Potência da usina, em WATTS: soma do totalGridPowerWatt (saída CA para a
+  // rede, soma das 3 fases) de cada inversor. É o mesmo número da curva
+  // "Potência Total De Saída AC" do Elekeeper. powerNow e totalPVPower vêm "0"
+  // para o C6 da Bom Jesus, então só são usados se nenhum inversor responder.
   if (saj.tempoReal) {
     const porPlanta = new Map(plantas.map((p) => [p.plant_id, p]));
+    const somaCa = new Map();
     for (const d of dispositivos) {
       const p = porPlanta.get(d.plant_id);
       if (!p || !d.device_sn) continue;
       try {
         const t = await saj.tempoReal(d.device_sn);
-        if (t) p.dados = { ...p.dados, tempo_real: { ...(p.dados?.tempo_real ?? {}), [d.device_sn]: t } };
+        if (!t) continue;
+        p.dados = { ...p.dados, tempo_real: { ...(p.dados?.tempo_real ?? {}), [d.device_sn]: t } };
+        const w = num(t.totalGridPowerWatt);
+        if (w !== null) somaCa.set(d.plant_id, (somaCa.get(d.plant_id) ?? 0) + Math.max(0, w));
       } catch (err) {
         erros.push(`tempo real ${d.device_sn}: ${err.message}`);
       }
     }
+    for (const [plantId, w] of somaCa) porPlanta.get(plantId).potencia_atual = w;
   }
 
   // Um pedido por usina. A doc da SAJ mostra dois formatos de resposta

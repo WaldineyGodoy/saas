@@ -145,11 +145,30 @@ test('tempo real de cada inversor vai cru em dados.tempo_real da usina', async (
     alarmes: async () => [],
     tempoReal: async (sn) => {
       if (sn === 'SN2') throw new Error('SAJ realtime: 200006');
-      return { deviceSn: sn, totalPVPower: '28120' };
+      return { deviceSn: sn, totalPVPower: '0', totalGridPowerWatt: '2915.00' };
     },
   };
   const p = await coletar(saj, new Date('2026-11-06T18:30:00Z'));
-  assert.deepEqual(p.plantas[0].dados.tempo_real, { SN1: { deviceSn: 'SN1', totalPVPower: '28120' } });
+  assert.deepEqual(p.plantas[0].dados.tempo_real, { SN1: { deviceSn: 'SN1', totalPVPower: '0', totalGridPowerWatt: '2915.00' } });
+  assert.equal(p.plantas[0].potencia_atual, 2915);
   assert.equal(p.plantas[0].dados.powerNow, '0');
   assert.deepEqual(p.erros, ['tempo real SN2: SAJ realtime: 200006']);
+});
+
+test('potência da usina = soma da saída CA (W) dos inversores; sem tempo real, fica o powerNow', async () => {
+  const base = {
+    dispositivos: async () => [
+      { deviceSn: 'A', plantId: 'P1', isOnline: 1 },
+      { deviceSn: 'B', plantId: 'P1', isOnline: 1 },
+      { deviceSn: 'C', plantId: 'P2', isOnline: 1 },
+    ],
+    estatisticas: async (id) => ({ powerNow: id === 'P2' ? '7' : '0', todayPvEnergy: '10' }),
+    alarmes: async () => [],
+  };
+  const com = await coletar({ ...base, tempoReal: async (sn) => (sn === 'C' ? null : { totalGridPowerWatt: sn === 'A' ? '25424.00' : '2700' }) },
+    new Date('2026-11-06T18:35:00Z'));
+  assert.equal(com.plantas.find((p) => p.plant_id === 'P1').potencia_atual, 28124);
+  assert.equal(com.plantas.find((p) => p.plant_id === 'P2').potencia_atual, 7);
+  const sem = await coletar(base, new Date('2026-11-06T18:35:00Z'));
+  assert.equal(sem.plantas.find((p) => p.plant_id === 'P1').potencia_atual, 0);
 });
