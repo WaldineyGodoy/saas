@@ -9,7 +9,9 @@ import { TIPOS_ALERTA, normalizarSn, ehSnDatalogger } from '../lib/alertasUsina'
 //     dado do fabricante a esta usina. Um inversor só pode estar numa usina;
 //   - usinas.alertas_tipos: quais alertas fn_monitor_avaliar_alertas dispara;
 //   - usinas.alertas_whatsapp: quem recebe (só dígitos com DDD; o
-//     send-whatsapp põe o 55 na frente).
+//     send-whatsapp põe o 55 na frente);
+//   - usinas.alertas_pausados: usina em manutenção, nada é enviado. O banco
+//     preenche alertas_pausados_em (gatilho trg_usina_alertas_pausa).
 // `statusInversores` (SN -> último dado do robô) vem do modal; null = carregando.
 const campo = {
     flex: 1, minWidth: 0, padding: '0.6rem 0.75rem', border: '1px solid #e2e8f0', borderRadius: '8px',
@@ -39,7 +41,8 @@ function situacaoInversor(sn, status) {
 
 export default function AlertasWhatsappUsina({
     marca, apiConectada, inversores: valorInversores, statusInversores, onChangeInversores,
-    numeros: valor, tipos, onChangeNumeros, onChangeTipos
+    numeros: valor, tipos, onChangeNumeros, onChangeTipos,
+    pausados = false, pausadosEm = null, onChangePausados
 }) {
     // sempre ao menos uma linha, para o campo aparecer vazio pronto para digitar
     const numeros = valor?.length ? valor : [''];
@@ -81,6 +84,26 @@ export default function AlertasWhatsappUsina({
     return (
         <div style={{ marginTop: '1.5rem', border: '1px solid #f1f5f9', borderRadius: '16px', padding: '1.5rem', background: '#fff' }}>
             {cabecalho}
+
+            <label style={{
+                display: 'flex', gap: '0.6rem', alignItems: 'flex-start', cursor: 'pointer', marginBottom: '1.25rem',
+                padding: '0.75rem 1rem', borderRadius: '10px',
+                border: `1px solid ${pausados ? '#fdba74' : '#e2e8f0'}`, background: pausados ? '#fff7ed' : '#f8fafc'
+            }}>
+                <input type="checkbox" checked={!!pausados} onChange={e => onChangePausados?.(e.target.checked)}
+                    aria-label="Usina em manutenção: pausar alertas"
+                    style={{ marginTop: '0.2rem', width: '16px', height: '16px', accentColor: '#c2410c', flexShrink: 0 }} />
+                <span>
+                    <span style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: pausados ? '#9a3412' : '#1e293b' }}>
+                        Usina em manutenção: pausar alertas
+                    </span>
+                    <span style={{ display: 'block', fontSize: '0.75rem', color: '#64748b' }}>
+                        {pausados
+                            ? `Nenhuma mensagem é enviada${pausadosEm ? ` desde ${new Date(pausadosEm).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}` : ''}. Desmarque ao terminar: se o inversor ainda estiver offline, o aviso sai no ciclo seguinte.`
+                            : 'Marque durante a manutenção para não receber alertas desta usina. O monitoramento continua registrando.'}
+                    </span>
+                </span>
+            </label>
 
             <div style={{ marginBottom: '1.5rem', paddingBottom: '1.25rem', borderBottom: '1px solid #f1f5f9' }}>
                 <div style={subtitulo}>Inversores da usina (SN)</div>
@@ -180,7 +203,7 @@ export default function AlertasWhatsappUsina({
                             <Plus size={16} /> Adicionar
                         </button>
                     </div>
-                    {marcados.length > 0 && !numeros.some(validatePhone) && (
+                    {marcados.length > 0 && !numeros.some(validatePhone) && !pausados && (
                         <p style={{ margin: '0.75rem 0 0', fontSize: '0.75rem', color: '#b45309' }}>
                             Sem número cadastrado, nenhum alerta desta usina é enviado.
                         </p>

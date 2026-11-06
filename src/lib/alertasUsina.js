@@ -2,11 +2,11 @@ import { cleanDigits, validatePhone } from './validators';
 
 // Alertas do monitoramento dos inversores, configurados por usina
 // (usinas.alertas_tipos / usinas.alertas_whatsapp). Os ids batem com os tipos
-// que fn_monitor_avaliar_alertas dispara (migração 20261031b).
+// que fn_monitor_avaliar_alertas dispara (migrações 20261031b e 20261106a).
 export const TIPOS_ALERTA = [
-    { id: 'offline', titulo: 'Inversor offline', detalhe: 'Sem comunicar por 30 min ou mais entre 07h e 17h. Avisa também quando volta.' },
+    { id: 'offline', titulo: 'Inversor offline', detalhe: 'Sem comunicar por 30 min ou mais entre 08h e 18h. Enquanto continuar offline, lembra no máximo 2 vezes por dia. Avisa também quando volta.' },
     { id: 'alarme', titulo: 'Alarme do inversor', detalhe: 'Falha registrada pela SAJ de nível importante ou urgente, e quando ela é encerrada.' },
-    { id: 'geracao_zero', titulo: 'Geração zero ao meio-dia', detalhe: 'Inversor comunicando, mas sem gerar por 30 min entre 10h e 14h.' },
+    { id: 'geracao_zero', titulo: 'Geração zero ao meio-dia', detalhe: 'Inversor comunicando, mas a geração do dia parada por 30 min entre 10h e 14h.' },
     { id: 'robo_parado', titulo: 'Monitoramento parado', detalhe: 'O robô ficou 40 min ou mais sem trazer dados das usinas.' }
 ];
 

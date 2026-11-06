@@ -27,7 +27,8 @@ describe('AlertasWhatsappUsina (aba Técnico do modal da usina)', () => {
     const html = render(<AlertasWhatsappUsina marca="Saj" apiConectada numeros={[]} tipos={['offline']}
       onChangeNumeros={nada} onChangeTipos={nada} />);
     for (const t of TIPOS_ALERTA) expect(html).toContain(t.titulo);
-    expect(html.match(/type="checkbox"/g)).toHaveLength(4);
+    // 4 tipos + "usina em manutenção"
+    expect(html.match(/type="checkbox"/g)).toHaveLength(5);
     expect(html.match(/type="tel"/g)).toHaveLength(1);
     expect(html).toContain('Adicionar');
     expect(html).toContain('Sem número cadastrado');
@@ -75,5 +76,20 @@ describe('AlertasWhatsappUsina (aba Técnico do modal da usina)', () => {
     expect(inversoresParaGravar([' c6v6753j2512e00528 ', 'C6V6753J2512E00528', ''])).toEqual(['C6V6753J2512E00528']);
     expect(ehSnDatalogger('m5380J2510015660')).toBe(true);
     expect(ehSnDatalogger('C6V6753J2512E00528')).toBe(false);
+  });
+
+  it('usina em manutenção: avisa que nada é enviado e desde quando', () => {
+    const html = render(<AlertasWhatsappUsina marca="Saj" apiConectada numeros={[]} tipos={['offline']}
+      onChangeNumeros={nada} onChangeTipos={nada} pausados pausadosEm="2026-11-06T18:00:00Z" onChangePausados={nada} />);
+    expect(html).toContain('Usina em manutenção: pausar alertas');
+    expect(html).toContain('Nenhuma mensagem é enviada desde');
+    expect(html).not.toContain('Sem número cadastrado');
+  });
+
+  it('sem manutenção: explica para que serve a pausa', () => {
+    const html = render(<AlertasWhatsappUsina marca="Saj" apiConectada numeros={['84999990000']} tipos={['offline']}
+      onChangeNumeros={nada} onChangeTipos={nada} />);
+    expect(html).toContain('Marque durante a manutenção');
+    expect(html).toContain('08h e 18h');
   });
 });
