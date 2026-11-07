@@ -13,7 +13,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2.45.0'
  *   categoria    (choice)           linha de negocio — confere o roteador
  *   proximo_passo(choice)           o que o atendente deve fazer agora
  *
- * Grava em leads.qualificacao.jev (CRM B2W) e uma tag `temp:<faixa> <pct>%` no card do
+ * Grava em leads.qualificacao.jev (CRM B2W) e uma tag `<faixa> <pct>%` no card do
  * Deskcomm, para filtrar o kanban de la. NAO escreve crm_lead_scores: aquela
  * tabela e do worker de score do Deskcomm (formula), e ele sobrescreveria.
  *
@@ -43,16 +43,20 @@ const TETO_MS = 8000
 
 /**
  * Etiqueta do termometro no Deskcomm, no mesmo formato do CRM ("Morno · 35%"):
- * `temp:morno 35%`. O numero vai arredondado de 5 em 5 — o Deskcomm guarda cada
- * etiqueta pelo nome exato, e de 1 em 1 o vocabulario ganharia uma entrada a cada
- * reavaliacao. Sem probabilidade, fica so a faixa. A mesma regra esta em SQL em
- * ponte_deskcomm.fn_etiqueta_temp (migration 20261107a).
+ * `morno 35%`, sem prefixo (pedido do dono, 07/11/2026). O numero vai arredondado
+ * de 5 em 5 — o Deskcomm guarda cada etiqueta pelo nome exato, e de 1 em 1 o
+ * vocabulario ganharia uma entrada a cada reavaliacao. Sem probabilidade, fica so a
+ * faixa. A mesma regra esta em SQL em ponte_deskcomm.fn_etiqueta_temp e o
+ * reconhecimento em ponte_deskcomm.eh_etiqueta_temp (migration 20261107a).
  */
 function etiquetaTemp(faixa: string, prob: number | null): string {
-    if (prob === null || !Number.isFinite(prob)) return `temp:${faixa}`
+    if (prob === null || !Number.isFinite(prob)) return faixa
     const pct = Math.max(0, Math.min(100, Math.round(prob * 20) * 5))
-    return `temp:${faixa} ${pct}%`
+    return `${faixa} ${pct}%`
 }
+
+/** Etiqueta de temperatura da ponte — a de agora ou a antiga `temp:…`. */
+const EH_ETIQUETA_TEMP = /^(temp:|(gelado|frio|morno|quente|fechando)( \d{1,3}%)?$)/
 
 const json = (status: number, body: unknown) =>
     new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
@@ -281,7 +285,7 @@ serve(async (req) => {
                 .eq('id', item.b2w_lead_id)
 
             const { data: card } = await supabase.from('crm_leads').select('tags').eq('id', item.deskcomm_lead_id).maybeSingle()
-            const tags = ((card?.tags ?? []) as string[]).filter((t) => !t.startsWith('temp:'))
+            const tags = ((card?.tags ?? []) as string[]).filter((t) => !EH_ETIQUETA_TEMP.test(t))
             tags.push(etiquetaTemp(temp.faixa, jev.probabilidade_fechamento_30d))
             await supabase.from('crm_leads').update({ tags }).eq('id', item.deskcomm_lead_id)
         }
