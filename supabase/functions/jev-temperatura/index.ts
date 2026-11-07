@@ -39,6 +39,8 @@ import { createClient } from 'npm:@supabase/supabase-js@2.45.0'
  */
 
 const JANELA_MENSAGENS = 16
+/** Abaixo disso o lead entra gelado (so a probabilidade vem do Jev). */
+const MINIMO_PARA_FAIXA = 3
 const TETO_MS = 8000
 
 /**
@@ -261,10 +263,17 @@ serve(async (req) => {
 
         const temp = faixaDoScore(r.answers.temperatura)
         const fecha = Number(r.answers.fecha_30d?.noul)
+        // Regra do dono (07/11/2026): com menos de 3 mensagens do cliente o lead
+        // entra GELADO; o Jev ainda da a probabilidade ("gelado 10%"). Na 3a
+        // mensagem a fila o reavalia e a faixa passa a ser a do Jev.
+        const poucasMensagens = Number(item.mensagens_cliente ?? 0) < MINIMO_PARA_FAIXA
         const jev = {
             avaliado_em: new Date().toISOString(),
             modelo: r.model,
-            temperatura: temp.faixa,
+            temperatura: poucasMensagens ? 'gelado' : temp.faixa,
+            temperatura_jev: temp.faixa,
+            temperatura_regra: poucasMensagens ? 'menos_de_3_mensagens' : null,
+            mensagens_cliente: Number(item.mensagens_cliente ?? 0),
             temperatura_score: temp.score01,
             temperatura_confianca: temp.confianca,
             probabilidade_fechamento_30d: Number.isFinite(fecha) ? Math.round(fecha * 1000) / 1000 : null,
@@ -286,7 +295,7 @@ serve(async (req) => {
 
             const { data: card } = await supabase.from('crm_leads').select('tags').eq('id', item.deskcomm_lead_id).maybeSingle()
             const tags = ((card?.tags ?? []) as string[]).filter((t) => !EH_ETIQUETA_TEMP.test(t))
-            tags.push(etiquetaTemp(temp.faixa, jev.probabilidade_fechamento_30d))
+            tags.push(etiquetaTemp(jev.temperatura, jev.probabilidade_fechamento_30d))
             await supabase.from('crm_leads').update({ tags }).eq('id', item.deskcomm_lead_id)
         }
 
