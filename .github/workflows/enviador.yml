@@ -47,7 +47,7 @@ on:
 jobs:
   enviar:
     name: Entregar faturas pendentes
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # Playwright 1.58 nao instala Chromium no 26.04 (ubuntu-latest desde 05/11/2026)
     timeout-minutes: 20
 
     steps:
