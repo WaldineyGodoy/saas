@@ -8,6 +8,28 @@ const corsHeaders = {
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-b2w-internal',
 }
 
+const NAO_ENTREGUE: Record<string, string> = {
+    suppressed: 'endereco na lista de supressao da Resend (bounce ou denuncia anterior); confirme o e-mail e retire-o da lista no painel da Resend',
+    bounced: 'devolvido pelo servidor do destinatario (bounce)',
+    complained: 'destinatario marcou como spam',
+    failed: 'falha de envio na Resend',
+}
+
+async function confirmarEntrega(apiKey: string, id?: string): Promise<string | null> {
+    if (!id) return null;
+    let ultimo: string | null = null;
+    for (let i = 0; i < 6; i++) {
+        await new Promise((r) => setTimeout(r, 2000));
+        try {
+            const r = await fetch(`https://api.resend.com/emails/${id}`, { headers: { Authorization: `Bearer ${apiKey}` } });
+            if (!r.ok) continue;
+            ultimo = (await r.json())?.last_event ?? null;
+        } catch (_) { continue; }
+        if (ultimo && (NAO_ENTREGUE[ultimo] || ['delivered', 'opened', 'clicked'].includes(ultimo))) break;
+    }
+    return ultimo;
+}
+
 serve(async (req) => {
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders })
@@ -250,7 +272,18 @@ serve(async (req) => {
 
         if (emailResponse.error) throw new Error(emailResponse.error.message);
 
-        return new Response(JSON.stringify({ success: true, data: emailResponse.data }), {
+        // A Resend aceita o envio e so depois decide se entrega. Endereco na
+        // lista de supressao (bounce ou denuncia anterior) volta "aceito" e
+        // nunca sai -- caso da Green Park em 24/10/2026: o robo gravou
+        // "e-mail enviado" e o e-mail nao chegou. Confere o estado por alguns
+        // segundos; supressao e bounce chegam quase na hora. Se ainda estiver
+        // em fila no fim da espera, segue como aceito (comportamento antigo).
+        const entrega = await confirmarEntrega(config.api_key, emailResponse.data?.id);
+        if (entrega && NAO_ENTREGUE[entrega]) {
+            throw new Error(`e-mail nao entregue a ${[].concat(finalRecipient).join(', ')}: ${NAO_ENTREGUE[entrega]}`);
+        }
+
+        return new Response(JSON.stringify({ success: true, data: emailResponse.data, entrega }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 200
         });
