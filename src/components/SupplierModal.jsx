@@ -6,7 +6,8 @@ import { fetchCpfCnpjData, fetchAddressByCep } from '../lib/api';
 import { maskCpfCnpj, maskPhone, validateDocument, validatePhone, cleanDigits } from '../lib/validators';
 import {
     History, User, MapPin, Wallet, X, Save, Trash2,
-    CheckCircle, Search, ArrowUpDown, ArrowUpRight, ArrowDownLeft, Copy, Zap, Download
+    CheckCircle, Search, ArrowUpDown, ArrowUpRight, ArrowDownLeft, Copy, Zap, Download,
+    Building2, Mail, ChevronDown, ChevronRight
 } from 'lucide-react';
 import HistoryTimeline from './HistoryTimeline';
 import ConvidarAppButton from './ConvidarAppButton';
@@ -960,32 +961,34 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
 
     const inputStyle = {
         width: '100%',
-        padding: '0.8rem 1rem',
-        border: '1px solid #e2e8f0',
-        borderRadius: '12px',
-        fontSize: '0.95rem',
-        transition: 'all 0.2s',
+        padding: '0.68rem 0.9rem',
+        border: '1px solid #cbd5e1',
+        borderRadius: '10px',
+        fontSize: '0.9rem',
+        color: '#0f172a',
+        fontWeight: 500,
+        transition: 'all 0.15s',
         backgroundColor: '#f8fafc',
         outline: 'none'
     };
 
     const labelStyle = {
         display: 'block',
-        fontSize: '0.85rem',
+        fontSize: '0.76rem',
         fontWeight: '700',
-        color: '#64748b',
-        marginBottom: '0.5rem',
+        color: '#475569',
+        marginBottom: '0.4rem',
         textTransform: 'uppercase',
-        letterSpacing: '0.025em'
+        letterSpacing: '0.03em'
     };
 
     const sectionStyle = {
-        background: 'white',
-        padding: '1.5rem',
-        borderRadius: '20px',
-        border: '1px solid #f1f5f9',
-        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
-        marginBottom: '1.5rem'
+        background: '#ffffff',
+        padding: '1.35rem 1.5rem',
+        borderRadius: '14px',
+        border: '1px solid #e2e8f0',
+        boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04)',
+        marginBottom: '1.25rem'
     };
 
     const formatCurrency = (val) => {
@@ -1278,651 +1281,1059 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
         <>
         <style>{`
             @keyframes fadeIn {
-                from { opacity: 0; transform: translateY(10px); }
+                from { opacity: 0; transform: translateY(6px); }
                 to { opacity: 1; transform: translateY(0); }
+            }
+            .sup-modal-input:focus {
+                border-color: #2563eb !important;
+                background-color: #ffffff !important;
+                box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12) !important;
+            }
+            .sup-modal-grid-2 {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+                gap: 1.25rem;
+                align-items: start;
+            }
+            .sup-kpi-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+                gap: 0.85rem;
+            }
+            .sup-manual-grid {
+                display: grid;
+                grid-template-columns: 150px 1.4fr 1.8fr 150px auto;
+                gap: 0.65rem;
+                align-items: end;
+            }
+            @media (max-width: 960px) {
+                .sup-modal-grid-2 {
+                    grid-template-columns: 1fr;
+                }
+                .sup-manual-grid {
+                    grid-template-columns: 1fr 1fr;
+                }
             }
         `}</style>
         <div className="print-wrapper" style={{
             position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-            backgroundColor: 'rgba(15, 23, 42, 0.7)', backdropFilter: 'blur(8px)',
-            display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000
+            backgroundColor: 'rgba(15, 23, 42, 0.68)', backdropFilter: 'blur(6px)',
+            display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000,
+            padding: '1rem'
         }}>
             <div className="extrato-print-container" style={{ 
                 background: '#f8fafc', 
-                borderRadius: '30px', 
-                width: '95%', 
-                maxWidth: '1200px', 
-                maxHeight: '90vh', 
-                overflowY: 'auto',
-                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                borderRadius: '16px', 
+                width: '96vw', 
+                maxWidth: '1380px', 
+                height: '92vh',
+                maxHeight: '92vh', 
+                overflow: 'hidden',
+                border: '1px solid rgba(255, 255, 255, 0.14)',
+                boxShadow: '0 25px 50px -12px rgba(15, 23, 42, 0.38)',
                 display: 'flex',
-                flexDirection: 'column'
+                flexDirection: 'column',
+                position: 'relative'
             }}>
-                {/* Premium Header */}
+                {/* Pinned Authority Header */}
                 <div className="no-print" style={{
-                    background: 'linear-gradient(135deg, #1e293b 0%, #334155 100%)',
-                    padding: '1.5rem 2rem',
+                    background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+                    padding: '1.15rem 1.75rem',
                     color: 'white',
                     display: 'flex',
                     justifyContent: 'space-between',
-                    alignItems: 'center'
-                }}>
-                    <div>
-                        <h3 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 800, letterSpacing: '-0.025em' }}>
-                            {supplier ? 'Editar Fornecedor' : 'Novo Fornecedor'}
-                        </h3>
-                        <p style={{ margin: 0, opacity: 0.8, fontSize: '0.9rem' }}>
-                            Gestão de parceiros e infraestrutura energética
-                        </p>
-                    </div>
-                    <button 
-                        onClick={onClose}
-                        style={{
-                            background: 'rgba(255,255,255,0.1)',
-                            border: 'none',
-                            color: 'white',
-                            padding: '0.5rem',
-                            borderRadius: '12px',
-                            cursor: 'pointer'
-                        }}
-                    >
-                        <X size={24} />
-                    </button>
-                </div>
-
-                {/* Horizontal Navigation */}
-                <div className="no-print" style={{
-                    display: 'flex',
+                    alignItems: 'center',
                     gap: '1rem',
-                    padding: '0.75rem 2rem',
-                    background: 'white',
-                    borderBottom: '1px solid #e2e8f0',
-                    overflowX: 'auto'
+                    flexWrap: 'wrap',
+                    borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+                    flexShrink: 0
                 }}>
-                    {[
-                        { id: 'geral', label: 'Geral', icon: User },
-                        { id: 'endereco', label: 'Endereço', icon: MapPin },
-                        { id: 'financeiro', label: 'Financeiro', icon: Wallet },
-                        { id: 'extrato', label: 'Extrato', icon: ArrowUpDown },
-                        { id: 'historico', label: 'Histórico', icon: History }
-                    ].map(tab => (
-                        <button
-                            key={tab.id}
-                            onClick={() => setActiveTab(tab.id)}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', minWidth: 0 }}>
+                        <div style={{
+                            width: '44px',
+                            height: '44px',
+                            borderRadius: '12px',
+                            background: 'rgba(59, 130, 246, 0.18)',
+                            border: '1px solid rgba(96, 165, 250, 0.35)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: '#60a5fa',
+                            flexShrink: 0
+                        }}>
+                            <Building2 size={22} />
+                        </div>
+                        <div style={{ minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
+                                <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, letterSpacing: '-0.02em', color: '#ffffff' }}>
+                                    {supplier ? (formData.name || 'Editar Fornecedor') : 'Novo Fornecedor'}
+                                </h3>
+                                <span style={{
+                                    padding: '0.22rem 0.7rem',
+                                    borderRadius: '999px',
+                                    fontWeight: 700,
+                                    fontSize: '0.74rem',
+                                    color: (STATUS_FORNECEDOR[formData.status] || STATUS_FORNECEDOR.cadastrado).cor,
+                                    background: (STATUS_FORNECEDOR[formData.status] || STATUS_FORNECEDOR.cadastrado).fundo,
+                                    letterSpacing: '0.01em'
+                                }}>
+                                    {(STATUS_FORNECEDOR[formData.status] || { rotulo: formData.status }).rotulo}
+                                </span>
+                                {supplier && usinas.length > 0 && (
+                                    <span style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '0.3rem',
+                                        padding: '0.22rem 0.65rem',
+                                        borderRadius: '999px',
+                                        background: 'rgba(14, 165, 233, 0.18)',
+                                        border: '1px solid rgba(56, 189, 248, 0.3)',
+                                        color: '#7dd3fc',
+                                        fontSize: '0.73rem',
+                                        fontWeight: 700,
+                                        fontVariantNumeric: 'tabular-nums'
+                                    }}>
+                                        <Zap size={12} /> {usinas.length} {usinas.length === 1 ? 'usina vinculada' : 'usinas vinculadas'}
+                                    </span>
+                                )}
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.25rem', fontSize: '0.82rem', color: '#94a3b8', flexWrap: 'wrap' }}>
+                                <span>{supplier ? 'Ficha cadastral, governança bancária e razão contábil do parceiro' : 'Cadastro de parceiro gerador e infraestrutura energética'}</span>
+                                {formData.cnpj && (
+                                    <>
+                                        <span style={{ opacity: 0.4 }}>•</span>
+                                        <span style={{ fontFamily: 'monospace', fontVariantNumeric: 'tabular-nums', color: '#cbd5e1', fontWeight: 600 }}>
+                                            CNPJ: {formData.cnpj}
+                                        </span>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+                        {supplier && (
+                            <button
+                                type="button"
+                                onClick={() => setActiveTab('extrato')}
+                                style={{
+                                    display: 'flex',
+                                     flexDirection: 'column',
+                                    alignItems: 'flex-end',
+                                    background: 'rgba(255, 255, 255, 0.06)',
+                                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                                    borderRadius: '10px',
+                                    padding: '0.4rem 0.85rem',
+                                    cursor: 'pointer',
+                                    color: 'white',
+                                    transition: 'background 0.15s'
+                                }}
+                                title="Clique para abrir o Extrato Financeiro"
+                            >
+                                <span style={{ fontSize: '0.66rem', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', fontWeight: 700 }}>
+                                    Saldo Acumulado
+                                </span>
+                                <span style={{
+                                    fontSize: '0.95rem',
+                                    fontWeight: 800,
+                                    fontVariantNumeric: 'tabular-nums',
+                                    color: displayBalance > 0 ? '#4ade80' : displayBalance < 0 ? '#f87171' : '#f8fafc'
+                                }}>
+                                    {displayBalance > 0 ? '+' : displayBalance < 0 ? '-' : ''}{formatCurrency(displayBalance)}
+                                </span>
+                            </button>
+                        )}
+                        <button 
+                            type="button"
+                            onClick={onClose}
+                            aria-label="Fechar modal"
                             style={{
+                                background: 'rgba(255, 255, 255, 0.08)',
+                                border: '1px solid rgba(255, 255, 255, 0.12)',
+                                color: '#e2e8f0',
+                                width: '38px',
+                                height: '38px',
+                                borderRadius: '10px',
+                                cursor: 'pointer',
                                 display: 'flex',
                                 alignItems: 'center',
-                                gap: '0.6rem',
-                                padding: '0.6rem 1.2rem',
-                                borderRadius: '14px',
-                                border: 'none',
-                                background: activeTab === tab.id ? '#eff6ff' : 'transparent',
-                                color: activeTab === tab.id ? '#3b82f6' : '#64748b',
-                                fontWeight: activeTab === tab.id ? '700' : '500',
-                                fontSize: '0.9rem',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s',
-                                whiteSpace: 'nowrap'
+                                justifyContent: 'center',
+                                transition: 'all 0.15s'
                             }}
+                            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.16)'; e.currentTarget.style.color = '#ffffff'; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'; e.currentTarget.style.color = '#e2e8f0'; }}
                         >
-                            <tab.icon size={18} />
-                            {tab.label}
+                            <X size={20} />
                         </button>
-                    ))}
+                    </div>
                 </div>
 
-                <div style={{ padding: '2rem', overflowY: 'auto', flex: 1 }}>
-                    <form onSubmit={handleSubmit}>
+                {/* Pinned Horizontal Navigation Bar */}
+                <div className="no-print" style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '0.5rem',
+                    padding: '0.6rem 1.75rem',
+                    background: '#ffffff',
+                    borderBottom: '1px solid #e2e8f0',
+                    overflowX: 'auto',
+                    flexShrink: 0
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        {[
+                            { id: 'geral', label: 'Geral', icon: User, badge: usinas.length > 0 ? `${usinas.length}` : null },
+                            { id: 'endereco', label: 'Endereço', icon: MapPin, badge: formData.uf || null },
+                            { id: 'financeiro', label: 'Financeiro', icon: Wallet, badge: formData.pix_key ? 'PIX' : null },
+                            { id: 'extrato', label: 'Extrato', icon: ArrowUpDown, badge: ledgerEntries.length > 0 ? `${ledgerEntries.length}` : null },
+                            ...(supplier ? [{ id: 'historico', label: 'Histórico', icon: History, badge: null }] : [])
+                        ].map(tab => {
+                            const isActive = activeTab === tab.id;
+                            return (
+                                <button
+                                    key={tab.id}
+                                    type="button"
+                                    onClick={() => setActiveTab(tab.id)}
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '0.5rem',
+                                        padding: '0.55rem 1rem',
+                                        borderRadius: '10px',
+                                        border: isActive ? '1px solid #bfdbfe' : '1px solid transparent',
+                                        background: isActive ? '#eff6ff' : 'transparent',
+                                        color: isActive ? '#1d4ed8' : '#475569',
+                                        fontWeight: isActive ? 700 : 600,
+                                        fontSize: '0.86rem',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.15s',
+                                        whiteSpace: 'nowrap'
+                                    }}
+                                >
+                                    <tab.icon size={16} color={isActive ? '#2563eb' : '#64748b'} />
+                                    <span>{tab.label}</span>
+                                    {tab.badge && (
+                                        <span style={{
+                                            padding: '0.1rem 0.45rem',
+                                            borderRadius: '999px',
+                                            fontSize: '0.68rem',
+                                            fontWeight: 700,
+                                            fontVariantNumeric: 'tabular-nums',
+                                            background: isActive ? '#dbeafe' : '#f1f5f9',
+                                            color: isActive ? '#1e40af' : '#64748b'
+                                        }}>
+                                            {tab.badge}
+                                        </span>
+                                    )}
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    {supplier?.id && (
+                        <div style={{ fontSize: '0.75rem', color: '#64748b', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                            ID: <span style={{ fontFamily: 'monospace', color: '#475569', fontWeight: 600 }}>{String(supplier.id).slice(0, 8)}</span>
+                        </div>
+                    )}
+                </div>
+
+                {/* Form wrapping Scrollable Body + Pinned Footer */}
+                <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+                    <div style={{ padding: '1.5rem 1.75rem', overflowY: 'auto', flex: 1 }}>
                         
+                        {/* ==================== ABA 1: GERAL ==================== */}
                         {activeTab === 'geral' && (
-                            <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
-                                <div style={sectionStyle}>
-                                    <h4 style={{ margin: '0 0 1.5rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b' }}>
-                                        <User size={20} color="#3b82f6" /> Dados do Fornecedor
-                                    </h4>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
-                                        <div style={{ gridColumn: '1 / -1' }}>
-                                            <label style={labelStyle}>CPF/CNPJ (busca automática no CNPJ)</label>
-                                            <input
-                                                style={{ ...inputStyle, borderStyle: 'dashed', borderWidth: '2px' }}
-                                                value={formData.cnpj}
-                                                onChange={e => {
-                                                    setFormData({ ...formData, cnpj: maskCpfCnpj(e.target.value) });
-                                                    setFornecedorDuplicado(null);
-                                                }}
-                                                onBlur={handleCnpjBlur}
-                                                placeholder="000.000.000-00 ou 00.000.000/0000-00"
-                                            />
-                                            {fornecedorDuplicado && (
-                                                <p style={{ margin: '0.4rem 0 0', fontSize: '0.75rem', fontWeight: 700, color: '#b91c1c' }}>
-                                                    Já existe o fornecedor "{fornecedorDuplicado.name}" com este CPF/CNPJ.
-                                                </p>
-                                            )}
-                                            {!fornecedorDuplicado && origemHerdada && (
-                                                <p style={{ margin: '0.4rem 0 0', fontSize: '0.75rem', color: '#2563eb' }}>
-                                                    Contato e endereço trazidos do {origemHerdada}. Confira antes de salvar.
-                                                </p>
-                                            )}
+                            <div style={{ animation: 'fadeIn 0.2s ease-out', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                                <div className="sup-modal-grid-2">
+                                    {/* Coluna Esquerda: Empresa + Contato */}
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                                        <div style={{ ...sectionStyle, marginBottom: 0 }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.15rem', paddingBottom: '0.75rem', borderBottom: '1px solid #f1f5f9' }}>
+                                                <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#0f172a', fontSize: '0.98rem', fontWeight: 700 }}>
+                                                    <Building2 size={18} color="#2563eb" /> Dados do Fornecedor
+                                                </h4>
+                                                {loading && (
+                                                    <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#2563eb', background: '#eff6ff', padding: '0.2rem 0.6rem', borderRadius: '999px' }}>
+                                                        Consultando CPF/CNPJ...
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem' }}>
+                                                <div>
+                                                    <label style={labelStyle}>CPF/CNPJ (busca automática no CNPJ)</label>
+                                                    <input
+                                                        className="sup-modal-input"
+                                                        style={{ ...inputStyle, fontVariantNumeric: 'tabular-nums', borderColor: '#cbd5e1' }}
+                                                        value={formData.cnpj}
+                                                        onChange={e => {
+                                                            setFormData({ ...formData, cnpj: maskCpfCnpj(e.target.value) });
+                                                            setFornecedorDuplicado(null);
+                                                        }}
+                                                        onBlur={handleCnpjBlur}
+                                                        placeholder="000.000.000-00 ou 00.000.000/0000-00"
+                                                    />
+                                                    {fornecedorDuplicado && (
+                                                        <p style={{ margin: '0.4rem 0 0', fontSize: '0.75rem', fontWeight: 700, color: '#b91c1c' }}>
+                                                            Já existe o fornecedor "{fornecedorDuplicado.name}" com este CPF/CNPJ.
+                                                        </p>
+                                                    )}
+                                                    {!fornecedorDuplicado && origemHerdada && (
+                                                        <p style={{ margin: '0.4rem 0 0', fontSize: '0.75rem', color: '#2563eb' }}>
+                                                            Contato e endereço trazidos do {origemHerdada}. Confira antes de salvar.
+                                                        </p>
+                                                    )}
+                                                </div>
+                                                <div>
+                                                    <label style={labelStyle}>{rotuloNome}</label>
+                                                    <input
+                                                        className="sup-modal-input"
+                                                        style={inputStyle}
+                                                        required
+                                                        placeholder="Informe o nome completo ou razão social do fornecedor"
+                                                        value={formData.name}
+                                                        onChange={e => setFormData({ ...formData, name: e.target.value })}
+                                                    />
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div style={{ gridColumn: '1 / -1' }}>
-                                            <label style={labelStyle}>{rotuloNome}</label>
-                                            <input
-                                                style={inputStyle}
-                                                required
-                                                value={formData.name}
-                                                onChange={e => setFormData({ ...formData, name: e.target.value })}
-                                            />
+
+                                        <div style={{ ...sectionStyle, marginBottom: 0 }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.15rem', paddingBottom: '0.75rem', borderBottom: '1px solid #f1f5f9' }}>
+                                                <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#0f172a', fontSize: '0.98rem', fontWeight: 700 }}>
+                                                    <Mail size={18} color="#2563eb" /> Informações de Contato
+                                                </h4>
+                                            </div>
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '1rem' }}>
+                                                <div>
+                                                    <label style={labelStyle}>E-mail Corporativo / Financeiro</label>
+                                                    <input
+                                                        className="sup-modal-input"
+                                                        style={inputStyle}
+                                                        type="email"
+                                                        placeholder="contato@empresa.com.br"
+                                                        value={formData.email}
+                                                        onChange={e => setFormData({ ...formData, email: e.target.value })}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label style={labelStyle}>Telefone / WhatsApp</label>
+                                                    <input
+                                                        className="sup-modal-input"
+                                                        style={{ ...inputStyle, fontVariantNumeric: 'tabular-nums' }}
+                                                        placeholder="(00) 00000-0000"
+                                                        value={formData.phone}
+                                                        onChange={e => setFormData({ ...formData, phone: maskPhone(e.target.value) })}
+                                                    />
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
 
-                                {docEhCnpj && (
-                                <div style={sectionStyle}>
-                                    <h4 style={{ margin: '0 0 1.5rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b' }}>
-                                        <CheckCircle size={20} color="#34d399" /> Sócio Administrador
-                                    </h4>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
-                                        <div>
-                                            <label style={labelStyle}>Nome Completo</label>
-                                            <input
-                                                style={inputStyle}
-                                                value={formData.legal_partner_name}
-                                                onChange={e => setFormData({ ...formData, legal_partner_name: e.target.value })}
-                                            />
+                                    {/* Coluna Direita: Sócio Administrador + Originador */}
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                                        {docEhCnpj && (
+                                        <div style={{ ...sectionStyle, marginBottom: 0 }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.15rem', paddingBottom: '0.75rem', borderBottom: '1px solid #f1f5f9' }}>
+                                                <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#0f172a', fontSize: '0.98rem', fontWeight: 700 }}>
+                                                    <CheckCircle size={18} color="#16a34a" /> Sócio Administrador / Representante Legal
+                                                </h4>
+                                            </div>
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: '1rem' }}>
+                                                <div>
+                                                    <label style={labelStyle}>Nome Completo</label>
+                                                    <input
+                                                        className="sup-modal-input"
+                                                        style={inputStyle}
+                                                        placeholder="Nome do representante"
+                                                        value={formData.legal_partner_name}
+                                                        onChange={e => setFormData({ ...formData, legal_partner_name: e.target.value })}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label style={labelStyle}>CPF do Sócio</label>
+                                                    <input
+                                                        className="sup-modal-input"
+                                                        style={{ ...inputStyle, fontVariantNumeric: 'tabular-nums' }}
+                                                        placeholder="000.000.000-00"
+                                                        value={formData.legal_partner_cpf}
+                                                        onChange={e => setFormData({ ...formData, legal_partner_cpf: maskCpfCnpj(e.target.value) })}
+                                                    />
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <label style={labelStyle}>CPF</label>
-                                            <input
-                                                style={inputStyle}
-                                                value={formData.legal_partner_cpf}
-                                                onChange={e => setFormData({ ...formData, legal_partner_cpf: maskCpfCnpj(e.target.value) })}
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-                                )}
+                                        )}
 
-                                <div style={sectionStyle}>
-                                    <h4 style={{ margin: '0 0 1.5rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b' }}>
-                                        Originador
-                                    </h4>
-                                    <label style={labelStyle}>Quem trouxe este fornecedor</label>
-                                    <select
-                                        style={inputStyle}
-                                        value={formData.originator_id}
-                                        disabled={!ehAdmin}
-                                        onChange={e => setFormData({ ...formData, originator_id: e.target.value })}
-                                    >
-                                        <option value="">Sem originador</option>
-                                        {originadores.map(o => (
-                                            <option key={o.id} value={o.id} disabled={!o.ativo && o.id !== formData.originator_id}>
-                                                {o.name}{o.cargo ? ` · ${o.cargo}` : ''}{o.ativo ? '' : ' (inativo)'}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    <p style={{ margin: '0.5rem 0 0', fontSize: '0.78rem', color: '#64748b' }}>
-                                        As usinas deste fornecedor herdam o originador. Ele recebe o que o Plano de Usina de cada uma prevê; sem originador, essa parte fica para a associação.
-                                        {!ehAdmin && ' Só admin altera.'}
-                                    </p>
-                                </div>
-
-                                <div style={sectionStyle}>
-                                    <h4 style={{ margin: '0 0 1.5rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b' }}>
-                                        <Search size={20} color="#3b82f6" /> Informações de Contato
-                                    </h4>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
-                                        <div>
-                                            <label style={labelStyle}>Email</label>
-                                            <input
-                                                style={inputStyle}
-                                                type="email"
-                                                value={formData.email}
-                                                onChange={e => setFormData({ ...formData, email: e.target.value })}
-                                            />
-                                        </div>
-                                        <div>
-                                            <label style={labelStyle}>Telefone</label>
-                                            <input
-                                                style={inputStyle}
-                                                value={formData.phone}
-                                                onChange={e => setFormData({ ...formData, phone: maskPhone(e.target.value) })}
-                                            />
+                                        <div style={{ ...sectionStyle, marginBottom: 0 }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.15rem', paddingBottom: '0.75rem', borderBottom: '1px solid #f1f5f9' }}>
+                                                <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#0f172a', fontSize: '0.98rem', fontWeight: 700 }}>
+                                                    <User size={18} color="#0284c7" /> Originador Comercial
+                                                </h4>
+                                                {!ehAdmin && (
+                                                    <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#64748b', background: '#f1f5f9', padding: '0.18rem 0.55rem', borderRadius: '6px' }}>
+                                                        Somente leitura
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div>
+                                                <label style={labelStyle}>Quem originou este fornecedor</label>
+                                                <select
+                                                    className="sup-modal-input"
+                                                    style={{ ...inputStyle, cursor: ehAdmin ? 'pointer' : 'not-allowed', opacity: ehAdmin ? 1 : 0.75 }}
+                                                    value={formData.originator_id}
+                                                    disabled={!ehAdmin}
+                                                    onChange={e => setFormData({ ...formData, originator_id: e.target.value })}
+                                                >
+                                                    <option value="">Sem originador vinculado</option>
+                                                    {originadores.map(o => (
+                                                        <option key={o.id} value={o.id} disabled={!o.ativo && o.id !== formData.originator_id}>
+                                                            {o.name}{o.cargo ? ` · ${o.cargo}` : ''}{o.ativo ? '' : ' (inativo)'}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                                <p style={{ margin: '0.65rem 0 0', fontSize: '0.78rem', color: '#64748b', lineHeight: 1.45 }}>
+                                                    As usinas deste fornecedor herdam o originador. Ele recebe o percentual que o Plano de Usina de cada uma prevê; sem originador, essa parte permanece na associação.
+                                                </p>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
                                 
                                 {supplier && usinas.length > 0 && (
-                                    <div style={{ ...sectionStyle, background: '#f0f9ff', border: '1px solid #bae6fd', marginTop: '1.5rem' }}>
-                                        <h4 style={{ margin: '0 0 1rem 0', fontSize: '1rem', color: '#0369a1', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                            <Zap size={20} color="#0369a1" /> Usinas Vinculadas
-                                        </h4>
-                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
-                                            {usinas.map(u => (
-                                                <div key={u.id} style={{
-                                                    background: 'white',
-                                                    padding: '0.6rem 1rem',
-                                                    borderRadius: '12px',
-                                                    fontSize: '0.85rem',
-                                                    border: '1px solid #e0f2fe',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    gap: '0.5rem',
-                                                    boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
-                                                }}>
-                                                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: u.status === 'ativo' ? '#10b981' : '#f59e0b' }}></div>
-                                                    <strong>{u.name}</strong>
-                                                </div>
-                                            ))}
+                                    <div style={{
+                                        ...sectionStyle,
+                                        marginBottom: 0,
+                                        background: 'linear-gradient(135deg, #f0f9ff 0%, #f8fafc 100%)',
+                                        border: '1px solid #bae6fd'
+                                    }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.9rem' }}>
+                                            <h4 style={{ margin: 0, fontSize: '0.95rem', color: '#0369a1', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 700 }}>
+                                                <Zap size={18} color="#0284c7" /> Usinas Vinculadas ao Fornecedor
+                                            </h4>
+                                            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#0369a1', background: '#e0f2fe', padding: '0.2rem 0.65rem', borderRadius: '999px', fontVariantNumeric: 'tabular-nums' }}>
+                                                {usinas.length} {usinas.length === 1 ? 'unidade geradora' : 'unidades geradoras'}
+                                            </span>
+                                        </div>
+                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.65rem' }}>
+                                            {usinas.map(u => {
+                                                const isAtiva = u.status === 'ativo' || u.status === 'gerando';
+                                                return (
+                                                    <div key={u.id} style={{
+                                                        background: '#ffffff',
+                                                        padding: '0.55rem 0.95rem',
+                                                        borderRadius: '10px',
+                                                        fontSize: '0.84rem',
+                                                        border: '1px solid #bae6fd',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '0.55rem',
+                                                        boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)'
+                                                    }}>
+                                                        <span style={{
+                                                            width: 8,
+                                                            height: 8,
+                                                            borderRadius: '50%',
+                                                            background: isAtiva ? '#16a34a' : '#d97706',
+                                                            flexShrink: 0
+                                                        }} />
+                                                        <strong style={{ color: '#0f172a', fontWeight: 700 }}>{u.name}</strong>
+                                                        {u.status && (
+                                                            <span style={{
+                                                                fontSize: '0.7rem',
+                                                                fontWeight: 600,
+                                                                color: isAtiva ? '#166534' : '#92400e',
+                                                                background: isAtiva ? '#dcfce7' : '#fef3c7',
+                                                                padding: '0.1rem 0.45rem',
+                                                                borderRadius: '6px',
+                                                                textTransform: 'capitalize'
+                                                            }}>
+                                                                {u.status}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
                                     </div>
                                 )}
                             </div>
                         )}
 
+                        {/* ==================== ABA 2: ENDEREÇO ==================== */}
                         {activeTab === 'endereco' && (
-                            <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
-                                <div style={sectionStyle}>
-                                    <h4 style={{ margin: '0 0 1.5rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b' }}>
-                                        <MapPin size={20} color="#ef4444" /> Localização
-                                    </h4>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
-                                        <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '1.5rem' }}>
-                                            <div>
-                                                <label style={labelStyle}>CEP</label>
-                                                <input
-                                                    style={inputStyle}
-                                                    value={formData.cep}
-                                                    onChange={e => setFormData({ ...formData, cep: e.target.value })}
-                                                    onBlur={handleCepBlur}
-                                                />
-                                            </div>
-                                            <div>
-                                                <label style={labelStyle}>Logradouro / Rua</label>
-                                                <input
-                                                    style={inputStyle}
-                                                    value={formData.rua}
-                                                    onChange={e => setFormData({ ...formData, rua: e.target.value })}
-                                                />
-                                            </div>
+                            <div style={{ animation: 'fadeIn 0.2s ease-out' }}>
+                                <div style={{ ...sectionStyle, marginBottom: 0 }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', paddingBottom: '0.75rem', borderBottom: '1px solid #f1f5f9' }}>
+                                        <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#0f172a', fontSize: '0.98rem', fontWeight: 700 }}>
+                                            <MapPin size={18} color="#dc2626" /> Endereço e Localização Fiscal
+                                        </h4>
+                                        {searchingCep && (
+                                            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#2563eb', background: '#eff6ff', padding: '0.2rem 0.6rem', borderRadius: '999px' }}>
+                                                Buscando CEP...
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: '1.15rem' }}>
+                                        <div style={{ gridColumn: 'span 3' }}>
+                                            <label style={labelStyle}>CEP (Busca Automática)</label>
+                                            <input
+                                                className="sup-modal-input"
+                                                style={{ ...inputStyle, fontVariantNumeric: 'tabular-nums' }}
+                                                placeholder="00000-000"
+                                                value={formData.cep}
+                                                onChange={e => setFormData({ ...formData, cep: e.target.value })}
+                                                onBlur={handleCepBlur}
+                                            />
                                         </div>
-                                        <div>
+                                        <div style={{ gridColumn: 'span 6' }}>
+                                            <label style={labelStyle}>Logradouro / Rua / Avenida</label>
+                                            <input
+                                                className="sup-modal-input"
+                                                style={inputStyle}
+                                                placeholder="Ex.: Av. Paulista"
+                                                value={formData.rua}
+                                                onChange={e => setFormData({ ...formData, rua: e.target.value })}
+                                            />
+                                        </div>
+                                        <div style={{ gridColumn: 'span 3' }}>
                                             <label style={labelStyle}>Número</label>
                                             <input
-                                                style={inputStyle}
+                                                className="sup-modal-input"
+                                                style={{ ...inputStyle, fontVariantNumeric: 'tabular-nums' }}
+                                                placeholder="S/N ou Nº"
                                                 value={formData.numero}
                                                 onChange={e => setFormData({ ...formData, numero: e.target.value })}
                                             />
                                         </div>
-                                        <div>
-                                            <label style={labelStyle}>Bairro</label>
+
+                                        <div style={{ gridColumn: 'span 4' }}>
+                                            <label style={labelStyle}>Complemento</label>
                                             <input
+                                                className="sup-modal-input"
                                                 style={inputStyle}
+                                                placeholder="Sala, Galpão, Faz., Km..."
+                                                value={formData.complemento || ''}
+                                                onChange={e => setFormData({ ...formData, complemento: e.target.value })}
+                                            />
+                                        </div>
+                                        <div style={{ gridColumn: 'span 3' }}>
+                                            <label style={labelStyle}>Bairro / Distrito</label>
+                                            <input
+                                                className="sup-modal-input"
+                                                style={inputStyle}
+                                                placeholder="Bairro"
                                                 value={formData.bairro}
                                                 onChange={e => setFormData({ ...formData, bairro: e.target.value })}
                                             />
                                         </div>
-                                        <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1.5rem' }}>
-                                            <div>
-                                                <label style={labelStyle}>Cidade</label>
-                                                <input
-                                                    style={inputStyle}
-                                                    value={formData.cidade}
-                                                    onChange={e => setFormData({ ...formData, cidade: e.target.value })}
-                                                />
-                                            </div>
-                                            <div>
-                                                <label style={labelStyle}>UF</label>
-                                                <input
-                                                    style={inputStyle}
-                                                    value={formData.uf}
-                                                    onChange={e => setFormData({ ...formData, uf: e.target.value })}
-                                                />
-                                            </div>
+                                        <div style={{ gridColumn: 'span 3' }}>
+                                            <label style={labelStyle}>Cidade / Município</label>
+                                            <input
+                                                className="sup-modal-input"
+                                                style={inputStyle}
+                                                placeholder="Cidade"
+                                                value={formData.cidade}
+                                                onChange={e => setFormData({ ...formData, cidade: e.target.value })}
+                                            />
+                                        </div>
+                                        <div style={{ gridColumn: 'span 2' }}>
+                                            <label style={labelStyle}>UF</label>
+                                            <input
+                                                className="sup-modal-input"
+                                                style={{ ...inputStyle, textTransform: 'uppercase', fontWeight: 700, textAlign: 'center' }}
+                                                maxLength={2}
+                                                placeholder="UF"
+                                                value={formData.uf}
+                                                onChange={e => setFormData({ ...formData, uf: e.target.value.toUpperCase() })}
+                                            />
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         )}
 
+                        {/* ==================== ABA 3: FINANCEIRO ==================== */}
                         {activeTab === 'financeiro' && (
-                            <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
-                                <div style={sectionStyle}>
-                                    <h4 style={{ margin: '0 0 1.5rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b' }}>
-                                        <CheckCircle size={20} color="#34d399" /> Status Operacional
-                                    </h4>
-                                    <div className="form-group">
-                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
-                                            <span style={{
-                                                padding: '0.4rem 0.9rem', borderRadius: '999px', fontWeight: 700, fontSize: '0.85rem',
-                                                color: (STATUS_FORNECEDOR[formData.status] || STATUS_FORNECEDOR.cadastrado).cor,
-                                                background: (STATUS_FORNECEDOR[formData.status] || STATUS_FORNECEDOR.cadastrado).fundo
-                                            }}>
-                                                {(STATUS_FORNECEDOR[formData.status] || { rotulo: formData.status }).rotulo}
-                                            </span>
-                                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600, color: '#991b1b', cursor: 'pointer' }}>
-                                                <input
-                                                    type="checkbox"
-                                                    checked={formData.status === 'inativo'}
-                                                    onChange={e => setFormData({
-                                                        ...formData,
-                                                        status: e.target.checked
-                                                            ? 'inativo'
-                                                            : (supplier?.status && supplier.status !== 'inativo' ? supplier.status : 'cadastrado')
-                                                    })}
-                                                />
-                                                Inativo
-                                            </label>
-                                        </div>
-                                        <small style={{ display: 'block', marginTop: '0.5rem', color: '#64748b', fontSize: '0.75rem' }}>
-                                            Calculado pelos contratos e pelas usinas: Compra e Venda assinada → Contrato Assinado; Gestão assinada → Em Ativação; Gestão + usina em conexão, gerando ou manutenção → Ativo. Só "Inativo" é escolhido à mão.
-                                        </small>
-                                    </div>
-                                    <div className="form-group" style={{ marginTop: '1rem' }}>
-                                        <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.5rem', color: '#475569', fontWeight: 600 }}>Contrato de Gestão assinado em</label>
-                                        <input
-                                            type="date"
-                                            style={inputStyle}
-                                            value={formData.contrato_assinado_em}
-                                            onChange={e => setFormData({ ...formData, contrato_assinado_em: e.target.value })}
-                                        />
-                                        <small style={{ display: 'block', marginTop: '0.35rem', color: '#64748b', fontSize: '0.75rem' }}>
-                                            Preenchido sozinho quando a assinatura é pela Autentique. Assinado por fora (papel, gov.br)? Informe a data aqui.
-                                        </small>
-                                    </div>
-                                </div>
-
-                                <div style={sectionStyle}>
-                                    <h4 style={{ margin: '0 0 1.5rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b' }}>
-                                        <Wallet size={20} color="#f59e0b" /> Dados Bancários e PIX
-                                    </h4>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
-                                        <div style={{ position: 'relative' }}>
-                                            <label style={labelStyle}>Chave PIX</label>
-                                            <div style={{ position: 'relative' }}>
-                                                <input
-                                                    style={{ ...inputStyle, paddingRight: '3.5rem' }}
-                                                    value={formData.pix_key}
-                                                    onChange={e => setFormData({ ...formData, pix_key: e.target.value })}
-                                                />
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        navigator.clipboard.writeText(formData.pix_key);
-                                                        showAlert('Chave PIX copiada!', 'success');
-                                                    }}
-                                                    style={{
-                                                        position: 'absolute',
-                                                        right: '8px',
-                                                        top: '50%',
-                                                        transform: 'translateY(-50%)',
-                                                        background: 'white',
-                                                        border: '1px solid #e2e8f0',
-                                                        borderRadius: '8px',
-                                                        padding: '0.4rem',
-                                                        cursor: 'pointer',
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        color: '#64748b'
-                                                    }}
-                                                    title="Copiar Chave PIX"
-                                                >
-                                                    <Copy size={16} />
-                                                </button>
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <label style={labelStyle}>Tipo de Chave</label>
-                                            <select
-                                                style={inputStyle}
-                                                value={formData.pix_key_type}
-                                                onChange={handlePixTypeChange}
-                                            >
-                                                <option value="cpf">CPF</option>
-                                                <option value="cnpj">CNPJ</option>
-                                                <option value="email">Email</option>
-                                                <option value="telefone">Telefone</option>
-                                                <option value="aleatoria">Aleatória</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                </div>
-
-
-
+                            <div style={{ animation: 'fadeIn 0.2s ease-out', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                                {/* Resumo Executivo de Saldos (Alto Contraste) */}
                                 <div style={{ 
-                                    background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
-                                    padding: '1.5rem',
-                                    borderRadius: '20px',
+                                    background: '#ffffff',
+                                    padding: '1.25rem 1.5rem',
+                                    borderRadius: '14px',
                                     border: '1px solid #e2e8f0',
                                     display: 'flex',
                                     justifyContent: 'space-between',
                                     alignItems: 'center',
-                                    marginBottom: '1rem',
-                                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)'
+                                    flexWrap: 'wrap',
+                                    gap: '1.25rem',
+                                    boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04)'
                                 }}>
-                                    <div>
-                                        <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Saldo Acumulado</div>
-                                        <div style={{ fontSize: '1.75rem', fontWeight: '900', color: displayBalance >= 0 ? '#00FF00' : '#FF0000', marginTop: '0.25rem' }}>
-                                            {displayBalance > 0 ? '+' : displayBalance < 0 ? '-' : ''}{formatCurrency(displayBalance)}
-                                        </div>
-                                        {pendingBalance > 0 && (
-                                            <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.15rem' }}>
-                                                Disponível: {availableBalance > 0 ? '+' : availableBalance < 0 ? '-' : ''}{formatCurrency(availableBalance)}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '2rem', flexWrap: 'wrap' }}>
+                                        <div>
+                                            <div style={{ fontSize: '0.73rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                                Saldo Acumulado na Conta Corrente
                                             </div>
+                                            <div style={{
+                                                fontSize: '1.75rem',
+                                                fontWeight: 800,
+                                                fontVariantNumeric: 'tabular-nums',
+                                                color: displayBalance > 0 ? '#15803d' : displayBalance < 0 ? '#b91c1c' : '#0f172a',
+                                                marginTop: '0.2rem',
+                                                letterSpacing: '-0.02em'
+                                            }}>
+                                                {displayBalance > 0 ? '+' : displayBalance < 0 ? '-' : ''}{formatCurrency(displayBalance)}
+                                            </div>
+                                        </div>
+
+                                        <div style={{ height: '38px', width: '1px', background: '#e2e8f0' }} />
+
+                                        <div>
+                                            <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                                Disponível p/ Repasse PIX
+                                            </div>
+                                            <div style={{
+                                                fontSize: '1.15rem',
+                                                fontWeight: 800,
+                                                fontVariantNumeric: 'tabular-nums',
+                                                color: availableBalance > 0 ? '#0f172a' : '#64748b',
+                                                marginTop: '0.25rem'
+                                            }}>
+                                                {availableBalance > 0 ? '+' : availableBalance < 0 ? '-' : ''}{formatCurrency(availableBalance)}
+                                            </div>
+                                        </div>
+
+                                        {pendingBalance > 0 && (
+                                            <>
+                                                <div style={{ height: '38px', width: '1px', background: '#e2e8f0' }} />
+                                                <div>
+                                                    <div style={{ fontSize: '0.72rem', color: '#b45309', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                                        Saldo Retido (Pendente)
+                                                    </div>
+                                                    <div style={{ fontSize: '1.15rem', fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: '#b45309', marginTop: '0.25rem' }}>
+                                                        {formatCurrency(pendingBalance)}
+                                                    </div>
+                                                </div>
+                                            </>
+                                        )}
+
+                                        {advanceBalance > 0 && (
+                                            <>
+                                                <div style={{ height: '38px', width: '1px', background: '#e2e8f0' }} />
+                                                <div>
+                                                    <div style={{ fontSize: '0.72rem', color: '#c2410c', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                                        Adiantamento em Aberto
+                                                    </div>
+                                                    <div style={{ fontSize: '1.15rem', fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: '#c2410c', marginTop: '0.25rem' }}>
+                                                        {formatCurrency(advanceBalance)}
+                                                    </div>
+                                                </div>
+                                            </>
                                         )}
                                     </div>
+
                                     <button 
                                         type="button"
                                         onClick={() => setActiveTab('extrato')}
                                         style={{
-                                            background: 'white',
-                                            border: '1px solid #e2e8f0',
-                                            padding: '0.75rem 1.25rem',
-                                            borderRadius: '12px',
-                                            fontSize: '0.9rem',
-                                            fontWeight: '700',
-                                            color: '#3b82f6',
+                                            background: '#eff6ff',
+                                            border: '1px solid #bfdbfe',
+                                            padding: '0.65rem 1.15rem',
+                                            borderRadius: '10px',
+                                            fontSize: '0.85rem',
+                                            fontWeight: 700,
+                                            color: '#1d4ed8',
                                             cursor: 'pointer',
-                                            boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
-                                            transition: 'all 0.2s'
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '0.45rem',
+                                            transition: 'all 0.15s'
                                         }}
-                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8fafc'}
-                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#dbeafe'; }}
+                                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#eff6ff'; }}
                                     >
-                                        Ver Detalhes
+                                        <ArrowUpDown size={16} /> Abrir Extrato e Pagamentos
                                     </button>
+                                </div>
+
+                                <div className="sup-modal-grid-2">
+                                    {/* Status Operacional e Contrato */}
+                                    <div style={{ ...sectionStyle, marginBottom: 0 }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.15rem', paddingBottom: '0.75rem', borderBottom: '1px solid #f1f5f9' }}>
+                                            <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#0f172a', fontSize: '0.98rem', fontWeight: 700 }}>
+                                                <CheckCircle size={18} color="#16a34a" /> Status Operacional e Governança
+                                            </h4>
+                                        </div>
+
+                                        <div style={{
+                                            background: '#f8fafc',
+                                            border: '1px solid #e2e8f0',
+                                            borderRadius: '12px',
+                                            padding: '1rem',
+                                            marginBottom: '1.15rem'
+                                        }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                                                    <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Estágio Atual:</span>
+                                                    <span style={{
+                                                        padding: '0.32rem 0.85rem',
+                                                        borderRadius: '999px',
+                                                        fontWeight: 700,
+                                                        fontSize: '0.82rem',
+                                                        color: (STATUS_FORNECEDOR[formData.status] || STATUS_FORNECEDOR.cadastrado).cor,
+                                                        background: (STATUS_FORNECEDOR[formData.status] || STATUS_FORNECEDOR.cadastrado).fundo
+                                                    }}>
+                                                        {(STATUS_FORNECEDOR[formData.status] || { rotulo: formData.status }).rotulo}
+                                                    </span>
+                                                </div>
+
+                                                <label style={{
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '0.45rem',
+                                                    fontWeight: 700,
+                                                    fontSize: '0.8rem',
+                                                    color: formData.status === 'inativo' ? '#991b1b' : '#475569',
+                                                    background: formData.status === 'inativo' ? '#fee2e2' : '#ffffff',
+                                                    border: `1px solid ${formData.status === 'inativo' ? '#fecaca' : '#cbd5e1'}`,
+                                                    padding: '0.35rem 0.75rem',
+                                                    borderRadius: '8px',
+                                                    cursor: 'pointer'
+                                                }}>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={formData.status === 'inativo'}
+                                                        onChange={e => setFormData({
+                                                            ...formData,
+                                                            status: e.target.checked
+                                                                ? 'inativo'
+                                                                : (supplier?.status && supplier.status !== 'inativo' ? supplier.status : 'cadastrado')
+                                                        })}
+                                                    />
+                                                    Marcar como Inativo
+                                                </label>
+                                            </div>
+                                            <small style={{ display: 'block', marginTop: '0.65rem', color: '#64748b', fontSize: '0.76rem', lineHeight: 1.45 }}>
+                                                Calculado automaticamente pelos contratos e usinas: Compra e Venda assinada → <strong>Contrato Assinado</strong>; Gestão assinada → <strong>Em Ativação</strong>; Gestão + usina em conexão, gerando ou manutenção → <strong>Ativo</strong>.
+                                            </small>
+                                        </div>
+
+                                        <div>
+                                            <label style={labelStyle}>Contrato de Gestão assinado em</label>
+                                            <input
+                                                type="date"
+                                                className="sup-modal-input"
+                                                style={{ ...inputStyle, fontVariantNumeric: 'tabular-nums' }}
+                                                value={formData.contrato_assinado_em}
+                                                onChange={e => setFormData({ ...formData, contrato_assinado_em: e.target.value })}
+                                            />
+                                            <small style={{ display: 'block', marginTop: '0.45rem', color: '#64748b', fontSize: '0.75rem', lineHeight: 1.4 }}>
+                                                Preenchido automaticamente quando assinado via Autentique. Caso assinado externamente (papel ou gov.br), informe a data acima.
+                                            </small>
+                                        </div>
+                                    </div>
+
+                                    {/* Dados Bancários e PIX */}
+                                    <div style={{ ...sectionStyle, marginBottom: 0 }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.15rem', paddingBottom: '0.75rem', borderBottom: '1px solid #f1f5f9' }}>
+                                            <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#0f172a', fontSize: '0.98rem', fontWeight: 700 }}>
+                                                <Wallet size={18} color="#d97706" /> Dados Bancários e Chave PIX
+                                            </h4>
+                                            {formData.pix_key && (
+                                                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#166534', background: '#dcfce7', padding: '0.2rem 0.6rem', borderRadius: '999px' }}>
+                                                    PIX Configurado
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: '1rem' }}>
+                                            <div>
+                                                <label style={labelStyle}>Tipo de Chave</label>
+                                                <select
+                                                    className="sup-modal-input"
+                                                    style={inputStyle}
+                                                    value={formData.pix_key_type}
+                                                    onChange={handlePixTypeChange}
+                                                >
+                                                    <option value="cpf">CPF</option>
+                                                    <option value="cnpj">CNPJ</option>
+                                                    <option value="email">E-mail</option>
+                                                    <option value="telefone">Telefone</option>
+                                                    <option value="aleatoria">Chave Aleatória</option>
+                                                </select>
+                                            </div>
+
+                                            <div>
+                                                <label style={labelStyle}>Chave PIX para Transferências Asaas</label>
+                                                <div style={{ position: 'relative' }}>
+                                                    <input
+                                                        className="sup-modal-input"
+                                                        style={{ ...inputStyle, paddingRight: '5.5rem', fontVariantNumeric: 'tabular-nums' }}
+                                                        placeholder="Informe a chave PIX do favorecido"
+                                                        value={formData.pix_key}
+                                                        onChange={e => setFormData({ ...formData, pix_key: e.target.value })}
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            if (!formData.pix_key) return;
+                                                            navigator.clipboard.writeText(formData.pix_key);
+                                                            showAlert('Chave PIX copiada!', 'success');
+                                                        }}
+                                                        style={{
+                                                            position: 'absolute',
+                                                            right: '6px',
+                                                            top: '50%',
+                                                            transform: 'translateY(-50%)',
+                                                            background: '#ffffff',
+                                                            border: '1px solid #cbd5e1',
+                                                            borderRadius: '8px',
+                                                            padding: '0.35rem 0.65rem',
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: '0.3rem',
+                                                            color: '#334155',
+                                                            fontSize: '0.75rem',
+                                                            fontWeight: 700
+                                                        }}
+                                                        title="Copiar Chave PIX"
+                                                    >
+                                                        <Copy size={13} /> Copiar
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div style={{
+                                            marginTop: '1.15rem',
+                                            padding: '0.85rem 1rem',
+                                            background: '#f8fafc',
+                                            borderRadius: '10px',
+                                            border: '1px solid #e2e8f0',
+                                            fontSize: '0.78rem',
+                                            color: '#475569',
+                                            lineHeight: 1.45
+                                        }}>
+                                            Os repasses de faturas compensadas e adiantamentos utilizam esta chave PIX diretamente via integração <strong>Asaas</strong>. Certifique-se de que a titularidade corresponde ao CNPJ ou Sócio Administrador cadastrado.
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         )}
 
+                        {/* ==================== ABA 4: EXTRATO ==================== */}
                         {activeTab === 'extrato' && (
-                            <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
+                            <div style={{ animation: 'fadeIn 0.2s ease-out', display: 'flex', flexDirection: 'column', gap: '1.15rem' }}>
+                                {/* Painel Executivo de Saldos e Ações Financeiras */}
                                 <div className="no-print" style={{
-                                    background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
-                                    padding: '2rem',
-                                    borderRadius: '24px',
+                                    background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+                                    padding: '1.35rem 1.5rem',
+                                    borderRadius: '14px',
                                     color: 'white',
-                                    marginBottom: '2rem',
+                                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                                    boxShadow: '0 10px 20px -5px rgba(15, 23, 42, 0.25)',
                                     display: 'flex',
                                     flexDirection: 'column',
-                                    boxShadow: '0 10px 15px -3px rgba(37, 99, 235, 0.4)',
-                                    gap: '1.25rem'
+                                    gap: '1.15rem'
                                 }}>
-                                    <div style={{
-                                        display: 'flex',
-                                        justifyContent: 'space-between',
-                                        alignItems: 'center',
-                                        flexWrap: 'wrap',
-                                        gap: '1rem',
-                                        width: '100%'
-                                    }}>
-                                        <div style={{ flex: '1 1 250px' }}>
-                                            <div style={{ fontSize: '0.9rem', opacity: 0.9, fontWeight: '500' }}>Saldo Acumulado</div>
-                                            <div style={{ fontSize: '2.5rem', fontWeight: 900, color: displayBalance > 0 ? '#00FF00' : displayBalance < 0 ? '#FF0000' : 'white' }}>{displayBalance > 0 ? '+' : displayBalance < 0 ? '-' : ''}{formatCurrency(displayBalance)}</div>
-                                            {pendingBalance > 0 && (
-                                                <div style={{ fontSize: '0.85rem', color: '#ffea80', marginTop: '0.25rem', fontWeight: 'bold' }}>
-                                                    Saldo Retido (Pendente): {formatCurrency(pendingBalance)} | Disponível: {availableBalance > 0 ? '+' : availableBalance < 0 ? '-' : ''}{formatCurrency(availableBalance)}
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
+                                        <div className="sup-kpi-grid" style={{ flex: '1 1 680px' }}>
+                                            {/* KPI 1: Saldo Acumulado */}
+                                            <div style={{
+                                                background: 'rgba(255, 255, 255, 0.05)',
+                                                border: '1px solid rgba(255, 255, 255, 0.1)',
+                                                borderRadius: '12px',
+                                                padding: '0.9rem 1.1rem'
+                                            }}>
+                                                <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#94a3b8', fontWeight: 700 }}>
+                                                    Saldo Acumulado (2.1.1)
                                                 </div>
-                                            )}
-                                            {advanceBalance > 0 && (
-                                                <div style={{ fontSize: '0.85rem', color: '#ffd7a1', marginTop: '0.35rem', fontWeight: 'bold' }}>
-                                                    Adiantamento em aberto: {formatCurrency(advanceBalance)} — será abatido conforme as faturas forem pagas
+                                                <div style={{
+                                                    fontSize: '1.65rem',
+                                                    fontWeight: 800,
+                                                    fontVariantNumeric: 'tabular-nums',
+                                                    color: displayBalance > 0 ? '#4ade80' : displayBalance < 0 ? '#f87171' : '#ffffff',
+                                                    marginTop: '0.2rem',
+                                                    letterSpacing: '-0.02em'
+                                                }}>
+                                                    {displayBalance > 0 ? '+' : displayBalance < 0 ? '-' : ''}{formatCurrency(displayBalance)}
                                                 </div>
-                                            )}
-                                            {displayBalance < 0 && (
-                                                <button
-                                                    type="button"
-                                                    onClick={handleClassificar}
-                                                    disabled={advancing || !podeMoverDinheiro}
-                                                    style={{
-                                                        marginTop: '0.5rem',
-                                                        background: 'rgba(255,255,255,0.18)',
-                                                        border: '1px solid rgba(255,255,255,0.4)',
-                                                        borderRadius: '8px',
-                                                        padding: '0.4rem 0.8rem',
-                                                        color: 'white',
-                                                        fontWeight: 700,
-                                                        fontSize: '0.8rem',
-                                                        cursor: (advancing || !podeMoverDinheiro) ? 'not-allowed' : 'pointer',
-                                                        opacity: (advancing || !podeMoverDinheiro) ? 0.6 : 1
-                                                    }}
-                                                    title="Move para a conta de adiantamentos o que foi pago acima do saldo devido"
-                                                >
-                                                    {advancing ? 'Classificando...' : 'Classificar adiantamento'}
-                                                </button>
-                                            )}
+                                                {displayBalance < 0 && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleClassificar}
+                                                        disabled={advancing || !podeMoverDinheiro}
+                                                        style={{
+                                                            marginTop: '0.5rem',
+                                                            background: 'rgba(248, 113, 113, 0.16)',
+                                                            border: '1px solid rgba(248, 113, 113, 0.4)',
+                                                            borderRadius: '6px',
+                                                            padding: '0.28rem 0.65rem',
+                                                            color: '#fecaca',
+                                                            fontWeight: 700,
+                                                            fontSize: '0.74rem',
+                                                            cursor: (advancing || !podeMoverDinheiro) ? 'not-allowed' : 'pointer',
+                                                            opacity: (advancing || !podeMoverDinheiro) ? 0.6 : 1
+                                                        }}
+                                                        title="Move para a conta de adiantamentos o que foi pago acima do saldo devido"
+                                                    >
+                                                        {advancing ? 'Classificando...' : 'Classificar como adiantamento'}
+                                                    </button>
+                                                )}
+                                            </div>
+
+                                            {/* KPI 2: Disponível para Saque */}
+                                            <div style={{
+                                                background: 'rgba(255, 255, 255, 0.05)',
+                                                border: '1px solid rgba(255, 255, 255, 0.1)',
+                                                borderRadius: '12px',
+                                                padding: '0.9rem 1.1rem'
+                                            }}>
+                                                <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#94a3b8', fontWeight: 700 }}>
+                                                    Disponível p/ Repasse
+                                                </div>
+                                                <div style={{
+                                                    fontSize: '1.45rem',
+                                                    fontWeight: 800,
+                                                    fontVariantNumeric: 'tabular-nums',
+                                                    color: availableBalance > 0 ? '#38bdf8' : '#e2e8f0',
+                                                    marginTop: '0.25rem'
+                                                }}>
+                                                    {availableBalance > 0 ? '+' : availableBalance < 0 ? '-' : ''}{formatCurrency(availableBalance)}
+                                                </div>
+                                                <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '0.2rem' }}>
+                                                    Liberado após conciliação
+                                                </div>
+                                            </div>
+
+                                            {/* KPI 3: Saldo Retido */}
+                                            <div style={{
+                                                background: 'rgba(255, 255, 255, 0.05)',
+                                                border: '1px solid rgba(255, 255, 255, 0.1)',
+                                                borderRadius: '12px',
+                                                padding: '0.9rem 1.1rem'
+                                            }}>
+                                                <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#94a3b8', fontWeight: 700 }}>
+                                                    Retido / Em Trânsito
+                                                </div>
+                                                <div style={{
+                                                    fontSize: '1.45rem',
+                                                    fontWeight: 800,
+                                                    fontVariantNumeric: 'tabular-nums',
+                                                    color: pendingBalance > 0 ? '#fbbf24' : '#64748b',
+                                                    marginTop: '0.25rem'
+                                                }}>
+                                                    {formatCurrency(pendingBalance)}
+                                                </div>
+                                                <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '0.2rem' }}>
+                                                    Transferências pendentes
+                                                </div>
+                                            </div>
+
+                                            {/* KPI 4: Adiantamento em Aberto */}
+                                            <div style={{
+                                                background: 'rgba(255, 255, 255, 0.05)',
+                                                border: '1px solid rgba(255, 255, 255, 0.1)',
+                                                borderRadius: '12px',
+                                                padding: '0.9rem 1.1rem'
+                                            }}>
+                                                <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#94a3b8', fontWeight: 700 }}>
+                                                    Adiantamento (1.1.3)
+                                                </div>
+                                                <div style={{
+                                                    fontSize: '1.45rem',
+                                                    fontWeight: 800,
+                                                    fontVariantNumeric: 'tabular-nums',
+                                                    color: advanceBalance > 0 ? '#fb923c' : '#64748b',
+                                                    marginTop: '0.25rem'
+                                                }}>
+                                                    {formatCurrency(advanceBalance)}
+                                                </div>
+                                                <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '0.2rem' }}>
+                                                    Abatido nas faturas pagas
+                                                </div>
+                                            </div>
                                         </div>
 
-                                        {/* Filters inside Header to save space */}
-                                        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                                            <input
-                                                type="date"
-                                                value={extratoStartDate}
-                                                onChange={e => setExtratoStartDate(e.target.value)}
-                                                style={{ padding: '0.5rem', borderRadius: '8px', border: 'none', fontSize: '0.85rem', color: '#1e293b', fontWeight: '600' }}
-                                            />
-                                            <span style={{ opacity: 0.8 }}>até</span>
-                                            <input
-                                                type="date"
-                                                value={extratoEndDate}
-                                                onChange={e => setExtratoEndDate(e.target.value)}
-                                                style={{ padding: '0.5rem', borderRadius: '8px', border: 'none', fontSize: '0.85rem', color: '#1e293b', fontWeight: '600' }}
-                                            />
-                                            <select
-                                                value={extratoType}
-                                                onChange={e => setExtratoType(e.target.value)}
-                                                style={{ padding: '0.5rem', borderRadius: '8px', border: 'none', fontSize: '0.85rem', color: '#1e293b', fontWeight: '600' }}
-                                            >
-                                                <option value="all">Todos os tipos</option>
-                                                <option value="credit">Créditos</option>
-                                                <option value="debit">Débitos</option>
-                                            </select>
-
+                                        {/* Botões de Movimentação PIX */}
+                                        <div style={{ display: 'flex', gap: '0.65rem', alignItems: 'center', flexWrap: 'wrap' }}>
                                             <button 
                                                 type="button"
-                                                onClick={handlePrintExtrato}
-                                                disabled={isGeneratingPdf}
+                                                onClick={handlePayPix}
+                                                disabled={paying || availableBalance <= 0 || !(['super_admin', 'superadmin', 'admin', 'gerente'].includes(profile?.role))}
                                                 style={{ 
-                                                    background: 'rgba(255,255,255,0.2)', 
-                                                    padding: '0.6rem 1rem', 
-                                                    borderRadius: '8px',
-                                                    border: '1px solid rgba(255,255,255,0.3)',
+                                                    background: availableBalance > 0 ? '#16a34a' : 'rgba(255,255,255,0.1)', 
+                                                    padding: '0.75rem 1.35rem', 
+                                                    borderRadius: '10px',
+                                                    border: '1px solid rgba(255,255,255,0.15)',
                                                     color: 'white',
-                                                    fontWeight: 'bold',
-                                                    cursor: isGeneratingPdf ? 'not-allowed' : 'pointer',
+                                                    fontWeight: 700,
+                                                    fontSize: '0.88rem',
+                                                    cursor: (paying || availableBalance <= 0 || !(['super_admin', 'superadmin', 'admin', 'gerente'].includes(profile?.role))) ? 'not-allowed' : 'pointer',
                                                     display: 'flex',
                                                     alignItems: 'center',
                                                     gap: '0.5rem',
-                                                    opacity: isGeneratingPdf ? 0.7 : 1
+                                                    opacity: (paying || availableBalance <= 0 || !(['super_admin', 'superadmin', 'admin', 'gerente'].includes(profile?.role))) ? 0.55 : 1,
+                                                    transition: 'all 0.15s'
                                                 }}
                                             >
-                                                {isGeneratingPdf ? 'Gerando...' : 'PDF'} <Download size={16} />
+                                                <Wallet size={17} />
+                                                {paying ? 'Processando...' : 'Pagar Agora (PIX)'}
+                                            </button>
+
+                                            <button
+                                                type="button"
+                                                onClick={handleAdvance}
+                                                disabled={advancing || paying || !podeMoverDinheiro}
+                                                title="Paga o fornecedor antes do faturamento. O valor fica como adiantamento e é abatido conforme as faturas forem pagas."
+                                                style={{
+                                                    background: 'rgba(255, 255, 255, 0.08)',
+                                                    padding: '0.75rem 1.2rem',
+                                                    borderRadius: '10px',
+                                                    border: '1px solid rgba(255, 255, 255, 0.25)',
+                                                    color: 'white',
+                                                    fontWeight: 700,
+                                                    fontSize: '0.88rem',
+                                                    cursor: (advancing || paying || !podeMoverDinheiro) ? 'not-allowed' : 'pointer',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '0.5rem',
+                                                    opacity: (advancing || paying || !podeMoverDinheiro) ? 0.55 : 1,
+                                                    transition: 'all 0.15s'
+                                                }}
+                                            >
+                                                <ArrowUpRight size={17} />
+                                                {advancing ? 'Enviando...' : 'Adiantar Valor'}
                                             </button>
                                         </div>
-
-                                        <button 
-                                            type="button"
-                                            onClick={handlePayPix}
-                                            disabled={paying || availableBalance <= 0 || !(['super_admin', 'superadmin', 'admin', 'gerente'].includes(profile?.role))}
-                                            style={{ 
-                                                background: 'white', 
-                                                padding: '1rem 2rem', 
-                                                borderRadius: '20px',
-                                                border: 'none',
-                                                color: '#1d4ed8',
-                                                fontWeight: '800',
-                                                fontSize: '1rem',
-                                                cursor: (paying || availableBalance <= 0 || !(['super_admin', 'superadmin', 'admin', 'gerente'].includes(profile?.role))) ? 'not-allowed' : 'pointer',
-                                                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: '0.75rem',
-                                                opacity: (paying || availableBalance <= 0 || !(['super_admin', 'superadmin', 'admin', 'gerente'].includes(profile?.role))) ? 0.7 : 1,
-                                                transition: 'transform 0.2s'
-                                            }}
-                                            onMouseEnter={(e) => { 
-                                                if (!paying && availableBalance > 0 && ['super_admin', 'superadmin', 'admin', 'gerente'].includes(profile?.role)) {
-                                                    e.currentTarget.style.transform = 'scale(1.05)'; 
-                                                }
-                                            }}
-                                            onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
-                                        >
-                                            <Wallet size={20} />
-                                            {paying ? 'Processando...' : 'Pagar Agora'}
-                                        </button>
-
-                                        {/* Adiantar nao depende de saldo: e para quando nao ha.
-                                            Cai em 1.1.3, nao em 2.1.1. */}
-                                        <button
-                                            type="button"
-                                            onClick={handleAdvance}
-                                            disabled={advancing || paying || !podeMoverDinheiro}
-                                            title="Paga o fornecedor antes do faturamento. O valor fica como adiantamento e é abatido conforme as faturas forem pagas."
-                                            style={{
-                                                background: 'transparent',
-                                                padding: '1rem 1.75rem',
-                                                borderRadius: '20px',
-                                                border: '2px solid rgba(255,255,255,0.85)',
-                                                color: 'white',
-                                                fontWeight: '800',
-                                                fontSize: '1rem',
-                                                cursor: (advancing || paying || !podeMoverDinheiro) ? 'not-allowed' : 'pointer',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: '0.75rem',
-                                                opacity: (advancing || paying || !podeMoverDinheiro) ? 0.6 : 1,
-                                                transition: 'transform 0.2s'
-                                            }}
-                                            onMouseEnter={(e) => {
-                                                if (!advancing && !paying && podeMoverDinheiro) {
-                                                    e.currentTarget.style.transform = 'scale(1.05)';
-                                                }
-                                            }}
-                                            onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
-                                        >
-                                            <ArrowUpRight size={20} />
-                                            {advancing ? 'Enviando...' : 'Adiantar'}
-                                        </button>
                                     </div>
 
+                                    {/* Barra de Lançamento Avulso em Partida Dobrada */}
                                     {supplier?.id && (
-                                        <>
-                                            <div style={{ width: '100%', height: '1px', background: 'rgba(255, 255, 255, 0.2)', margin: '0.25rem 0' }} />
-                                            
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', width: '100%' }}>
-                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.6fr 2fr 1.2fr auto', gap: '0.75rem', alignItems: 'center', width: '100%' }}>
+                                        <div style={{
+                                            background: 'rgba(15, 23, 42, 0.55)',
+                                            border: '1px solid rgba(255, 255, 255, 0.1)',
+                                            borderRadius: '12px',
+                                            padding: '0.9rem 1rem'
+                                        }}>
+                                            <div style={{ fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#94a3b8', marginBottom: '0.6rem' }}>
+                                                Lançamento Manual no Razão (Partida Dobrada)
+                                            </div>
+                                            <div className="sup-manual-grid">
+                                                <div>
+                                                    <label style={{ display: 'block', fontSize: '0.68rem', color: '#cbd5e1', marginBottom: '0.25rem', fontWeight: 600 }}>Natureza</label>
                                                     <select
                                                         value={manualEntryType}
                                                         onChange={e => setManualEntryType(e.target.value)}
                                                         style={{
-                                                            padding: '0.55rem 0.75rem',
-                                                            borderRadius: '10px',
-                                                            border: '1px solid rgba(255,255,255,0.25)',
-                                                            background: 'rgba(255,255,255,0.15)',
+                                                            width: '100%',
+                                                            padding: '0.5rem 0.65rem',
+                                                            borderRadius: '8px',
+                                                            border: '1px solid rgba(255,255,255,0.2)',
+                                                            background: 'rgba(255,255,255,0.1)',
                                                             color: 'white',
-                                                            fontSize: '0.85rem',
-                                                            fontWeight: '600',
+                                                            fontSize: '0.82rem',
+                                                            fontWeight: 600,
                                                             outline: 'none',
                                                             cursor: 'pointer',
                                                             height: '38px'
@@ -1931,20 +2342,23 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                                         <option value="credit" style={{ color: '#1e293b' }}>Crédito (+)</option>
                                                         <option value="debit" style={{ color: '#1e293b' }}>Débito (-)</option>
                                                     </select>
+                                                </div>
 
-                                                    {/* Toda partida precisa de destino: sem isto o razão não fecha. */}
+                                                <div>
+                                                    <label style={{ display: 'block', fontSize: '0.68rem', color: '#cbd5e1', marginBottom: '0.25rem', fontWeight: 600 }}>Conta de Contrapartida</label>
                                                     <select
                                                         value={manualEntryCounterAccount}
                                                         onChange={e => setManualEntryCounterAccount(e.target.value)}
                                                         title="Conta de contrapartida — de onde sai (ou para onde vai) o valor"
                                                         style={{
-                                                            padding: '0.55rem 0.75rem',
-                                                            borderRadius: '10px',
-                                                            border: '1px solid rgba(255,255,255,0.25)',
-                                                            background: 'rgba(255,255,255,0.15)',
+                                                            width: '100%',
+                                                            padding: '0.5rem 0.65rem',
+                                                            borderRadius: '8px',
+                                                            border: '1px solid rgba(255,255,255,0.2)',
+                                                            background: 'rgba(255,255,255,0.1)',
                                                             color: 'white',
-                                                            fontSize: '0.85rem',
-                                                            fontWeight: '600',
+                                                            fontSize: '0.82rem',
+                                                            fontWeight: 600,
                                                             outline: 'none',
                                                             cursor: 'pointer',
                                                             height: '38px'
@@ -1959,80 +2373,82 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                                             </option>
                                                         ))}
                                                     </select>
+                                                </div>
 
+                                                <div>
+                                                    <label style={{ display: 'block', fontSize: '0.68rem', color: '#cbd5e1', marginBottom: '0.25rem', fontWeight: 600 }}>Histórico / Descrição</label>
                                                     <input
-                                                        placeholder="Descrição do lançamento avulso"
+                                                        placeholder="Descreva o motivo do lançamento..."
                                                         value={manualEntryDescription}
                                                         onChange={e => setManualEntryDescription(e.target.value)}
                                                         style={{
-                                                            padding: '0.55rem 0.75rem',
-                                                            borderRadius: '10px',
-                                                            border: 'none',
-                                                            background: 'rgba(255,255,255,0.95)',
-                                                            color: '#1e293b',
-                                                            fontSize: '0.85rem',
-                                                            fontWeight: '600',
+                                                            width: '100%',
+                                                            padding: '0.5rem 0.75rem',
+                                                            borderRadius: '8px',
+                                                            border: '1px solid rgba(255,255,255,0.15)',
+                                                            background: '#ffffff',
+                                                            color: '#0f172a',
+                                                            fontSize: '0.84rem',
+                                                            fontWeight: 600,
                                                             outline: 'none',
                                                             height: '38px'
                                                         }}
                                                     />
-                                                    
+                                                </div>
+
+                                                <div>
+                                                    <label style={{ display: 'block', fontSize: '0.68rem', color: '#cbd5e1', marginBottom: '0.25rem', fontWeight: 600 }}>Valor (R$)</label>
                                                     <input
                                                         type="number"
                                                         min="0"
                                                         step="0.01"
-                                                        placeholder="Valor R$ 0,00"
+                                                        placeholder="0,00"
                                                         value={manualEntryAmount}
                                                         onChange={e => setManualEntryAmount(e.target.value)}
                                                         style={{
-                                                            padding: '0.55rem 0.75rem',
-                                                            borderRadius: '10px',
-                                                            border: 'none',
-                                                            background: 'rgba(255,255,255,0.95)',
-                                                            color: '#1e293b',
-                                                            fontSize: '0.85rem',
-                                                            fontWeight: '700',
+                                                            width: '100%',
+                                                            padding: '0.5rem 0.75rem',
+                                                            borderRadius: '8px',
+                                                            border: '1px solid rgba(255,255,255,0.15)',
+                                                            background: '#ffffff',
+                                                            color: '#0f172a',
+                                                            fontSize: '0.84rem',
+                                                            fontWeight: 700,
+                                                            fontVariantNumeric: 'tabular-nums',
                                                             outline: 'none',
                                                             height: '38px'
                                                         }}
                                                     />
-                                                    
-                                                    <button
-                                                        type="button"
-                                                        onClick={handleManualEntry}
-                                                        disabled={manualEntryLoading || !manualEntryAmount || !manualEntryDescription}
-                                                        style={{
-                                                            background: 'white',
-                                                            color: manualEntryType === 'credit' ? '#10b981' : '#ef4444',
-                                                            border: 'none',
-                                                            padding: '0 1.5rem',
-                                                            borderRadius: '10px',
-                                                            fontWeight: 'bold',
-                                                            fontSize: '0.85rem',
-                                                            cursor: (manualEntryLoading || !manualEntryAmount || !manualEntryDescription) ? 'not-allowed' : 'pointer',
-                                                            opacity: (manualEntryLoading || !manualEntryAmount || !manualEntryDescription) ? 0.7 : 1,
-                                                            transition: 'all 0.2s',
-                                                            height: '38px',
-                                                            boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
-                                                        }}
-                                                        onMouseEnter={(e) => {
-                                                            if (!manualEntryLoading && manualEntryAmount && manualEntryDescription) {
-                                                                e.currentTarget.style.background = manualEntryType === 'credit' ? '#e6fbf4' : '#fde8e8';
-                                                            }
-                                                        }}
-                                                        onMouseLeave={(e) => {
-                                                            e.currentTarget.style.background = 'white';
-                                                        }}
-                                                    >
-                                                        {manualEntryLoading ? 'Lançando...' : 'Lançar'}
-                                                    </button>
                                                 </div>
+
+                                                <button
+                                                    type="button"
+                                                    onClick={handleManualEntry}
+                                                    disabled={manualEntryLoading || !manualEntryAmount || !manualEntryDescription}
+                                                    style={{
+                                                        background: manualEntryType === 'credit' ? '#16a34a' : '#dc2626',
+                                                        color: '#ffffff',
+                                                        border: 'none',
+                                                        padding: '0 1.25rem',
+                                                        borderRadius: '8px',
+                                                        fontWeight: 700,
+                                                        fontSize: '0.84rem',
+                                                        cursor: (manualEntryLoading || !manualEntryAmount || !manualEntryDescription) ? 'not-allowed' : 'pointer',
+                                                        opacity: (manualEntryLoading || !manualEntryAmount || !manualEntryDescription) ? 0.55 : 1,
+                                                        transition: 'all 0.15s',
+                                                        height: '38px',
+                                                        whiteSpace: 'nowrap'
+                                                    }}
+                                                >
+                                                    {manualEntryLoading ? 'Lançando...' : 'Registrar'}
+                                                </button>
                                             </div>
-                                        </>
+                                        </div>
                                     )}
                                 </div>
 
-                                <div style={sectionStyle}>
+                                {/* Tabela de Lançamentos e Filtros */}
+                                <div style={{ ...sectionStyle, marginBottom: 0, padding: '1.25rem 1.5rem' }}>
                                     <div style={{ display: 'none' }} className="print-only-header">
                                         <div style={{ marginBottom: '1.5rem', paddingBottom: '1rem', borderBottom: '1px solid #e2e8f0', color: '#1e293b' }}>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -2052,27 +2468,144 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                         </div>
                                     </div>
 
-                                    <div className="no-print" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                                        <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b' }}>
-                                            <Search size={20} color="#3b82f6" /> Lançamentos Recentes
-                                        </h4>
+                                    {/* Barra de Ferramentas e Filtros do Razão */}
+                                    <div className="no-print" style={{
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                        flexWrap: 'wrap',
+                                        gap: '0.85rem',
+                                        marginBottom: '1.15rem',
+                                        paddingBottom: '0.9rem',
+                                        borderBottom: '1px solid #f1f5f9'
+                                    }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                                            <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#0f172a', fontSize: '0.98rem', fontWeight: 700 }}>
+                                                <ArrowUpDown size={18} color="#2563eb" /> Lançamentos do Razão
+                                            </h4>
+                                            <span style={{
+                                                padding: '0.15rem 0.55rem',
+                                                borderRadius: '999px',
+                                                background: '#f1f5f9',
+                                                color: '#475569',
+                                                fontSize: '0.74rem',
+                                                fontWeight: 700,
+                                                fontVariantNumeric: 'tabular-nums'
+                                            }}>
+                                                {filteredLedgerEntries.length} {filteredLedgerEntries.length === 1 ? 'registro' : 'registros'}
+                                            </span>
+                                        </div>
+
+                                        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                                            <input
+                                                type="date"
+                                                value={extratoStartDate}
+                                                onChange={e => setExtratoStartDate(e.target.value)}
+                                                style={{
+                                                    padding: '0.42rem 0.65rem',
+                                                    borderRadius: '8px',
+                                                    border: '1px solid #cbd5e1',
+                                                    background: '#f8fafc',
+                                                    fontSize: '0.8rem',
+                                                    color: '#0f172a',
+                                                    fontWeight: 600,
+                                                    fontVariantNumeric: 'tabular-nums'
+                                                }}
+                                            />
+                                            <span style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600 }}>até</span>
+                                            <input
+                                                type="date"
+                                                value={extratoEndDate}
+                                                onChange={e => setExtratoEndDate(e.target.value)}
+                                                style={{
+                                                    padding: '0.42rem 0.65rem',
+                                                    borderRadius: '8px',
+                                                    border: '1px solid #cbd5e1',
+                                                    background: '#f8fafc',
+                                                    fontSize: '0.8rem',
+                                                    color: '#0f172a',
+                                                    fontWeight: 600,
+                                                    fontVariantNumeric: 'tabular-nums'
+                                                }}
+                                            />
+                                            <select
+                                                value={extratoType}
+                                                onChange={e => setExtratoType(e.target.value)}
+                                                style={{
+                                                    padding: '0.42rem 0.7rem',
+                                                    borderRadius: '8px',
+                                                    border: '1px solid #cbd5e1',
+                                                    background: '#f8fafc',
+                                                    fontSize: '0.8rem',
+                                                    color: '#0f172a',
+                                                    fontWeight: 600
+                                                }}
+                                            >
+                                                <option value="all">Todos os tipos</option>
+                                                <option value="credit">Créditos (+)</option>
+                                                <option value="debit">Débitos (-)</option>
+                                            </select>
+
+                                            {(extratoStartDate || extratoEndDate || extratoType !== 'all') && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => { setExtratoStartDate(''); setExtratoEndDate(''); setExtratoType('all'); }}
+                                                    style={{
+                                                        padding: '0.42rem 0.65rem',
+                                                        borderRadius: '8px',
+                                                        border: '1px solid #e2e8f0',
+                                                        background: '#ffffff',
+                                                        color: '#64748b',
+                                                        fontSize: '0.76rem',
+                                                        fontWeight: 600,
+                                                        cursor: 'pointer'
+                                                    }}
+                                                >
+                                                    Limpar
+                                                </button>
+                                            )}
+
+                                            <button 
+                                                type="button"
+                                                onClick={handlePrintExtrato}
+                                                disabled={isGeneratingPdf}
+                                                style={{ 
+                                                    background: '#0f172a', 
+                                                    padding: '0.45rem 0.85rem', 
+                                                    borderRadius: '8px',
+                                                    border: '1px solid #0f172a',
+                                                    color: '#ffffff',
+                                                    fontSize: '0.8rem',
+                                                    fontWeight: 700,
+                                                    cursor: isGeneratingPdf ? 'not-allowed' : 'pointer',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '0.4rem',
+                                                    opacity: isGeneratingPdf ? 0.7 : 1
+                                                }}
+                                            >
+                                                <Download size={14} /> {isGeneratingPdf ? 'Gerando PDF...' : 'Exportar PDF'}
+                                            </button>
+                                        </div>
                                     </div>
                                     
                                     {ledgerLoading ? (
-                                        <div style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>Carregando extrato...</div>
+                                        <div style={{ textAlign: 'center', padding: '2.5rem', color: '#64748b', fontSize: '0.9rem' }}>
+                                            Carregando lançamentos do razão...
+                                        </div>
                                     ) : filteredLedgerEntries.length === 0 ? (
-                                        <div style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8', border: '1px dashed #e2e8f0', borderRadius: '16px' }}>
+                                        <div style={{ textAlign: 'center', padding: '2.5rem', color: '#64748b', border: '1px dashed #cbd5e1', borderRadius: '12px', background: '#f8fafc' }}>
                                             Nenhum lançamento encontrado para os filtros selecionados.
                                         </div>
                                     ) : (
-                                        <div style={{ overflowX: 'auto' }}>
+                                        <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: '12px' }}>
                                             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
                                                 <thead>
-                                                    <tr style={{ textAlign: 'left' }}>
-                                                        <th style={{ padding: '12px 15px', color: '#ffffff', background: '#003366' }}>Data</th>
-                                                        <th style={{ padding: '12px 15px', color: '#ffffff', background: '#003366' }}>Entidade</th>
-                                                        <th style={{ padding: '12px 15px', color: '#ffffff', background: '#003366' }}>Descrição</th>
-                                                        <th style={{ padding: '12px 15px', color: '#ffffff', background: '#003366', textAlign: 'right' }}>Valor</th>
+                                                    <tr style={{ textAlign: 'left', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                                                        <th style={{ padding: '0.75rem 1rem', color: '#475569', fontWeight: 700, fontSize: '0.73rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Data</th>
+                                                        <th style={{ padding: '0.75rem 1rem', color: '#475569', fontWeight: 700, fontSize: '0.73rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Entidade</th>
+                                                        <th style={{ padding: '0.75rem 1rem', color: '#475569', fontWeight: 700, fontSize: '0.73rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Descrição / Assinante</th>
+                                                        <th style={{ padding: '0.75rem 1rem', color: '#475569', fontWeight: 700, fontSize: '0.73rem', textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: 'right' }}>Valor</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
@@ -2081,10 +2614,10 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                                         // Credit (Negative amount) = Money they have to receive (Revenue/Positive for them)
                                                         // Debit (Positive amount) = Money deducted from them (Expense/Negative for them)
                                                         const isRevenue = entry.amount < 0;
-                                                        
                                                         const isRepasse = entry.description?.toLowerCase().includes('repasse');
                                                         const subscriberOrig = isRepasse ? (repasseOrigins[entry.transaction_id] || entry.metadata?.subscriber_name || entry.metadata?.consumer_name || entry.metadata?.nome_assinante || entry.metadata?.originator_name) : null;
                                                         const kwhCompensated = entry.metadata?.kwh || entry.metadata?.kwh_compensado || entry.metadata?.kWh || null;
+                                                        const isExpanded = expandedTx === entry.transaction_id;
 
                                                         return (
                                                             <React.Fragment key={entry.id}>
@@ -2093,89 +2626,100 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                                                     style={{ 
                                                                         borderBottom: '1px solid #f1f5f9', 
                                                                         cursor: 'pointer',
-                                                                        transition: 'background 0.2s'
+                                                                        background: isExpanded ? '#f8fafc' : '#ffffff',
+                                                                        transition: 'background 0.15s'
                                                                     }}
                                                                     onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8fafc'}
-                                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = isExpanded ? '#f8fafc' : '#ffffff'}
                                                                 >
-                                                                    <td style={{ padding: '1.25rem 0.5rem', whiteSpace: 'nowrap' }}>
-                                                                        <div style={{ color: '#64748b', fontWeight: '500' }}>{formatDate(entry.created_at)}</div>
+                                                                    <td style={{ padding: '0.9rem 1rem', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+                                                                        <div style={{ color: '#475569', fontWeight: 600, fontSize: '0.82rem' }}>{formatDate(entry.created_at)}</div>
                                                                     </td>
-                                                                    <td style={{ padding: '1.25rem 0.5rem' }}>
-                                                                        <div style={{ fontWeight: '600', color: '#475569' }}>
+                                                                    <td style={{ padding: '0.9rem 1rem', whiteSpace: 'nowrap' }}>
+                                                                        <span style={{
+                                                                            display: 'inline-block',
+                                                                            padding: '0.2rem 0.55rem',
+                                                                            borderRadius: '6px',
+                                                                            background: '#f1f5f9',
+                                                                            color: '#334155',
+                                                                            fontWeight: 600,
+                                                                            fontSize: '0.76rem'
+                                                                        }}>
                                                                             {translateEntity(entry.entity_name || 'Sistema')}
-                                                                        </div>
+                                                                        </span>
                                                                     </td>
-                                                                    <td style={{ padding: '1.25rem 0.5rem' }}>
-                                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                                    <td style={{ padding: '0.9rem 1rem' }}>
+                                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.7rem' }}>
                                                                             <div className="no-print" style={{
-                                                                                width: '32px',
-                                                                                height: '32px',
-                                                                                borderRadius: '10px',
-                                                                                background: isRevenue ? '#f0fdf4' : '#fef2f2',
-                                                                                color: isRevenue ? '#10b981' : '#ef4444',
+                                                                                width: '30px',
+                                                                                height: '30px',
+                                                                                borderRadius: '8px',
+                                                                                background: isRevenue ? '#dcfce7' : '#fee2e2',
+                                                                                color: isRevenue ? '#15803d' : '#b91c1c',
                                                                                 display: 'flex',
                                                                                 alignItems: 'center',
                                                                                 justifyContent: 'center',
                                                                                 flexShrink: 0
                                                                             }}>
-                                                                                {isRevenue ? <ArrowDownLeft size={16} /> : <ArrowUpRight size={16} />}
+                                                                                {isRevenue ? <ArrowDownLeft size={15} /> : <ArrowUpRight size={15} />}
                                                                             </div>
                                                                             <div>
                                                                                 {subscriberOrig ? (
                                                                                     <>
-                                                                                        <div style={{ fontWeight: '800', color: '#1e293b', fontSize: '0.95rem' }}>
+                                                                                        <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.88rem' }}>
                                                                                             {subscriberOrig}
                                                                                         </div>
-                                                                                        <div style={{ fontWeight: '600', color: '#64748b', fontSize: '0.8rem', marginTop: '0.15rem' }}>
-                                                                                            {entry.description} {kwhCompensated && ` | ${kwhCompensated} kWh compensados`}
+                                                                                        <div style={{ fontWeight: 500, color: '#64748b', fontSize: '0.76rem', marginTop: '0.1rem' }}>
+                                                                                            {entry.description} {kwhCompensated && ` • ${kwhCompensated} kWh compensados`}
                                                                                         </div>
                                                                                     </>
                                                                                 ) : (
-                                                                                    <div style={{ fontWeight: '800', color: '#1e293b', fontSize: '0.95rem' }}>
+                                                                                    <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.88rem' }}>
                                                                                         {entry.description}
                                                                                     </div>
                                                                                 )}
                                                                             </div>
                                                                         </div>
                                                                     </td>
-                                                                    <td style={{ padding: '1.25rem 0.5rem', textAlign: 'right' }}>
-                                                                        <div className="print-value" style={{
-                                                                            fontWeight: '800',
-                                                                            fontSize: '1.05rem',
-                                                                            color: isRevenue ? '#10b981' : '#ef4444'
-                                                                        }}>
-                                                                            {isRevenue ? '+' : '-'}{formatCurrency(entry.amount)}
+                                                                    <td style={{ padding: '0.9rem 1rem', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                                                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                                            <span className="print-value" style={{
+                                                                                fontWeight: 800,
+                                                                                fontSize: '0.95rem',
+                                                                                fontVariantNumeric: 'tabular-nums',
+                                                                                color: isRevenue ? '#15803d' : '#b91c1c'
+                                                                            }}>
+                                                                                {isRevenue ? '+' : '-'}{formatCurrency(entry.amount)}
+                                                                            </span>
+                                                                            <span className="no-print" style={{ color: '#94a3b8', display: 'inline-flex' }}>
+                                                                                {isExpanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+                                                                            </span>
                                                                         </div>
                                                                     </td>
                                                                 </tr>
                                                                 
-                                                                {expandedTx === entry.transaction_id && (
+                                                                {isExpanded && (
                                                                     <tr>
-                                                                        <td colSpan={4} style={{ padding: '0 0.5rem 1rem 0.5rem' }}>
+                                                                        <td colSpan={4} style={{ padding: '0 1rem 0.9rem 1rem', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
                                                                             <div style={{ 
-                                                                                background: '#f8fafc', 
-                                                                                borderRadius: '16px', 
-                                                                                padding: '1.5rem',
-                                                                                border: '1px solid #e2e8f0',
-                                                                                animation: 'fadeIn 0.2s ease-out'
+                                                                                background: '#ffffff', 
+                                                                                borderRadius: '10px', 
+                                                                                padding: '1rem 1.25rem',
+                                                                                border: '1px solid #cbd5e1',
+                                                                                animation: 'fadeIn 0.15s ease-out'
                                                                             }}>
-                                                                                <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', marginBottom: '1rem', letterSpacing: '0.05em' }}>
-                                                                                    Composição do Lançamento
+                                                                                <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '0.65rem', letterSpacing: '0.04em' }}>
+                                                                                    Composição Contábil do Lançamento (Partida Dobrada)
                                                                                 </div>
                                                                                 {txLoading ? (
-                                                                                    <div style={{ color: '#94a3b8', fontSize: '0.8rem' }}>Carregando detalhes...</div>
+                                                                                    <div style={{ color: '#64748b', fontSize: '0.8rem' }}>Carregando detalhes...</div>
                                                                                 ) : (
                                                                                     (() => {
-                                                                                        // Filter out the supplier's own account (2.1.1) to avoid confusing mirrored entries
                                                                                         const filtered = txDetails.filter(d => d.account_code !== '2.1.1');
-                                                                                        
-                                                                                        // Group by description and entity to consolidate multiple entries (like taxes or splits)
                                                                                         const grouped = filtered.reduce((acc, curr) => {
                                                                                             const key = `${curr.description}-${curr.entity_name}`;
                                                                                             if (!acc[key]) {
                                                                                                 acc[key] = { ...curr };
-                                                                                                // Invert sign because these are contra-entries (offsets) to the main line
                                                                                                 acc[key].amount = -curr.amount;
                                                                                             } else {
                                                                                                 acc[key].amount -= curr.amount;
@@ -2186,27 +2730,24 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                                                                         const finalDetails = Object.values(grouped);
 
                                                                                         if (finalDetails.length === 0) {
-                                                                                            return <div style={{ color: '#94a3b8', fontSize: '0.8rem' }}>Detalhes não disponíveis para esta visualização.</div>;
+                                                                                            return <div style={{ color: '#64748b', fontSize: '0.8rem' }}>Detalhes não disponíveis para esta visualização.</div>;
                                                                                         }
 
                                                                                         return (
-                                                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                                                                                {finalDetails.map((detail, idx) => {
-                                                                                                    const isRevenue = detail.amount < 0; // Negative in Supplier view means "they receive"
-                                                                                                    return (
-                                                                                                        <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 0', borderBottom: '1px dashed #e2e8f0' }}>
-                                                                                                            <div>
-                                                                                                                <div style={{ fontWeight: '600', color: '#334155', fontSize: '0.85rem' }}>
-                                                                                                                    {translateEntity(detail.entity_name || detail.account_name)}
-                                                                                                                </div>
-                                                                                                                <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{detail.description}</div>
+                                                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                                                                                {finalDetails.map((detail, idx) => (
+                                                                                                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.4rem 0', borderBottom: idx < finalDetails.length - 1 ? '1px dashed #e2e8f0' : 'none' }}>
+                                                                                                        <div>
+                                                                                                            <div style={{ fontWeight: 600, color: '#1e293b', fontSize: '0.82rem' }}>
+                                                                                                                {translateEntity(detail.entity_name || detail.account_name)}
                                                                                                             </div>
-                                                                                                            <div style={{ fontWeight: '700', color: detail.amount < 0 ? '#10b981' : '#ef4444' }}>
-                                                                                                                {detail.amount < 0 ? '+' : '-'}{formatCurrency(detail.amount)}
-                                                                                                            </div>
+                                                                                                            <div style={{ fontSize: '0.72rem', color: '#64748b' }}>{detail.description}</div>
                                                                                                         </div>
-                                                                                                    );
-                                                                                                })}
+                                                                                                        <div style={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums', fontSize: '0.85rem', color: detail.amount < 0 ? '#15803d' : '#b91c1c' }}>
+                                                                                                            {detail.amount < 0 ? '+' : '-'}{formatCurrency(detail.amount)}
+                                                                                                        </div>
+                                                                                                    </div>
+                                                                                                ))}
                                                                                             </div>
                                                                                         );
                                                                                     })()
@@ -2226,12 +2767,20 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                             </div>
                         )}
 
+                        {/* ==================== ABA 5: HISTÓRICO ==================== */}
                         {activeTab === 'historico' && supplier && (
-                            <div className="no-print" style={{ animation: 'fadeIn 0.3s ease-out' }}>
-                                <div style={sectionStyle}>
-                                    <h4 style={{ margin: '0 0 1.5rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b' }}>
-                                        <History size={20} color="#3b82f6" /> Timeline de Auditoria
-                                    </h4>
+                            <div className="no-print" style={{ animation: 'fadeIn 0.2s ease-out' }}>
+                                <div style={{ ...sectionStyle, marginBottom: 0 }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', paddingBottom: '0.75rem', borderBottom: '1px solid #f1f5f9' }}>
+                                        <div>
+                                            <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#0f172a', fontSize: '0.98rem', fontWeight: 700 }}>
+                                                <History size={18} color="#2563eb" /> Timeline de Auditoria e Alterações
+                                            </h4>
+                                            <p style={{ margin: '0.25rem 0 0', fontSize: '0.78rem', color: '#64748b' }}>
+                                                Registro cronológico de eventos cadastrais, financeiros e operacionais deste fornecedor.
+                                            </p>
+                                        </div>
+                                    </div>
                                     <HistoryTimeline 
                                         entityType="supplier" 
                                         entityId={supplier.id} 
@@ -2242,280 +2791,289 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                 </div>
                             </div>
                         )}
+                    </div>
 
-                        {/* Modal Footer Actions */}
-                        <div className="no-print" style={{ 
-                            display: 'flex', 
-                            justifyContent: 'space-between', 
-                            alignItems: 'center',
-                            marginTop: '2rem',
-                            paddingTop: '2rem',
-                            borderTop: '1px solid #e2e8f0'
+                    {/* Pinned Modal Footer Actions */}
+                    <div className="no-print" style={{ 
+                        display: 'flex', 
+                        justifyContent: 'space-between', 
+                        alignItems: 'center',
+                        padding: '1rem 1.75rem',
+                        background: '#ffffff',
+                        borderTop: '1px solid #e2e8f0',
+                        flexShrink: 0,
+                        gap: '1rem',
+                        flexWrap: 'wrap'
+                    }}>
+                        <div>
+                            {supplier && (
+                                <button 
+                                    type="button" 
+                                    onClick={handleDelete}
+                                    style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '0.45rem',
+                                        padding: '0.62rem 1.1rem',
+                                        background: '#fef2f2',
+                                        color: '#dc2626',
+                                        border: '1px solid #fecaca',
+                                        borderRadius: '10px',
+                                        fontWeight: 700,
+                                        fontSize: '0.84rem',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.15s'
+                                    }}
+                                    onMouseEnter={e => { e.currentTarget.style.background = '#fee2e2'; }}
+                                    onMouseLeave={e => { e.currentTarget.style.background = '#fef2f2'; }}
+                                >
+                                    <Trash2 size={16} /> Excluir Fornecedor
+                                </button>
+                            )}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                            {supplier?.id && (
+                                <ConvidarAppButton tipo="supplier" id={supplier.id} nome={supplier.name} style={{ borderRadius: '10px', padding: '0.62rem 1.1rem', fontSize: '0.84rem' }} />
+                            )}
+                            <button
+                                type="button"
+                                onClick={onClose}
+                                style={{
+                                    padding: '0.62rem 1.25rem',
+                                    background: '#ffffff',
+                                    color: '#475569',
+                                    border: '1px solid #cbd5e1',
+                                    borderRadius: '10px',
+                                    fontWeight: 700,
+                                    fontSize: '0.84rem',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Cancelar
+                            </button>
+                            <button 
+                                type="submit" 
+                                disabled={loading}
+                                style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '0.45rem',
+                                    padding: '0.62rem 1.5rem',
+                                    background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+                                    color: '#ffffff',
+                                    border: 'none',
+                                    borderRadius: '10px',
+                                    fontWeight: 700,
+                                    fontSize: '0.86rem',
+                                    cursor: loading ? 'not-allowed' : 'pointer',
+                                    boxShadow: '0 4px 12px rgba(37, 99, 235, 0.25)',
+                                    transition: 'all 0.15s'
+                                }}
+                            >
+                                {loading ? (
+                                    'Processando...'
+                                ) : (
+                                    <><Save size={16} /> Salvar Alterações</>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </form>
+
+                {/* Adiantamento ao fornecedor */}
+                {showAdvanceModal && (
+                    <div style={{
+                        position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                        backgroundColor: 'rgba(15, 23, 42, 0.55)', backdropFilter: 'blur(4px)',
+                        zIndex: 2000, display: 'flex', justifyContent: 'center', alignItems: 'center',
+                        animation: 'fadeIn 0.15s ease-out', padding: '1rem'
+                    }}>
+                        <div style={{
+                            background: '#ffffff', borderRadius: '16px', width: '92%', maxWidth: '440px',
+                            padding: '1.75rem', border: '1px solid #e2e8f0',
+                            boxShadow: '0 20px 25px -5px rgba(15, 23, 42, 0.2)'
                         }}>
-                            <div>
-                                {supplier && (
-                                    <button 
-                                        type="button" 
-                                        onClick={handleDelete}
-                                        style={{
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '0.5rem',
-                                            padding: '0.75rem 1.25rem',
-                                            background: '#fee2e2',
-                                            color: '#dc2626',
-                                            border: 'none',
-                                            borderRadius: '14px',
-                                            fontWeight: '700',
-                                            justifyContent: 'center',
-                                            cursor: 'pointer'
-                                        }}
-                                    >
-                                        <Trash2 size={18} /> Excluir Fornecedor
-                                    </button>
+                            <div style={{
+                                width: '52px', height: '52px', borderRadius: '12px', background: '#fff7ed',
+                                border: '1px solid #fed7aa',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem',
+                                color: '#ea580c'
+                            }}>
+                                <ArrowUpRight size={26} />
+                            </div>
+                            <h4 style={{ margin: '0 0 0.4rem', fontSize: '1.15rem', color: '#0f172a', fontWeight: 800, textAlign: 'center' }}>
+                                Adiantar ao Fornecedor
+                            </h4>
+                            <p style={{ color: '#64748b', fontSize: '0.84rem', lineHeight: 1.5, marginBottom: '1.25rem', textAlign: 'center' }}>
+                                Pagamento antecipado ao faturamento. O valor entra como <strong>adiantamento (1.1.3)</strong> e é abatido conforme as faturas dos assinantes forem pagas.
+                            </p>
+
+                            <label style={{ ...labelStyle, marginBottom: '0.35rem' }}>Valor do Adiantamento</label>
+                            <div style={{ position: 'relative', marginBottom: '0.9rem' }}>
+                                <span style={{ position: 'absolute', left: '0.9rem', top: '50%', transform: 'translateY(-50%)', fontWeight: 700, color: '#64748b', fontSize: '0.9rem' }}>R$</span>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0.01"
+                                    autoFocus
+                                    style={{ width: '100%', padding: '0.7rem 0.8rem 0.7rem 2.6rem', borderRadius: '10px', border: '1px solid #cbd5e1', fontWeight: 800, color: '#0f172a', fontVariantNumeric: 'tabular-nums', fontSize: '0.95rem' }}
+                                    value={advanceAmount}
+                                    onChange={(e) => setAdvanceAmount(e.target.value)}
+                                />
+                            </div>
+
+                            <label style={{ ...labelStyle, marginBottom: '0.35rem' }}>Motivo / Observação</label>
+                            <input
+                                type="text"
+                                placeholder="Ex.: adiantamento de geração, faturas ainda não emitidas"
+                                style={{ width: '100%', padding: '0.7rem 0.85rem', borderRadius: '10px', border: '1px solid #cbd5e1', color: '#0f172a', marginBottom: '1.1rem', fontSize: '0.88rem' }}
+                                value={advanceReason}
+                                onChange={(e) => setAdvanceReason(e.target.value)}
+                            />
+
+                            <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '0.8rem 0.95rem', marginBottom: '1.25rem' }}>
+                                <div style={{ fontSize: '0.68rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', marginBottom: '0.2rem' }}>
+                                    Destino PIX (Asaas)
+                                </div>
+                                <div style={{ fontSize: '0.86rem', color: '#0f172a', fontWeight: 700, wordBreak: 'break-all', fontVariantNumeric: 'tabular-nums' }}>
+                                    {formData.pix_key} ({formData.pix_key_type?.toUpperCase()})
+                                </div>
+                                {advanceBalance > 0 && (
+                                    <div style={{ fontSize: '0.76rem', color: '#b45309', marginTop: '0.4rem', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                                        Já há {formatCurrency(advanceBalance)} de adiantamento em aberto.
+                                    </div>
                                 )}
                             </div>
-                            <div style={{ display: 'flex', gap: '1rem' }}>
-                                {supplier?.id && (
-                                    <ConvidarAppButton tipo="supplier" id={supplier.id} nome={supplier.name} style={{ borderRadius: '14px', padding: '0.75rem 1.25rem' }} />
-                                )}
+
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
                                 <button
                                     type="button"
-                                    onClick={onClose}
+                                    onClick={confirmAdvance}
                                     style={{
-                                        padding: '0.75rem 1.5rem',
-                                        background: 'white',
-                                        color: '#64748b',
-                                        border: '1px solid #e2e8f0',
-                                        borderRadius: '14px',
-                                        fontWeight: '700',
-                                        cursor: 'pointer'
+                                        padding: '0.75rem', background: '#ea580c', color: 'white', borderRadius: '10px',
+                                        border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '0.88rem'
+                                    }}
+                                >
+                                    Confirmar e Enviar Adiantamento
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowAdvanceModal(false)}
+                                    style={{
+                                        padding: '0.7rem', background: 'white', color: '#64748b', borderRadius: '10px',
+                                        border: '1px solid #cbd5e1', fontWeight: 600, cursor: 'pointer', fontSize: '0.85rem'
                                     }}
                                 >
                                     Cancelar
                                 </button>
-                                <button 
-                                    type="submit" 
-                                    disabled={loading}
-                                    style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '0.5rem',
-                                        padding: '0.75rem 2rem',
-                                        background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
-                                        color: 'white',
-                                        border: 'none',
-                                        borderRadius: '14px',
-                                        fontWeight: '800',
-                                        cursor: 'pointer',
-                                        boxShadow: '0 10px 15px -3px rgba(37, 99, 235, 0.3)',
-                                        transition: 'all 0.2s'
-                                    }}
-                                >
-                                    {loading ? (
-                                        'Processando...'
-                                    ) : (
-                                        <><Save size={18} /> Salvar Alterações</>
-                                    )}
-                                </button>
                             </div>
                         </div>
-                    </form>
-                </div>
-            </div>
+                    </div>
+                )}
 
-            <style>{`
-                @keyframes fadeIn {
-                    from { opacity: 0; transform: translateY(10px); }
-                    to { opacity: 1; transform: translateY(0); }
-                }
-            `}</style>
-
-            {/* Adiantamento ao fornecedor */}
-            {showAdvanceModal && (
-                <div style={{
-                    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-                    backgroundColor: 'rgba(0, 0, 0, 0.4)', backdropFilter: 'blur(4px)',
-                    zIndex: 2000, display: 'flex', justifyContent: 'center', alignItems: 'center',
-                    animation: 'fadeIn 0.2s ease-out'
-                }}>
+                {/* Custom Payment Modal */}
+                {showPaymentModal && (
                     <div style={{
-                        background: 'white', borderRadius: '24px', width: '90%', maxWidth: '440px',
-                        padding: '2rem', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)'
+                        position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                        backgroundColor: 'rgba(15, 23, 42, 0.55)', backdropFilter: 'blur(4px)',
+                        zIndex: 2000, display: 'flex', justifyContent: 'center', alignItems: 'center',
+                        animation: 'fadeIn 0.15s ease-out', padding: '1rem'
                     }}>
                         <div style={{
-                            width: '64px', height: '64px', borderRadius: '50%', background: '#fff7ed',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.25rem',
-                            color: '#f97316'
+                            background: '#ffffff', borderRadius: '16px', width: '92%', maxWidth: '420px',
+                            padding: '1.75rem', border: '1px solid #e2e8f0',
+                            boxShadow: '0 20px 25px -5px rgba(15, 23, 42, 0.2)',
+                            textAlign: 'center'
                         }}>
-                            <ArrowUpRight size={32} />
-                        </div>
-                        <h4 style={{ margin: '0 0 0.5rem', fontSize: '1.25rem', color: '#1e293b', fontWeight: 800, textAlign: 'center' }}>
-                            Adiantar ao fornecedor
-                        </h4>
-                        <p style={{ color: '#64748b', fontSize: '0.9rem', lineHeight: '1.5', marginBottom: '1.5rem', textAlign: 'center' }}>
-                            Pagamento antes do faturamento. O valor entra como <strong>adiantamento</strong> e
-                            é abatido conforme as faturas dos assinantes forem pagas — não vira crédito do mês.
-                        </p>
-
-                        <label style={{ ...labelStyle, marginBottom: '0.4rem' }}>Valor</label>
-                        <div style={{ position: 'relative', marginBottom: '1rem' }}>
-                            <span style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', fontWeight: 'bold', color: '#64748b' }}>R$</span>
-                            <input
-                                type="number"
-                                step="0.01"
-                                min="0.01"
-                                autoFocus
-                                style={{ width: '100%', padding: '0.8rem 0.8rem 0.8rem 3rem', borderRadius: '12px', border: '1px solid #e2e8f0', fontWeight: '800', color: '#1e293b' }}
-                                value={advanceAmount}
-                                onChange={(e) => setAdvanceAmount(e.target.value)}
-                            />
-                        </div>
-
-                        <label style={{ ...labelStyle, marginBottom: '0.4rem' }}>Motivo</label>
-                        <input
-                            type="text"
-                            placeholder="Ex.: adiantamento de julho, faturas ainda não emitidas"
-                            style={{ width: '100%', padding: '0.8rem', borderRadius: '12px', border: '1px solid #e2e8f0', color: '#1e293b', marginBottom: '1.25rem' }}
-                            value={advanceReason}
-                            onChange={(e) => setAdvanceReason(e.target.value)}
-                        />
-
-                        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '0.9rem', marginBottom: '1.25rem' }}>
-                            <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 800, textTransform: 'uppercase', marginBottom: '0.25rem' }}>
-                                Destino
+                            <div style={{ 
+                                width: '52px', height: '52px', borderRadius: '12px', background: '#eff6ff',
+                                border: '1px solid #bfdbfe',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem',
+                                color: '#2563eb'
+                            }}>
+                                <Wallet size={26} />
                             </div>
-                            <div style={{ fontSize: '0.9rem', color: '#1e293b', fontWeight: 700, wordBreak: 'break-all' }}>
-                                {formData.pix_key} ({formData.pix_key_type?.toUpperCase()})
-                            </div>
-                            {advanceBalance > 0 && (
-                                <div style={{ fontSize: '0.8rem', color: '#b45309', marginTop: '0.5rem', fontWeight: 700 }}>
-                                    Já há {formatCurrency(advanceBalance)} de adiantamento em aberto.
+                            <h4 style={{ margin: '0 0 0.6rem', fontSize: '1.15rem', color: '#0f172a', fontWeight: 800 }}>Confirmação de Repasse PIX</h4>
+                            
+                            {!isPartial ? (
+                                <p style={{ color: '#64748b', fontSize: '0.88rem', lineHeight: 1.5, marginBottom: '1.5rem' }}>
+                                    Deseja realizar a transferência de <strong style={{ color: '#0f172a', fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(paymentAmount)}</strong> via PIX para a chave <strong style={{ color: '#0f172a' }}>{formData.pix_key}</strong> ({formData.pix_key_type?.toUpperCase()})?
+                                </p>
+                            ) : (
+                                <div style={{ marginBottom: '1.5rem' }}>
+                                    <label style={{ ...labelStyle, textAlign: 'left', marginBottom: '0.4rem' }}>Valor do Pagamento Parcial</label>
+                                    <div style={{ position: 'relative' }}>
+                                        <span style={{ position: 'absolute', left: '0.9rem', top: '50%', transform: 'translateY(-50%)', fontWeight: 700, color: '#64748b', fontSize: '0.9rem' }}>R$</span>
+                                        <input 
+                                            type="number"
+                                            style={{ ...inputStyle, paddingLeft: '2.6rem', fontWeight: 800, color: '#0f172a', fontVariantNumeric: 'tabular-nums' }}
+                                            value={paymentAmount}
+                                            onChange={(e) => setPaymentAmount(e.target.value)}
+                                            autoFocus
+                                        />
+                                    </div>
+                                    <p style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.4rem', textAlign: 'left', fontVariantNumeric: 'tabular-nums' }}>
+                                        Limite disponível: {formatCurrency(Math.abs(displayBalance))}
+                                    </p>
                                 </div>
                             )}
-                        </div>
 
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                            <button
-                                onClick={confirmAdvance}
-                                style={{
-                                    padding: '0.8rem', background: '#f97316', color: 'white', borderRadius: '12px',
-                                    border: 'none', fontWeight: '700', cursor: 'pointer'
-                                }}
-                            >
-                                Enviar adiantamento
-                            </button>
-                            <button
-                                onClick={() => setShowAdvanceModal(false)}
-                                style={{
-                                    padding: '0.8rem', background: 'white', color: '#94a3b8', borderRadius: '12px',
-                                    border: '1px solid #e2e8f0', fontWeight: '600', cursor: 'pointer'
-                                }}
-                            >
-                                Cancelar
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Custom Payment Modal */}
-            {showPaymentModal && (
-                <div style={{
-                    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-                    backgroundColor: 'rgba(0, 0, 0, 0.4)', backdropFilter: 'blur(4px)',
-                    zIndex: 2000, display: 'flex', justifyContent: 'center', alignItems: 'center',
-                    animation: 'fadeIn 0.2s ease-out'
-                }}>
-                    <div style={{
-                        background: 'white', borderRadius: '24px', width: '90%', maxWidth: '400px',
-                        padding: '2rem', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
-                        textAlign: 'center'
-                    }}>
-                        <div style={{ 
-                            width: '64px', height: '64px', borderRadius: '50%', background: '#eff6ff', 
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem',
-                            color: '#3b82f6'
-                        }}>
-                            <Wallet size={32} />
-                        </div>
-                        <h4 style={{ margin: '0 0 1rem', fontSize: '1.25rem', color: '#1e293b', fontWeight: 800 }}>Confirmação</h4>
-                        
-                        {!isPartial ? (
-                            <p style={{ color: '#64748b', fontSize: '0.95rem', lineHeight: '1.5', marginBottom: '2rem' }}>
-                                Deseja realizar o pagamento de <strong style={{ color: '#1e293b' }}>{formatCurrency(paymentAmount)}</strong> via PIX para a chave <strong style={{ color: '#1e293b' }}>{formData.pix_key}</strong> ({formData.pix_key_type?.toUpperCase()})?
-                            </p>
-                        ) : (
-                            <div style={{ marginBottom: '2rem' }}>
-                                <label style={{ ...labelStyle, textAlign: 'left', marginBottom: '0.5rem' }}>Valor do Pagamento Parcial</label>
-                                <div style={{ position: 'relative' }}>
-                                    <span style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', fontWeight: 'bold', color: '#64748b' }}>R$</span>
-                                    <input 
-                                        type="number"
-                                        style={{ ...inputStyle, paddingLeft: '3rem', fontWeight: '800', color: '#1e293b' }}
-                                        value={paymentAmount}
-                                        onChange={(e) => setPaymentAmount(e.target.value)}
-                                        autoFocus
-                                    />
+                            <div style={{ 
+                                background: '#f8fafc', 
+                                padding: '0.85rem 1rem', 
+                                borderRadius: '10px', 
+                                border: '1px solid #e2e8f0',
+                                marginBottom: '1.25rem',
+                                textAlign: 'left'
+                            }}>
+                                <div style={{ fontSize: '0.68rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', marginBottom: '0.2rem' }}>
+                                    Destino (Chave PIX)
                                 </div>
-                                <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.5rem', textAlign: 'left' }}>
-                                    Limite máximo: {formatCurrency(Math.abs(displayBalance))}
-                                </p>
+                                <div style={{ fontSize: '0.86rem', color: '#0f172a', fontWeight: 700, wordBreak: 'break-all', fontVariantNumeric: 'tabular-nums' }}>
+                                    {formData.pix_key} ({formData.pix_key_type?.toUpperCase()})
+                                </div>
                             </div>
-                        )}
 
-                        <div style={{ 
-                            background: '#f8fafc', 
-                            padding: '1rem', 
-                            borderRadius: '16px', 
-                            border: '1px solid #e2e8f0',
-                            marginBottom: '1.5rem',
-                            textAlign: 'left'
-                        }}>
-                            <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: '800', textTransform: 'uppercase', marginBottom: '0.25rem' }}>
-                                Destino (Chave PIX)
-                            </div>
-                            <div style={{ fontSize: '0.9rem', color: '#1e293b', fontWeight: '700', wordBreak: 'break-all' }}>
-                                {formData.pix_key} ({formData.pix_key_type?.toUpperCase()})
-                            </div>
-                        </div>
-
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                            <button 
-                                onClick={confirmPixPayment}
-                                style={{
-                                    padding: '0.8rem', background: '#1e293b', color: 'white', borderRadius: '12px',
-                                    border: 'none', fontWeight: '700', cursor: 'pointer'
-                                }}
-                            >
-                                Confirmar Pagamento
-                            </button>
-                            
-                            {!isPartial && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
                                 <button 
-                                    onClick={() => setIsPartial(true)}
+                                    type="button"
+                                    onClick={confirmPixPayment}
                                     style={{
-                                        padding: '0.8rem', background: '#f1f5f9', color: '#475569', borderRadius: '12px',
-                                        border: 'none', fontWeight: '700', cursor: 'pointer'
+                                        padding: '0.75rem', background: '#16a34a', color: 'white', borderRadius: '10px',
+                                        border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '0.88rem'
                                     }}
                                 >
-                                    Outro Valor
+                                    Confirmar Pagamento PIX
                                 </button>
-                            )}
+                                
+                                {!isPartial && (
+                                    <button 
+                                        type="button"
+                                        onClick={() => setIsPartial(true)}
+                                        style={{
+                                            padding: '0.7rem', background: '#f1f5f9', color: '#334155', borderRadius: '10px',
+                                            border: '1px solid #e2e8f0', fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem'
+                                        }}
+                                    >
+                                        Informar Outro Valor
+                                    </button>
+                                )}
 
-                            <button 
-                                onClick={() => setShowPaymentModal(false)}
-                                style={{
-                                    padding: '0.8rem', background: 'white', color: '#94a3b8', borderRadius: '12px',
-                                    border: '1px solid #e2e8f0', fontWeight: '600', cursor: 'pointer'
-                                }}
-                            >
-                                Cancelar
-                            </button>
+                                <button 
+                                    type="button"
+                                    onClick={() => setShowPaymentModal(false)}
+                                    style={{
+                                        padding: '0.7rem', background: 'white', color: '#64748b', borderRadius: '10px',
+                                        border: '1px solid #cbd5e1', fontWeight: 600, cursor: 'pointer', fontSize: '0.85rem'
+                                    }}
+                                >
+                                    Cancelar
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )}
+            </div>
             
             {/* Hidden Offscreen Container for Generating High-Quality Extrato PDF */}
             <div style={{ position: 'absolute', left: '-9999px', top: '-9999px', overflow: 'hidden', height: 0 }}>
