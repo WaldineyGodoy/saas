@@ -21,6 +21,7 @@ import HistoryTimeline from './HistoryTimeline';
 import ContratoUsina from './ContratoUsina';
 import ContratoGestaoUsina from './ContratoGestaoUsina';
 import { mesclarCondicoesGestao } from '../lib/condicoesGestao';
+import { periodoLeituraUcs, faturasDoPeriodo } from '../lib/periodoRepasse';
 import { baixarPdfContratoUsina, CONTRATOS_USINA, DEFAULTS_USINA, gerarPdfContratoUsinaBase64 } from '../lib/contratosUsina';
 import { termosContratoDoPlano, CHAVES_CONTRATO_DO_PLANO, planoAceitaUsina } from '../lib/planoUsina';
 import { paraNumero } from '../lib/contratoBase';
@@ -1369,7 +1370,7 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
             const isYear = periodType === 'year';
             const yearStr = referenceYear || referenceMonth.slice(0, 4);
 
-            let firstDay, nextMonthStr;
+            let firstDay;
             let startYearStr, endYearStr;
 
             if (isYear) {
@@ -1377,14 +1378,6 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                 endYearStr = `${parseInt(yearStr) + 1}-01-01`;
             } else {
                 firstDay = `${referenceMonth}-01`;
-                const [year, month] = referenceMonth.split('-');
-                let y = parseInt(year);
-                let m = parseInt(month) + 1;
-                if (m > 12) {
-                    m = 1;
-                    y++;
-                }
-                nextMonthStr = `${y}-${String(m).padStart(2, '0')}-01`;
             }
             
             // 1. Resolver a Unidade Geradora (UG) correspondente e sua energia injetada na fatura do mês/ano
@@ -1492,39 +1485,13 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                 }
             }
 
-            // 2. Definir o período para apuração das UCs beneficiárias (dia seguinte à leitura da UG até a próxima leitura da UG)
+            // 2. Período das UCs beneficiárias pela regra do repasse: do dia
+            // seguinte à leitura da UG até o fim de M+1, uma leitura por UC
+            // (src/lib/periodoRepasse.js).
             let ucPeriodoIni = null;
             let ucPeriodoFim = null;
             if (!isYear) {
-                const ugEndObj = parseISO(ugDataFim);
-                const ucStartObj = new Date(ugEndObj.getFullYear(), ugEndObj.getMonth(), ugEndObj.getDate() + 1);
-                ucPeriodoIni = format(ucStartObj, 'yyyy-MM-dd');
-
-                let nextUgReadingDate = null;
-                if (ugId && nextMonthStr) {
-                    try {
-                        const { data: nextUgInv } = await supabase
-                            .from('invoices')
-                            .select('data_leitura')
-                            .eq('uc_id', ugId)
-                            .eq('mes_referencia', nextMonthStr)
-                            .order('created_at', { ascending: false })
-                            .limit(1)
-                            .maybeSingle();
-                        if (nextUgInv?.data_leitura) {
-                            nextUgReadingDate = nextUgInv.data_leitura;
-                        }
-                    } catch (nextUgErr) {
-                        console.error('Erro ao buscar próxima leitura da UG:', nextUgErr);
-                    }
-                }
-
-                if (nextUgReadingDate && nextUgReadingDate > ucPeriodoIni) {
-                    ucPeriodoFim = nextUgReadingDate;
-                } else {
-                    const ucEndObj = new Date(ugEndObj.getFullYear(), ugEndObj.getMonth() + 1, ugEndObj.getDate());
-                    ucPeriodoFim = format(ucEndObj, 'yyyy-MM-dd');
-                }
+                ({ ini: ucPeriodoIni, fim: ucPeriodoFim } = periodoLeituraUcs(ugDataFim, firstDay));
             } else {
                 ucPeriodoIni = `${yearStr}-01-01`;
                 ucPeriodoFim = `${yearStr}-12-31`;
@@ -1565,15 +1532,11 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                     const { data: rawBeneficiariaInvs, error: invErr } = await invQuery;
                     if (invErr) console.error('Erro ao buscar faturas das beneficiárias:', invErr);
 
-                    const matchingBeneficiariaInvs = (rawBeneficiariaInvs || []).filter(inv => {
-                        if (inv.data_leitura) {
-                            return inv.data_leitura >= ucPeriodoIni && inv.data_leitura <= ucPeriodoFim;
-                        }
-                        if (isYear) {
-                            return inv.mes_referencia >= ucPeriodoIni && inv.mes_referencia <= ucPeriodoFim;
-                        }
-                        return inv.mes_referencia === firstDay;
-                    });
+                    const matchingBeneficiariaInvs = isYear
+                        ? (rawBeneficiariaInvs || []).filter(inv => (inv.data_leitura
+                            ? inv.data_leitura >= ucPeriodoIni && inv.data_leitura <= ucPeriodoFim
+                            : inv.mes_referencia >= ucPeriodoIni && inv.mes_referencia <= ucPeriodoFim))
+                        : faturasDoPeriodo(rawBeneficiariaInvs, { ini: ucPeriodoIni, fim: ucPeriodoFim, mesReferencia: firstDay });
 
                     matchingBeneficiariaInvs.forEach(inv => {
                         const comp = Number(inv.consumo_compensado) || 0;
@@ -1685,7 +1648,9 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                     faturamento_atrasado: faturamentoAtrasado,
                     custo_disponibilidade: totalContasEnergia,
                     ug_data_ini: ugDataIni,
-                    ug_data_fim: ugDataFim
+                    ug_data_fim: ugDataFim,
+                    uc_periodo_ini: ucPeriodoIni,
+                    uc_periodo_fim: ucPeriodoFim
                 });
             } else if (prodData) {
                 const existingDetails = prodData.service_details || {};
@@ -1723,7 +1688,9 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                     servicos: Object.values(finalDetails).reduce((acc, curr) => acc + curr, 0),
                     geracao_prevista: prediction,
                     ug_data_ini: ugDataIni,
-                    ug_data_fim: ugDataFim
+                    ug_data_fim: ugDataFim,
+                    uc_periodo_ini: ucPeriodoIni,
+                    uc_periodo_fim: ucPeriodoFim
                 });
             } else {
                 // Initialize placeholder from defaults
@@ -1765,7 +1732,9 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                     faturamento_atrasado: faturamentoAtrasado,
                     custo_disponibilidade: totalContasEnergia,
                     ug_data_ini: ugDataIni,
-                    ug_data_fim: ugDataFim
+                    ug_data_fim: ugDataFim,
+                    uc_periodo_ini: ucPeriodoIni,
+                    uc_periodo_fim: ucPeriodoFim
                 });
             }
         } catch (err) {
@@ -2598,41 +2567,12 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                 ugDataFim = `${curYear}-12-31`;
             }
 
-            // Período de leitura das UCs Beneficiárias (dia seguinte à leitura da UG até a próxima leitura da UG)
+            // Período das UCs pela regra do repasse (src/lib/periodoRepasse.js),
+            // o mesmo do extrato na tela.
             let ucPeriodoIni = null;
             let ucPeriodoFim = null;
             if (!isYear) {
-                const firstDay = `${referenceMonth}-01`;
-                const nextMonthStr = format(addMonths(parseISO(firstDay), 1), 'yyyy-MM-01');
-                const ugEndObj = parseISO(ugDataFim);
-                const ucStartObj = new Date(ugEndObj.getFullYear(), ugEndObj.getMonth(), ugEndObj.getDate() + 1);
-                ucPeriodoIni = format(ucStartObj, 'yyyy-MM-dd');
-
-                let nextUgReadingDate = null;
-                if (ugId) {
-                    try {
-                        const { data: nextUgInv } = await supabase
-                            .from('invoices')
-                            .select('data_leitura')
-                            .eq('uc_id', ugId)
-                            .eq('mes_referencia', nextMonthStr)
-                            .order('created_at', { ascending: false })
-                            .limit(1)
-                            .maybeSingle();
-                        if (nextUgInv?.data_leitura) {
-                            nextUgReadingDate = nextUgInv.data_leitura;
-                        }
-                    } catch (nextUgErr) {
-                        console.error('Erro ao buscar próxima leitura da UG para PDF:', nextUgErr);
-                    }
-                }
-
-                if (nextUgReadingDate && nextUgReadingDate > ucPeriodoIni) {
-                    ucPeriodoFim = nextUgReadingDate;
-                } else {
-                    const ucEndObj = new Date(ugEndObj.getFullYear(), ugEndObj.getMonth() + 1, ugEndObj.getDate());
-                    ucPeriodoFim = format(ucEndObj, 'yyyy-MM-dd');
-                }
+                ({ ini: ucPeriodoIni, fim: ucPeriodoFim } = periodoLeituraUcs(ugDataFim, `${referenceMonth}-01`));
             } else {
                 ucPeriodoIni = `${curYear}-01-01`;
                 ucPeriodoFim = `${curYear}-12-31`;
@@ -2661,12 +2601,7 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
 
                     if (invs && invs.length > 0) {
                         // Filtrar as faturas que tiveram leitura atual dentro do período após a leitura da UG
-                        matchingInvoices = invs.filter(inv => {
-                            if (inv.data_leitura) {
-                                return inv.data_leitura >= ucPeriodoIni && inv.data_leitura <= ucPeriodoFim;
-                            }
-                            return inv.mes_referencia === `${referenceMonth}-01`;
-                        });
+                        matchingInvoices = faturasDoPeriodo(invs, { ini: ucPeriodoIni, fim: ucPeriodoFim, mesReferencia: `${referenceMonth}-01` });
                     }
                 } else {
                     invQuery = invQuery.gte('mes_referencia', `${curYear}-01-01`).lte('mes_referencia', `${curYear}-12-31`).order('mes_referencia', { ascending: true });
@@ -3590,6 +3525,8 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                         reference_year,
                         ug_data_ini,
                         ug_data_fim,
+                        uc_periodo_ini: _ucPeriodoIni,
+                        uc_periodo_fim: _ucPeriodoFim,
                         ...mainData 
                     } = monthlyDetails;
                     const upsertData = {
@@ -4878,6 +4815,17 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                                                    (monthlyDetails?.servicos || 0);
                                             const totalServicos = gestaoTaxa + outrosServicos;
                                             const saldoAReceber = subtotal - totalServicos;
+                                            // Previsão: mês do calendário (01 ao último dia), pois a estimativa é mensal.
+                                            const mesRefIni = parseISO(`${referenceMonth}-01`);
+                                            const periodoHint_geracao_prevista = periodType === 'year'
+                                                ? `Estimativa de jan a dez/${referenceYear || referenceMonth.slice(0, 4)}`
+                                                : `Estimativa de ${format(mesRefIni, 'dd/MM/yyyy')} a ${format(endOfMonth(mesRefIni), 'dd/MM/yyyy')}`;
+                                            const periodoHint_geracao_mensal_kwh = periodType === 'year'
+                                                ? 'Contas da UG no ano'
+                                                : `Leitura da UG de ${formatDateBR(monthlyDetails?.ug_data_ini)} a ${formatDateBR(monthlyDetails?.ug_data_fim)}`;
+                                            const periodoHint_energia_compensada = periodType === 'year'
+                                                ? 'Leituras das UCs no ano'
+                                                : `Leituras das UCs de ${formatDateBR(monthlyDetails?.uc_periodo_ini)} a ${formatDateBR(monthlyDetails?.uc_periodo_fim)}`;
 
                                             return (
                                                 <>
@@ -4998,12 +4946,8 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                                         </div>
                                                     </div>
 
-                                                    {/* Grid Row (2 columns: left is Operations + Status breakdown, right is Services + totalServicos in footer) */}
-                                                    <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '1.5rem', alignItems: 'start', marginBottom: '1.5rem' }}>
-                                                        {/* Coluna Esquerda: Dados de Operação + Detalhamento de Faturamento */}
-                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                                                            {/* Card: Dados de Operação e Performance */}
-                                                            <div style={{ background: 'white', borderRadius: '20px', border: '1px solid #e2e8f0', padding: '1.5rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+                                                    {/* Dados de Operação e Performance (largura toda) */}
+                                                    <div style={{ background: 'white', borderRadius: '20px', border: '1px solid #e2e8f0', padding: '1.5rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
                                                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.5rem' }}>
                                                                     <h4 style={{ margin: 0, fontSize: '1rem', color: '#1e293b', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                                                                         <div style={{ padding: '0.5rem', background: '#f0fdf4', borderRadius: '10px', color: '#16a34a' }}>
@@ -5046,63 +4990,81 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                                                         )}
                                                                     </button>
                                                                 </div>
-                                                                
-                                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '1rem' }}>
                                                                     <div>
                                                                         <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
                                                                             {periodType === 'year' ? 'Geração Anual - Energia Injetada (kWh)' : 'Geração Mensal - Energia Injetada (kWh)'}
                                                                         </label>
-                                                                        <input 
+                                                                        <input
                                                                             type="number"
                                                                             value={monthlyDetails?.geracao_mensal_kwh || ''}
                                                                             onChange={e => setMonthlyDetails({...monthlyDetails, geracao_mensal_kwh: Number(e.target.value)})}
                                                                             placeholder="0"
-                                                                            style={{ width: '100%', padding: '0.6rem 1rem', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '1rem', fontWeight: 700, color: '#1e293b', outline: 'none' }}
+                                                                            style={{ width: '100%', padding: '0.6rem 1rem', border: '1px solid #e2e8f0', color: '#1e293b', borderRadius: '10px', fontSize: '1rem', fontWeight: 700, outline: 'none' }}
                                                                         />
+                                                                        <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '0.3rem', fontWeight: 600 }}>
+                                                                            {periodoHint_geracao_mensal_kwh}
+                                                                        </div>
                                                                     </div>
                                                                     <div>
                                                                         <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
                                                                             {periodType === 'year' ? 'Geração Prevista Anual (kWh)' : 'Geração Prevista (kWh)'}
                                                                         </label>
-                                                                        <input 
+                                                                        <input
                                                                             type="number"
                                                                             value={monthlyDetails?.geracao_prevista || ''}
                                                                             onChange={e => setMonthlyDetails({...monthlyDetails, geracao_prevista: Number(e.target.value)})}
                                                                             placeholder="0"
-                                                                            style={{ width: '100%', padding: '0.6rem 1rem', border: '1px solid #dcfce7', borderRadius: '10px', fontSize: '1rem', fontWeight: 700, color: '#166534', background: '#f0fdf4', outline: 'none' }}
+                                                                            style={{ width: '100%', padding: '0.6rem 1rem', border: '1px solid #dcfce7', color: '#166534', background: '#f0fdf4', borderRadius: '10px', fontSize: '1rem', fontWeight: 700, outline: 'none' }}
                                                                         />
+                                                                        <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '0.3rem', fontWeight: 600 }}>
+                                                                            {periodoHint_geracao_prevista}
+                                                                        </div>
                                                                     </div>
-                                                                    <div style={{ gridColumn: 'span 2' }}>
+                                                                    <div>
                                                                         <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
                                                                             {periodType === 'year' ? 'Energia Compensada nas UCs no Ano (kWh)' : 'Energia Compensada nas UCs (kWh)'}
                                                                         </label>
-                                                                        <input 
+                                                                        <input
                                                                             type="number"
                                                                             value={monthlyDetails?.energia_compensada || ''}
                                                                             onChange={e => setMonthlyDetails({...monthlyDetails, energia_compensada: Number(e.target.value)})}
                                                                             placeholder="0"
-                                                                            style={{ width: '100%', padding: '0.6rem 1rem', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '1rem', fontWeight: 700, color: '#1e293b', outline: 'none' }}
+                                                                            style={{ width: '100%', padding: '0.6rem 1rem', border: '1px solid #e2e8f0', color: '#1e293b', borderRadius: '10px', fontSize: '1rem', fontWeight: 700, outline: 'none' }}
                                                                         />
+                                                                        <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '0.3rem', fontWeight: 600 }}>
+                                                                            {periodoHint_energia_compensada}
+                                                                        </div>
                                                                     </div>
                                                                 </div>
                                                             </div>
 
-                                                            {/* Card: Faturamento Bruto Total no Período */}
-                                                            <div style={{ background: '#f0fdf4', borderRadius: '20px', border: '1.5px solid #bbf7d0', padding: '1.25rem 1.5rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                                <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#166534' }}>Faturamento Bruto Total no Período:</span>
-                                                                <span style={{ fontSize: '1.35rem', fontWeight: 900, color: '#166534' }}>{formatCurrency(monthlyDetails?.faturamento_mensal || 0)}</span>
-                                                            </div>
+                                                    {/* Apuração do repasse: faturamento, receitas, lançamentos e líquido
+                                                        num bloco só, no mesmo período de leitura das UCs da Energia Compensada. */}
+                                                    <div style={{ background: 'white', borderRadius: '20px', border: '1px solid #e2e8f0', padding: '1.5rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', margin: '1.5rem 0' }}>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1.25rem' }}>
+                                                            <h4 style={{ margin: 0, fontSize: '1rem', color: '#1e293b', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                                <div style={{ padding: '0.5rem', background: '#eff6ff', borderRadius: '10px', color: '#3b82f6' }}>
+                                                                    <FileText size={20} />
+                                                                </div>
+                                                                Apuração do Repasse ao Fornecedor
+                                                            </h4>
+                                                            <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>{periodoHint_energia_compensada}</span>
+                                                        </div>
 
-                                                            {/* Card: Detalhamento do Faturamento por Status */}
-                                                            <div style={{ background: 'white', borderRadius: '20px', border: '1px solid #e2e8f0', padding: '1.5rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
-                                                                <h4 style={{ margin: '0 0 1.25rem 0', fontSize: '1rem', color: '#1e293b', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                                                    <div style={{ padding: '0.5rem', background: '#fff7ed', borderRadius: '10px', color: '#ea580c' }}>
-                                                                        <CreditCard size={20} />
-                                                                    </div>
-                                                                    Detalhamento de Receitas do Período
-                                                                </h4>
-                                                                
-                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                                        {/* (1) Faturamento Bruto Total */}
+                                                        <div style={{ background: '#f0fdf4', borderRadius: '14px', border: '1.5px solid #bbf7d0', padding: '0.9rem 1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+                                                            <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#166534' }}>Faturamento Bruto Total no Período</span>
+                                                            <span style={{ fontSize: '1.25rem', fontWeight: 900, color: '#166534' }}>{formatCurrency(monthlyDetails?.faturamento_mensal || 0)}</span>
+                                                        </div>
+
+                                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem', alignItems: 'start' }}>
+                                                            {/* (2) Detalhamento de Receitas */}
+                                                            <div>
+                                                                <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#ea580c', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                                    <CreditCard size={16} /> Detalhamento de Receitas
+                                                                </div>
+                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
                                                                     {/* Breakdown rows */}
                                                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.6rem 0.75rem', background: '#f8fafc', borderRadius: '10px', borderLeft: '4px solid #3b82f6' }}>
                                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -5153,22 +5115,21 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                                                         </div>
                                                                     )}
                                                                 </div>
+                                                                <div style={{ borderTop: '1px solid #e2e8f0', marginTop: '0.9rem', paddingTop: '0.75rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                                    <span style={{ fontSize: '0.78rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }} title="Faturamento pago menos as contas de energia das UCs e as faturas retidas">
+                                                                        Subtotal das receitas
+                                                                    </span>
+                                                                    <span style={{ fontSize: '1.15rem', fontWeight: 900, color: '#1e293b' }}>{formatCurrency(subtotal)}</span>
+                                                                </div>
                                                             </div>
-                                                        </div>
 
-                                                        {/* Coluna Direita: Extrato Detalhado de Lançamentos */}
-                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                                                            <div style={{ background: 'white', borderRadius: '20px', border: '1px solid #e2e8f0', padding: '1.5rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', minHeight: '425px', justifyContent: 'space-between' }}>
-                                                                <div>
-                                                                    <h4 style={{ margin: '0 0 1.25rem 0', fontSize: '1rem', color: '#1e293b', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                                                        <div style={{ padding: '0.5rem', background: '#eff6ff', borderRadius: '10px', color: '#3b82f6' }}>
-                                                                            <FileText size={20} />
-                                                                        </div>
-                                                                        Extrato Detalhado de Lançamentos
-                                                                    </h4>
-
-                                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', maxHeight: '300px', overflowY: 'auto', paddingRight: '0.25rem' }}>
-                                                                        {/* Row: Gestão */}
+                                                            {/* (3) Extrato Detalhado de Lançamentos */}
+                                                            <div>
+                                                                <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#3b82f6', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                                    <FileText size={16} /> Extrato Detalhado de Lançamentos
+                                                                </div>
+                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                                                                    {/* Row: Gestão */}
                                                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.6rem 0.75rem', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
                                                                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                                                                 <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#3b82f6' }} />
@@ -5248,19 +5209,23 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                                                                 </div>
                                                                             );
                                                                         })}
-                                                                    </div>
                                                                 </div>
-
-                                                                {/* Footer: Total de Serviços do Mês/Ano */}
-                                                                <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem' }}>
-                                                                    <span style={{ fontSize: '0.8rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>
-                                                                        {periodType === 'year' ? 'Total de Serviços do Ano' : 'Total de Serviços do Mês'}
+                                                                <div style={{ borderTop: '1px solid #e2e8f0', marginTop: '0.9rem', paddingTop: '0.75rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                                    <span style={{ fontSize: '0.78rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>
+                                                                        {periodType === 'year' ? 'Subtotal dos lançamentos do ano' : 'Subtotal dos lançamentos do mês'}
                                                                     </span>
-                                                                    <span style={{ fontSize: '1.4rem', fontWeight: 900, color: '#166534' }}>
-                                                                        {formatCurrency(totalServicos)}
-                                                                    </span>
+                                                                    <span style={{ fontSize: '1.15rem', fontWeight: 900, color: '#1e293b' }}>{formatCurrency(totalServicos)}</span>
                                                                 </div>
                                                             </div>
+                                                        </div>
+
+                                                        {/* Valor líquido do repasse */}
+                                                        <div style={{ marginTop: '1.5rem', background: '#eff6ff', border: '1.5px solid #bfdbfe', borderRadius: '14px', padding: '1rem 1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                                                            <div>
+                                                                <div style={{ fontSize: '0.95rem', fontWeight: 900, color: '#1e3a8a' }}>Valor líquido do repasse ao fornecedor</div>
+                                                                <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 600 }}>Subtotal das receitas − subtotal dos lançamentos</div>
+                                                            </div>
+                                                            <span style={{ fontSize: '1.6rem', fontWeight: 900, color: saldoAReceber < 0 ? '#b91c1c' : '#1e3a8a' }}>{formatCurrency(saldoAReceber)}</span>
                                                         </div>
                                                     </div>
 
