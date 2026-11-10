@@ -58,15 +58,15 @@ export default function HomeConnect() {
       ) : null}
       {!sub && !linkPar ? (
         parceiro.isLoading && perfil.data?.originator ? <Loading /> : (
-          <Empty icon="badge" title="Disponível para assinantes e parceiros" text="O Home Connect é liberado para quem tem contrato de energia por assinatura ou é Parceiro Power."
+          <Empty icon="diversity-3" title="Disponível para assinantes e parceiros" text="O Home Connect é liberado para quem tem contrato de energia por assinatura ou é Parceiro Power."
             action={<BotaoConvite label={perfil.data?.lead ? 'Continuar minha adesão' : 'Assinar energia'} icon="bolt" destino={assinar} />} />
         )
       ) : null}
       {ehParceiro ? (
         <>
           <Row>
-            <Metric label="Clientes ativos" value={String(totPar.ativos)} icon="groups" />
-            <Metric label="Comissões" value={fmtBRL(totPar.comissao)} icon="payments" iconColor={colors.secondary} foot="Acumulado" footIcon="verified" />
+            <Metric label="Clientes ativos" value={String(totPar.ativos)} icon="groups" iconColor={colors.accentEnergy} />
+            <Metric label="Comissões" value={fmtBRL(totPar.comissao)} icon="payments" iconColor={colors.statusVerified} foot="Acumulado" footColor={colors.statusVerified} footIcon="verified" />
           </Row>
           <SectionLabel title="Minha rede de clientes" aside={`${clientes.data?.length ?? 0} clientes`} />
           {clientes.isLoading ? <Loading /> : clientes.error ? <ErrorState error={clientes.error} onRetry={() => clientes.refetch()} /> : <RedeParceiro clientes={clientes.data ?? []} />}
@@ -75,8 +75,8 @@ export default function HomeConnect() {
       {sub ? (
         <>
       <Row>
-        <Metric label="Consumo da rede" value={fmtKwh(tot.consumo)} unit="kWh" icon="payments" />
-        <Metric label="Rendimentos" value={fmtBRL(tot.cashback)} icon="speed" iconColor={colors.secondary} foot="Deduzidos na conta" footIcon="verified" />
+        <Metric label="Consumo da rede" value={fmtKwh(tot.consumo)} unit="kWh" icon="bolt" iconColor={colors.accentEnergy} />
+        <Metric label="Rendimentos" value={fmtBRL(tot.cashback)} icon="savings" iconColor={colors.statusVerified} foot="Deduzidos na conta" footColor={colors.statusVerified} footIcon="verified" />
       </Row>
       <SectionLabel title="Rede de assinantes indicados" aside={`${rede.data?.length ?? 0} indicados`} />
       {rede.isLoading ? <Loading /> : rede.error ? <ErrorState error={rede.error} onRetry={() => rede.refetch()} /> : <RedeIndicados indicados={rede.data ?? []} />}
