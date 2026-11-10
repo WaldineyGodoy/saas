@@ -7,7 +7,7 @@ import { maskCpfCnpj, maskPhone, validateDocument, validatePhone, cleanDigits } 
 import {
     History, User, MapPin, Wallet, X, Save, Trash2,
     CheckCircle, Search, ArrowUpDown, ArrowUpRight, ArrowDownLeft, Copy, Zap, Download,
-    Building2, Mail, ChevronDown, ChevronRight
+    Building2, Mail, ChevronDown, ChevronRight, RefreshCw
 } from 'lucide-react';
 import HistoryTimeline from './HistoryTimeline';
 import ConvidarAppButton from './ConvidarAppButton';
@@ -273,6 +273,42 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
             console.error('Error fetching ledger:', err);
         } finally {
             setLedgerLoading(false);
+        }
+    };
+
+    const [refreshing, setRefreshing] = useState(false);
+
+    const handleRefreshModalData = async () => {
+        if (!supplier?.id || refreshing) return;
+        setRefreshing(true);
+        try {
+            const [{ data: freshSupplier }] = await Promise.all([
+                supabase.from('suppliers').select('*').eq('id', supplier.id).single(),
+                fetchLinkedUsinas(supplier.id),
+                fetchLedgerStatement()
+            ]);
+            if (freshSupplier) {
+                setFormData(prev => ({
+                    ...prev,
+                    status: freshSupplier.status || prev.status,
+                    contrato_assinado_em: freshSupplier.contrato_assinado_em
+                        ? freshSupplier.contrato_assinado_em.slice(0, 10)
+                        : prev.contrato_assinado_em
+                }));
+            }
+            if (expandedTx) {
+                const { data: freshTx } = await supabase
+                    .from('view_ledger_enriched')
+                    .select('*')
+                    .eq('transaction_id', expandedTx)
+                    .order('amount', { ascending: false });
+                if (freshTx) setTxDetails(freshTx);
+            }
+        } catch (err) {
+            console.error('Erro ao atualizar dados do fornecedor:', err);
+            showAlert('Erro ao atualizar dados: ' + (err.message || ''), 'error');
+        } finally {
+            setRefreshing(false);
         }
     };
 
@@ -1284,6 +1320,13 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                 from { opacity: 0; transform: translateY(6px); }
                 to { opacity: 1; transform: translateY(0); }
             }
+            @keyframes supSpin {
+                from { transform: rotate(0deg); }
+                to { transform: rotate(360deg); }
+            }
+            .sup-spin {
+                animation: supSpin 0.8s linear infinite;
+            }
             .sup-modal-input:focus {
                 border-color: #2563eb !important;
                 background-color: #ffffff !important;
@@ -1411,37 +1454,66 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                         </div>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
                         {supplier && (
-                            <button
-                                type="button"
-                                onClick={() => setActiveTab('extrato')}
-                                style={{
-                                    display: 'flex',
-                                     flexDirection: 'column',
-                                    alignItems: 'flex-end',
-                                    background: 'rgba(255, 255, 255, 0.06)',
-                                    border: '1px solid rgba(255, 255, 255, 0.12)',
-                                    borderRadius: '10px',
-                                    padding: '0.4rem 0.85rem',
-                                    cursor: 'pointer',
-                                    color: 'white',
-                                    transition: 'background 0.15s'
-                                }}
-                                title="Clique para abrir o Extrato Financeiro"
-                            >
-                                <span style={{ fontSize: '0.66rem', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', fontWeight: 700 }}>
-                                    Saldo Acumulado
-                                </span>
-                                <span style={{
-                                    fontSize: '0.95rem',
-                                    fontWeight: 800,
-                                    fontVariantNumeric: 'tabular-nums',
-                                    color: displayBalance > 0 ? '#4ade80' : displayBalance < 0 ? '#f87171' : '#f8fafc'
-                                }}>
-                                    {displayBalance > 0 ? '+' : displayBalance < 0 ? '-' : ''}{formatCurrency(displayBalance)}
-                                </span>
-                            </button>
+                            <>
+                                <button
+                                    type="button"
+                                    onClick={() => setActiveTab('extrato')}
+                                    style={{
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'flex-end',
+                                        background: 'rgba(255, 255, 255, 0.06)',
+                                        border: '1px solid rgba(255, 255, 255, 0.12)',
+                                        borderRadius: '10px',
+                                        padding: '0.4rem 0.85rem',
+                                        cursor: 'pointer',
+                                        color: 'white',
+                                        transition: 'background 0.15s'
+                                    }}
+                                    title="Clique para abrir o Extrato Financeiro"
+                                >
+                                    <span style={{ fontSize: '0.66rem', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', fontWeight: 700 }}>
+                                        Saldo Acumulado
+                                    </span>
+                                    <span style={{
+                                        fontSize: '0.95rem',
+                                        fontWeight: 800,
+                                        fontVariantNumeric: 'tabular-nums',
+                                        color: displayBalance > 0 ? '#4ade80' : displayBalance < 0 ? '#f87171' : '#f8fafc'
+                                    }}>
+                                        {displayBalance > 0 ? '+' : displayBalance < 0 ? '-' : ''}{formatCurrency(displayBalance)}
+                                    </span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleRefreshModalData}
+                                    disabled={refreshing || ledgerLoading}
+                                    title="Atualizar saldos, extrato e dados do fornecedor sem fechar o modal"
+                                    style={{
+                                        background: 'rgba(59, 130, 246, 0.16)',
+                                        border: '1px solid rgba(96, 165, 250, 0.35)',
+                                        color: '#e0f2fe',
+                                        height: '38px',
+                                        padding: '0 0.85rem',
+                                        borderRadius: '10px',
+                                        cursor: (refreshing || ledgerLoading) ? 'not-allowed' : 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '0.45rem',
+                                        fontSize: '0.8rem',
+                                        fontWeight: 700,
+                                        opacity: (refreshing || ledgerLoading) ? 0.7 : 1,
+                                        transition: 'all 0.15s'
+                                    }}
+                                    onMouseEnter={e => { if (!refreshing && !ledgerLoading) e.currentTarget.style.background = 'rgba(59, 130, 246, 0.28)'; }}
+                                    onMouseLeave={e => { e.currentTarget.style.background = 'rgba(59, 130, 246, 0.16)'; }}
+                                >
+                                    <RefreshCw size={15} className={(refreshing || ledgerLoading) ? 'sup-spin' : ''} />
+                                    <span>{(refreshing || ledgerLoading) ? 'Atualizando...' : 'Atualizar'}</span>
+                                </button>
+                            </>
                         )}
                         <button 
                             type="button"
@@ -1931,28 +2003,55 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                         )}
                                     </div>
 
-                                    <button 
-                                        type="button"
-                                        onClick={() => setActiveTab('extrato')}
-                                        style={{
-                                            background: '#eff6ff',
-                                            border: '1px solid #bfdbfe',
-                                            padding: '0.65rem 1.15rem',
-                                            borderRadius: '10px',
-                                            fontSize: '0.85rem',
-                                            fontWeight: 700,
-                                            color: '#1d4ed8',
-                                            cursor: 'pointer',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '0.45rem',
-                                            transition: 'all 0.15s'
-                                        }}
-                                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#dbeafe'; }}
-                                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#eff6ff'; }}
-                                    >
-                                        <ArrowUpDown size={16} /> Abrir Extrato e Pagamentos
-                                    </button>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+                                        {supplier?.id && (
+                                            <button
+                                                type="button"
+                                                onClick={handleRefreshModalData}
+                                                disabled={refreshing || ledgerLoading}
+                                                style={{
+                                                    background: '#ffffff',
+                                                    border: '1px solid #cbd5e1',
+                                                    padding: '0.65rem 0.95rem',
+                                                    borderRadius: '10px',
+                                                    fontSize: '0.84rem',
+                                                    fontWeight: 700,
+                                                    color: '#334155',
+                                                    cursor: (refreshing || ledgerLoading) ? 'not-allowed' : 'pointer',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '0.4rem',
+                                                    opacity: (refreshing || ledgerLoading) ? 0.65 : 1,
+                                                    transition: 'all 0.15s'
+                                                }}
+                                            >
+                                                <RefreshCw size={15} className={(refreshing || ledgerLoading) ? 'sup-spin' : ''} />
+                                                {(refreshing || ledgerLoading) ? 'Atualizando...' : 'Atualizar'}
+                                            </button>
+                                        )}
+                                        <button 
+                                            type="button"
+                                            onClick={() => setActiveTab('extrato')}
+                                            style={{
+                                                background: '#eff6ff',
+                                                border: '1px solid #bfdbfe',
+                                                padding: '0.65rem 1.15rem',
+                                                borderRadius: '10px',
+                                                fontSize: '0.85rem',
+                                                fontWeight: 700,
+                                                color: '#1d4ed8',
+                                                cursor: 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '0.45rem',
+                                                transition: 'all 0.15s'
+                                            }}
+                                            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#dbeafe'; }}
+                                            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#eff6ff'; }}
+                                        >
+                                            <ArrowUpDown size={16} /> Abrir Extrato e Pagamentos
+                                        </button>
+                                    </div>
                                 </div>
 
                                 <div className="sup-modal-grid-2">
@@ -2564,6 +2663,31 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                                     Limpar
                                                 </button>
                                             )}
+
+                                            <button
+                                                type="button"
+                                                onClick={handleRefreshModalData}
+                                                disabled={refreshing || ledgerLoading}
+                                                title="Recarregar lançamentos do razão e saldos"
+                                                style={{
+                                                    background: '#eff6ff',
+                                                    padding: '0.45rem 0.85rem',
+                                                    borderRadius: '8px',
+                                                    border: '1px solid #bfdbfe',
+                                                    color: '#1d4ed8',
+                                                    fontSize: '0.8rem',
+                                                    fontWeight: 700,
+                                                    cursor: (refreshing || ledgerLoading) ? 'not-allowed' : 'pointer',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '0.4rem',
+                                                    opacity: (refreshing || ledgerLoading) ? 0.65 : 1,
+                                                    transition: 'all 0.15s'
+                                                }}
+                                            >
+                                                <RefreshCw size={14} className={(refreshing || ledgerLoading) ? 'sup-spin' : ''} />
+                                                {(refreshing || ledgerLoading) ? 'Atualizando...' : 'Atualizar'}
+                                            </button>
 
                                             <button 
                                                 type="button"

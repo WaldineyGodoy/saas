@@ -2040,73 +2040,326 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
         .reduce((acc, curr) => acc + (Number(curr.valor_a_pagar) || 0), 0);
 
 
+    const [refreshingSub, setRefreshingSub] = useState(false);
+
+    const handleRefreshSubscriberModal = async () => {
+        if (!subscriber?.id || refreshingSub) return;
+        setRefreshingSub(true);
+        try {
+            const tasks = [
+                fetchConsumerUnits(subscriber.id),
+                fetchConsolidatedInvoices(subscriber.id),
+                fetchSignatures(subscriber.id)
+            ];
+            if (ehPapelInterno(profile?.role)) {
+                tasks.push(fetchInvoices(subscriber.id));
+            }
+            await Promise.all(tasks);
+            setHistoryRefreshKey(prev => prev + 1);
+        } catch (err) {
+            console.error('Erro ao atualizar dados do assinante:', err);
+        } finally {
+            setRefreshingSub(false);
+        }
+    };
+
+    const subInputStyle = {
+        width: '100%',
+        padding: '0.68rem 0.9rem',
+        border: '1px solid #cbd5e1',
+        borderRadius: '10px',
+        fontSize: '0.9rem',
+        color: '#0f172a',
+        fontWeight: 500,
+        backgroundColor: '#f8fafc',
+        outline: 'none',
+        transition: 'all 0.15s'
+    };
+
+    const subLabelStyle = {
+        display: 'block',
+        fontSize: '0.75rem',
+        fontWeight: 700,
+        color: '#475569',
+        marginBottom: '0.4rem',
+        textTransform: 'uppercase',
+        letterSpacing: '0.03em'
+    };
+
+    const subCardStyle = {
+        background: '#ffffff',
+        padding: '1.35rem 1.5rem',
+        borderRadius: '14px',
+        border: '1px solid #e2e8f0',
+        boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04)'
+    };
+
+    const statusBadgeMap = {
+        ativacao: { bg: '#fef9c3', color: '#854d0e', label: 'Em Ativação' },
+        contrato_assinado: { bg: '#dbeafe', color: '#1e40af', label: 'Contrato Assinado' },
+        ativo: { bg: '#dcfce7', color: '#166534', label: 'Ativo' },
+        ativo_inadimplente: { bg: '#ffedd5', color: '#c2410c', label: 'Ativo (Inadimplente)' },
+        transferido: { bg: '#f1f5f9', color: '#475569', label: 'Transferido' },
+        cancelado: { bg: '#fee2e2', color: '#991b1b', label: 'Cancelado' },
+        cancelado_inadimplente: { bg: '#fecaca', color: '#7f1d1d', label: 'Cancelado (Inadimplente)' }
+    };
+    const currentStatusMeta = statusBadgeMap[formData.status] || { bg: '#f1f5f9', color: '#475569', label: formData.status };
+
     return (
         <div style={{
             position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000
+            backgroundColor: 'rgba(15, 23, 42, 0.68)', backdropFilter: 'blur(6px)',
+            display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000,
+            padding: '1rem'
         }}>
-            {/* 1140px porque com 900px as abas nao cabiam: "Documentos" ficava
-                cortada na borda, virando um clipe solto, e a de Contratos
-                encostava nele. */}
-            <div style={{ background: 'white', padding: '0', borderRadius: '12px', width: '95%', maxWidth: '1140px', maxHeight: '95vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-                {/* Modal Header */}
+            <style>{`
+                @keyframes subFadeIn {
+                    from { opacity: 0; transform: translateY(6px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
+                @keyframes subSpin {
+                    from { transform: rotate(0deg); }
+                    to { transform: rotate(360deg); }
+                }
+                .sub-spin {
+                    animation: subSpin 0.8s linear infinite;
+                }
+                .sub-modal-input:focus {
+                    border-color: #2563eb !important;
+                    background-color: #ffffff !important;
+                    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12) !important;
+                }
+                .sub-modal-grid-2 {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(430px, 1fr));
+                    gap: 1.25rem;
+                    align-items: start;
+                }
+                .sub-uc-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+                    gap: 1rem;
+                }
+                @media (max-width: 960px) {
+                    .sub-modal-grid-2, .sub-uc-grid {
+                        grid-template-columns: 1fr;
+                    }
+                }
+            `}</style>
+
+            <div style={{
+                background: '#f8fafc',
+                padding: 0,
+                borderRadius: '16px',
+                width: '96vw',
+                maxWidth: '1380px',
+                height: '92vh',
+                maxHeight: '92vh',
+                overflow: 'hidden',
+                border: '1px solid rgba(255, 255, 255, 0.14)',
+                boxShadow: '0 25px 50px -12px rgba(15, 23, 42, 0.38)',
+                display: 'flex',
+                flexDirection: 'column',
+                position: 'relative'
+            }}>
+                {/* Pinned Authority Header */}
                 <div style={{
-                    padding: '1.25rem 2rem',
-                    borderBottom: '1px solid #eee',
+                    padding: '1.15rem 1.75rem',
+                    borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
-                    background: '#f8fafc'
+                    gap: '1rem',
+                    flexWrap: 'wrap',
+                    background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+                    color: '#ffffff',
+                    flexShrink: 0
                 }}>
-                    <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#1e293b' }}>
-                        {subscriber ? `Assinante - ${formData.name}` : 'Novo Assinante'}
-                    </h3>
-                    <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', minWidth: 0 }}>
+                        <div style={{
+                            width: '44px',
+                            height: '44px',
+                            borderRadius: '12px',
+                            background: 'rgba(59, 130, 246, 0.18)',
+                            border: '1px solid rgba(96, 165, 250, 0.35)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: '#60a5fa',
+                            flexShrink: 0
+                        }}>
+                            <User size={22} />
+                        </div>
+                        <div style={{ minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+                                <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: '#ffffff', letterSpacing: '-0.02em' }}>
+                                    {subscriber ? (formData.name || 'Assinante') : 'Novo Assinante'}
+                                </h3>
+                                <span style={{
+                                    padding: '0.2rem 0.7rem',
+                                    borderRadius: '999px',
+                                    fontSize: '0.73rem',
+                                    fontWeight: 700,
+                                    background: currentStatusMeta.bg,
+                                    color: currentStatusMeta.color
+                                }}>
+                                    {currentStatusMeta.label}
+                                </span>
+                                {subscriber && (
+                                    <span style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '0.3rem',
+                                        padding: '0.2rem 0.65rem',
+                                        borderRadius: '999px',
+                                        background: 'rgba(16, 185, 129, 0.18)',
+                                        border: '1px solid rgba(52, 211, 153, 0.3)',
+                                        color: '#6ee7b7',
+                                        fontSize: '0.72rem',
+                                        fontWeight: 700,
+                                        fontVariantNumeric: 'tabular-nums'
+                                    }}>
+                                        <Zap size={12} /> {consumerUnits.length} {consumerUnits.length === 1 ? 'UC' : 'UCs'}
+                                    </span>
+                                )}
+                                {subscriber && (
+                                    <span style={{
+                                        padding: '0.2rem 0.65rem',
+                                        borderRadius: '999px',
+                                        background: 'rgba(255, 255, 255, 0.08)',
+                                        border: '1px solid rgba(255, 255, 255, 0.14)',
+                                        color: '#cbd5e1',
+                                        fontSize: '0.72rem',
+                                        fontWeight: 600
+                                    }}>
+                                        Cobrança {billingMode === 'consolidada' ? 'Consolidada' : 'Individualizada'}
+                                    </span>
+                                )}
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.7rem', marginTop: '0.25rem', fontSize: '0.8rem', color: '#94a3b8', flexWrap: 'wrap' }}>
+                                {formData.cpf_cnpj ? (
+                                    <span style={{ fontFamily: 'monospace', fontVariantNumeric: 'tabular-nums', color: '#cbd5e1', fontWeight: 600 }}>
+                                        Doc: {formData.cpf_cnpj}
+                                    </span>
+                                ) : (
+                                    <span>Gestão completa do titular, endereço, unidades consumidoras, faturas e contratos</span>
+                                )}
+                                {formData.email && (
+                                    <>
+                                        <span style={{ opacity: 0.4 }}>•</span>
+                                        <span>{formData.email}</span>
+                                    </>
+                                )}
+                                {formData.phone && (
+                                    <>
+                                        <span style={{ opacity: 0.4 }}>•</span>
+                                        <span style={{ fontVariantNumeric: 'tabular-nums' }}>{formData.phone}</span>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    </div>
 
-                        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}>
-                            <X size={24} />
+                    <div style={{ display: 'flex', gap: '0.65rem', alignItems: 'center' }}>
+                        {subscriber?.id && ehPapelInterno(profile?.role) && (
+                            <button
+                                type="button"
+                                onClick={() => setActiveTab('faturas')}
+                                style={{
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'flex-end',
+                                    background: totalUnpaidGlobal > 0 ? 'rgba(239, 68, 68, 0.14)' : 'rgba(255, 255, 255, 0.06)',
+                                    border: `1px solid ${totalUnpaidGlobal > 0 ? 'rgba(248, 113, 113, 0.35)' : 'rgba(255, 255, 255, 0.12)'}`,
+                                    borderRadius: '10px',
+                                    padding: '0.38rem 0.85rem',
+                                    cursor: 'pointer',
+                                    color: 'white'
+                                }}
+                                title="Ver faturas do assinante"
+                            >
+                                <span style={{ fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: totalUnpaidGlobal > 0 ? '#fca5a5' : '#94a3b8', fontWeight: 700 }}>
+                                    Total em Aberto
+                                </span>
+                                <span style={{ fontSize: '0.95rem', fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: totalUnpaidGlobal > 0 ? '#f87171' : '#4ade80' }}>
+                                    {totalUnpaidGlobal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                </span>
+                            </button>
+                        )}
+
+                        {subscriber?.id && (
+                            <button
+                                type="button"
+                                onClick={handleRefreshSubscriberModal}
+                                disabled={refreshingSub || loadingInvoices}
+                                title="Atualizar UCs, faturas e contratos sem fechar o modal"
+                                style={{
+                                    background: 'rgba(59, 130, 246, 0.16)',
+                                    border: '1px solid rgba(96, 165, 250, 0.35)',
+                                    color: '#e0f2fe',
+                                    height: '38px',
+                                    padding: '0 0.85rem',
+                                    borderRadius: '10px',
+                                    cursor: (refreshingSub || loadingInvoices) ? 'not-allowed' : 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.45rem',
+                                    fontSize: '0.8rem',
+                                    fontWeight: 700,
+                                    opacity: (refreshingSub || loadingInvoices) ? 0.7 : 1,
+                                    transition: 'all 0.15s'
+                                }}
+                            >
+                                <RefreshCw size={15} className={(refreshingSub || loadingInvoices) ? 'sub-spin' : ''} />
+                                <span>{(refreshingSub || loadingInvoices) ? 'Atualizando...' : 'Atualizar'}</span>
+                            </button>
+                        )}
+
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            aria-label="Fechar modal"
+                            style={{
+                                background: 'rgba(255, 255, 255, 0.08)',
+                                border: '1px solid rgba(255, 255, 255, 0.12)',
+                                width: '38px',
+                                height: '38px',
+                                borderRadius: '10px',
+                                cursor: 'pointer',
+                                color: '#e2e8f0',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center'
+                            }}
+                        >
+                            <X size={20} />
                         </button>
                     </div>
                 </div>
 
-                {/* Tabs Menu */}
-                {/* As abas quebram para a linha de baixo em vez de espremer ou
-                    sumir na borda: com 8 delas, em tela estreita a de
-                    Documentos virava um clipe solto no canto. Aba escondida e
-                    aba que nao existe. */}
+                {/* Unified Tabs Menu (Dados Cadastrais + Endereço unificados na primeira aba) */}
                 <div style={{
                     display: 'flex',
                     flexWrap: 'wrap',
-                    background: 'white',
-                    padding: '0 2rem',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    background: '#ffffff',
+                    padding: '0.6rem 1.75rem',
                     borderBottom: '1px solid #e2e8f0',
-                    columnGap: '1.5rem'
+                    flexShrink: 0
                 }}>
                     {[
-                        { id: 'dados', label: 'Dados Cadastrais', icon: User, color: '#003366', bg: '#f0f9ff' },
-                        { id: 'endereco', label: 'Endereço', icon: Home, color: '#f59e0b', bg: '#fff7ed' },
-                        { id: 'ucs', label: 'Unidades Consumidoras', icon: Zap, color: '#10b981', bg: '#ecfdf5' },
-                        { id: 'faturas', label: 'Faturas', icon: CreditCard, color: '#8b5cf6', bg: '#f5f3ff' },
-                        { id: 'comunicacao', label: 'Comunicados', icon: MessageCircle, color: '#25D366', bg: '#f0fdf4' },
-                        { id: 'contratos', label: 'Contratos', icon: FileText, color: '#003366', bg: '#f0f9ff' },
-                        { id: 'documentos', label: 'Documentos', icon: Paperclip, color: '#8b5cf6', bg: '#f5f3ff' },
-                        { id: 'conect', label: 'Assinante Connect', icon: Share2, color: '#0f766e', bg: '#f0fdfa' }
+                        { id: 'dados', label: 'Dados Cadastrais & Endereço', icon: User, color: '#1d4ed8', bg: '#eff6ff', border: '#bfdbfe', badge: formData.uf || null },
+                        { id: 'ucs', label: 'Unidades Consumidoras', icon: Zap, color: '#047857', bg: '#ecfdf5', border: '#a7f3d0', badge: consumerUnits.length > 0 ? `${consumerUnits.length}` : null },
+                        { id: 'faturas', label: 'Faturas', icon: CreditCard, color: '#6d28d9', bg: '#f5f3ff', border: '#ddd6fe', badge: invoices.length > 0 ? `${invoices.length}` : null },
+                        { id: 'comunicacao', label: 'Comunicados', icon: MessageCircle, color: '#15803d', bg: '#f0fdf4', border: '#bbf7d0', badge: null },
+                        { id: 'contratos', label: 'Contratos', icon: FileText, color: '#1e40af', bg: '#eff6ff', border: '#bfdbfe', badge: signatures.length > 0 ? `${signatures.length}` : null },
+                        { id: 'documentos', label: 'Documentos', icon: Paperclip, color: '#6d28d9', bg: '#f5f3ff', border: '#ddd6fe', badge: null },
+                        { id: 'conect', label: 'Assinante Connect', icon: Share2, color: '#0f766e', bg: '#f0fdfa', border: '#99f6e4', badge: null }
                     ]
-                        // A aba Faturas nao e consulta: emite boleto, cancela,
-                        // reenvia e desvincula fatura consolidada — tudo escrita
-                        // em `invoices`, que desde a migracao 20260922h so o
-                        // papel interno grava. A tela Assinantes fica no menu do
-                        // embaixador e do fornecedor, entao sem este filtro eles
-                        // veriam os botoes e levariam 42501 na cara.
-                        //
-                        // Tem outro motivo, menos visivel: `fetchInvoices` dispara
-                        // uma "auto-correcao" que ATUALIZA faturas orfas e chama a
-                        // si mesma em seguida. Com a escrita recusada, a condicao
-                        // continuaria verdadeira e a tela entraria em laco infinito
-                        // de refetch. A aba fechada e o que impede isso.
                         .filter(tab => tab.id !== 'faturas' || ehPapelInterno(profile?.role))
                         .map(tab => {
-                        const isActive = activeTab === tab.id;
+                        const isActive = activeTab === tab.id || (tab.id === 'dados' && activeTab === 'endereco');
                         const Icon = tab.icon;
                         return (
                             <button
@@ -2116,206 +2369,297 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
                                 style={{
                                     display: 'flex',
                                     alignItems: 'center',
-                                    gap: '0.6rem',
-                                    padding: '1rem 0',
-                                    border: 'none',
-                                    background: 'none',
+                                    gap: '0.5rem',
+                                    padding: '0.52rem 0.95rem',
+                                    borderRadius: '10px',
+                                    border: `1px solid ${isActive ? tab.border : 'transparent'}`,
+                                    background: isActive ? tab.bg : 'transparent',
                                     cursor: 'pointer',
-                                    color: isActive ? tab.color : '#64748b',
-                                    borderBottom: `3px solid ${isActive ? tab.color : 'transparent'}`,
-                                    transition: 'all 0.2s',
-                                    fontSize: '0.9rem',
-                                    fontWeight: isActive ? 700 : 500,
-                                    position: 'relative',
+                                    color: isActive ? tab.color : '#475569',
+                                    transition: 'all 0.15s',
+                                    fontSize: '0.85rem',
+                                    fontWeight: isActive ? 700 : 600,
                                     flexShrink: 0,
                                     whiteSpace: 'nowrap'
                                 }}
                             >
-                                <div style={{
-                                    padding: '0.4rem',
-                                    borderRadius: '8px',
-                                    background: isActive ? tab.bg : 'transparent',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    transition: 'all 0.2s'
-                                }}>
-                                    <Icon size={18} strokeWidth={isActive ? 2.5 : 2} />
-                                </div>
+                                <Icon size={16} strokeWidth={isActive ? 2.3 : 2} />
                                 <span>{tab.label}</span>
+                                {tab.badge && (
+                                    <span style={{
+                                        padding: '0.08rem 0.45rem',
+                                        borderRadius: '999px',
+                                        fontSize: '0.68rem',
+                                        fontWeight: 700,
+                                        fontVariantNumeric: 'tabular-nums',
+                                        background: isActive ? '#ffffff' : '#f1f5f9',
+                                        color: isActive ? tab.color : '#64748b'
+                                    }}>
+                                        {tab.badge}
+                                    </span>
+                                )}
                             </button>
                         );
                     })}
                 </div>
 
-                <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem 2rem' }}>
-                    <form onSubmit={handleSubmit}>
-                        {activeTab === 'dados' && (
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', paddingBottom: '1rem' }}>
+                {/* Form wrapping Scrollable Content + Pinned Footer */}
+                <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+                    <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem 1.75rem' }}>
 
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Status</label>
-                                <select
-                                    value={formData.status}
-                                    onChange={e => setFormData({ ...formData, status: e.target.value })}
-                                    style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
-                                >
-                                    {statusOptions.map(opt => (
-                                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                                    ))}
-                                </select>
-                            </div>
+                        {/* ==================== ABA 1 UNIFICADA: DADOS CADASTRAIS & ENDEREÇO ==================== */}
+                        {(activeTab === 'dados' || activeTab === 'endereco') && (
+                            <div style={{ animation: 'subFadeIn 0.2s ease-out' }} className="sub-modal-grid-2">
+                                {/* Coluna Esquerda: Identificação, Status, Originador e Contato */}
+                                <div style={subCardStyle}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '1.15rem', paddingBottom: '0.75rem', borderBottom: '1px solid #f1f5f9' }}>
+                                        <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#0f172a', fontSize: '0.98rem', fontWeight: 700 }}>
+                                            <User size={18} color="#2563eb" /> Dados Cadastrais e Contato
+                                        </h4>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                            {searchingDoc && (
+                                                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#2563eb', background: '#eff6ff', padding: '0.2rem 0.55rem', borderRadius: '999px' }}>
+                                                    Consultando CPF/CNPJ...
+                                                </span>
+                                            )}
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowCredentialsModal(true)}
+                                                style={{
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '0.4rem',
+                                                    padding: '0.38rem 0.75rem',
+                                                    background: (temSenhaGuardada || formData.portal_credentials?.login) ? '#f0fdf4' : '#fff7ed',
+                                                    color: (temSenhaGuardada || formData.portal_credentials?.login) ? '#15803d' : '#c2410c',
+                                                    borderRadius: '8px',
+                                                    border: `1px solid ${(temSenhaGuardada || formData.portal_credentials?.login) ? '#bbf7d0' : '#fed7aa'}`,
+                                                    fontSize: '0.76rem',
+                                                    fontWeight: 700,
+                                                    cursor: 'pointer'
+                                                }}
+                                                title="Configurar login e senha do portal da concessionária"
+                                            >
+                                                <Key size={14} />
+                                                {(temSenhaGuardada || formData.portal_credentials?.login) ? 'Credenciais Configuradas' : 'Credenciais do Portal'}
+                                            </button>
+                                        </div>
+                                    </div>
 
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Originador</label>
-                                <select
-                                    value={formData.originator_id}
-                                    onChange={e => setFormData({ ...formData, originator_id: e.target.value })}
-                                    style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
-                                >
-                                    <option value="">Selecione...</option>
-                                    {originators.map(o => (
-                                        <option key={o.id} value={o.id}>{o.name}</option>
-                                    ))}
-                                </select>
-                            </div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                        <div>
+                                            <label style={subLabelStyle}>CPF / CNPJ (Busca Automática) *</label>
+                                            <input
+                                                className="sub-modal-input"
+                                                value={formData.cpf_cnpj}
+                                                onChange={e => setFormData({ ...formData, cpf_cnpj: maskCpfCnpj(e.target.value) })}
+                                                onBlur={handleDocBlur}
+                                                placeholder="000.000.000-00 ou 00.000.000/0000-00"
+                                                style={{ ...subInputStyle, fontVariantNumeric: 'tabular-nums', background: searchingDoc ? '#eff6ff' : '#f8fafc' }}
+                                                required
+                                            />
+                                        </div>
 
-                            <div style={{ display: 'flex', alignItems: 'flex-end', gap: '1rem' }}>
-                                <div style={{ flex: 1 }}>
-                                    <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>CPF/CNPJ</label>
-                                    <input
-                                        value={formData.cpf_cnpj}
-                                        onChange={e => setFormData({ ...formData, cpf_cnpj: maskCpfCnpj(e.target.value) })}
-                                        onBlur={handleDocBlur}
-                                        placeholder="000.000.000-00"
-                                        style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', background: searchingDoc ? '#f0f9ff' : 'white', outline: 'none' }}
-                                        required
-                                    />
+                                        <div>
+                                            <label style={subLabelStyle}>Status Operacional</label>
+                                            <select
+                                                className="sub-modal-input"
+                                                value={formData.status}
+                                                onChange={e => setFormData({ ...formData, status: e.target.value })}
+                                                style={subInputStyle}
+                                            >
+                                                {statusOptions.map(opt => (
+                                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        <div style={{ gridColumn: '1 / -1' }}>
+                                            <label style={subLabelStyle}>Nome Completo / Razão Social *</label>
+                                            <input
+                                                className="sub-modal-input"
+                                                required
+                                                placeholder="Nome do titular ou razão social da empresa"
+                                                value={formData.name}
+                                                onChange={e => setFormData({ ...formData, name: e.target.value })}
+                                                style={subInputStyle}
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label style={subLabelStyle}>E-mail Principal *</label>
+                                            <input
+                                                className="sub-modal-input"
+                                                type="email"
+                                                placeholder="cliente@email.com"
+                                                value={formData.email}
+                                                onChange={e => setFormData({ ...formData, email: e.target.value })}
+                                                style={subInputStyle}
+                                                required
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label style={subLabelStyle}>Telefone / WhatsApp</label>
+                                            <input
+                                                className="sub-modal-input"
+                                                value={formData.phone}
+                                                onChange={e => setFormData({ ...formData, phone: maskPhone(e.target.value) })}
+                                                placeholder="(00) 00000-0000"
+                                                style={{ ...subInputStyle, fontVariantNumeric: 'tabular-nums' }}
+                                            />
+                                        </div>
+
+                                        <div style={{ gridColumn: '1 / -1' }}>
+                                            <label style={subLabelStyle}>Originador Comercial</label>
+                                            <select
+                                                className="sub-modal-input"
+                                                value={formData.originator_id}
+                                                onChange={e => setFormData({ ...formData, originator_id: e.target.value })}
+                                                style={subInputStyle}
+                                            >
+                                                <option value="">Sem originador vinculado...</option>
+                                                {originators.map(o => (
+                                                    <option key={o.id} value={o.id}>{o.name}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </div>
                                 </div>
-                                <button
-                                    type="button"
-                                    onClick={() => setShowCredentialsModal(true)}
-                                    style={{
+
+                                {/* Coluna Direita: Endereço e Localização (Unificado) */}
+                                <div style={subCardStyle}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '1.15rem', paddingBottom: '0.75rem', borderBottom: '1px solid #f1f5f9' }}>
+                                        <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#0f172a', fontSize: '0.98rem', fontWeight: 700 }}>
+                                            <Home size={18} color="#d97706" /> Endereço e Localização
+                                        </h4>
+                                        {searchingCep && (
+                                            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#2563eb', background: '#eff6ff', padding: '0.2rem 0.55rem', borderRadius: '999px' }}>
+                                                Buscando CEP...
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: '1rem' }}>
+                                        <div style={{ gridColumn: 'span 4' }}>
+                                            <label style={subLabelStyle}>CEP (Busca Automática)</label>
+                                            <input
+                                                className="sub-modal-input"
+                                                placeholder="00000-000"
+                                                value={formData.cep}
+                                                onChange={e => setFormData({ ...formData, cep: e.target.value })}
+                                                onBlur={handleCepBlur}
+                                                style={{ ...subInputStyle, fontVariantNumeric: 'tabular-nums', background: searchingCep ? '#eff6ff' : '#f8fafc' }}
+                                            />
+                                        </div>
+
+                                        <div style={{ gridColumn: 'span 8' }}>
+                                            <label style={subLabelStyle}>Cidade / UF</label>
+                                            <input
+                                                value={formData.cidade || formData.uf ? `${formData.cidade || ''}${formData.uf ? ` - ${formData.uf}` : ''}` : ''}
+                                                placeholder="Preenchido automaticamente pelo CEP"
+                                                disabled
+                                                style={{ ...subInputStyle, background: '#f1f5f9', color: '#475569', borderColor: '#e2e8f0' }}
+                                            />
+                                        </div>
+
+                                        <div style={{ gridColumn: 'span 8' }}>
+                                            <label style={subLabelStyle}>Logradouro / Rua / Avenida</label>
+                                            <input
+                                                className="sub-modal-input"
+                                                placeholder="Rua, Avenida, Travessa..."
+                                                value={formData.rua}
+                                                onChange={e => setFormData({ ...formData, rua: e.target.value })}
+                                                style={subInputStyle}
+                                            />
+                                        </div>
+
+                                        <div style={{ gridColumn: 'span 4' }}>
+                                            <label style={subLabelStyle}>Número</label>
+                                            <input
+                                                className="sub-modal-input"
+                                                placeholder="Nº ou S/N"
+                                                value={formData.numero}
+                                                onChange={e => setFormData({ ...formData, numero: e.target.value })}
+                                                style={{ ...subInputStyle, fontVariantNumeric: 'tabular-nums' }}
+                                            />
+                                        </div>
+
+                                        <div style={{ gridColumn: 'span 6' }}>
+                                            <label style={subLabelStyle}>Bairro</label>
+                                            <input
+                                                className="sub-modal-input"
+                                                placeholder="Bairro"
+                                                value={formData.bairro}
+                                                onChange={e => setFormData({ ...formData, bairro: e.target.value })}
+                                                style={subInputStyle}
+                                            />
+                                        </div>
+
+                                        <div style={{ gridColumn: 'span 6' }}>
+                                            <label style={subLabelStyle}>Complemento</label>
+                                            <input
+                                                className="sub-modal-input"
+                                                placeholder="Apto, Bloco, Sala, Condomínio..."
+                                                value={formData.complemento}
+                                                onChange={e => setFormData({ ...formData, complemento: e.target.value })}
+                                                style={subInputStyle}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div style={{
+                                        marginTop: '1.15rem',
+                                        padding: '0.75rem 0.95rem',
+                                        borderRadius: '10px',
+                                        background: '#f8fafc',
+                                        border: '1px solid #e2e8f0',
                                         display: 'flex',
                                         alignItems: 'center',
-                                        gap: '0.5rem',
-                                        padding: '0.6rem 1rem',
-                                        background: '#fef2f2',
-                                        color: '#ef4444',
-                                        borderRadius: '6px',
-                                        border: '1px solid #fee2e2',
-                                        fontSize: '0.85rem',
-                                        fontWeight: 600,
-                                        cursor: 'pointer',
-                                        height: '42px'
-                                    }}
-                                >
-                                    <Key size={16} /> Credenciais
-                                </button>
-                            </div>
-
-                            <div style={{ gridColumn: '1 / -1' }}>
-                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Nome Completo / Razão Social</label>
-                                <input
-                                    required
-                                    value={formData.name}
-                                    onChange={e => setFormData({ ...formData, name: e.target.value })}
-                                    style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
-                                />
-                            </div>
-
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Email</label>
-                                <input
-                                    type="email"
-                                    value={formData.email}
-                                    onChange={e => setFormData({ ...formData, email: e.target.value })}
-                                    style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
-                                    required
-                                />
-                            </div>
-
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Telefone</label>
-                                <input
-                                    value={formData.phone}
-                                    onChange={e => setFormData({ ...formData, phone: maskPhone(e.target.value) })}
-                                    placeholder="(00) 00000-0000"
-                                    style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
-                                />
-                            </div>
-
+                                        justifyContent: 'space-between',
+                                        gap: '0.75rem',
+                                        flexWrap: 'wrap',
+                                        fontSize: '0.76rem',
+                                        color: '#64748b'
+                                    }}>
+                                        <span>Os dados cadastrais e de endereço são sincronizados automaticamente com o <strong>Asaas</strong> e com a minuta do contrato de adesão.</span>
+                                        {subscriber?.asaas_customer_id && (
+                                            <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#15803d', background: '#dcfce7', padding: '0.15rem 0.5rem', borderRadius: '6px' }}>
+                                                Asaas: {subscriber.asaas_customer_id}
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
                             </div>
                         )}
 
+                        {/* ==================== ABA: ASSINANTE CONNECT ==================== */}
                         {activeTab === 'conect' && (
-                            <div style={{ paddingBottom: '1rem' }}>
+                            <div style={{ animation: 'subFadeIn 0.2s ease-out', paddingBottom: '0.5rem' }}>
                                 <AssinanteConnect subscriber={subscriber} profile={profile} />
                             </div>
                         )}
 
-                        {activeTab === 'endereco' && (
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', paddingBottom: '1rem' }}>
-                            <div style={{ flex: 1 }}>
-                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>CEP (Busca)</label>
-                                <input
-                                    value={formData.cep}
-                                    onChange={e => setFormData({ ...formData, cep: e.target.value })}
-                                    onBlur={handleCepBlur}
-                                    style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', background: searchingCep ? '#f0f9ff' : 'white', outline: 'none' }}
-                                />
-                            </div>
-                            <div style={{ flex: 2 }}>
-                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Cidade/UF</label>
-                                <input
-                                    value={`${formData.cidade} - ${formData.uf}`}
-                                    disabled
-                                    style={{ width: '100%', padding: '0.6rem', border: '1px solid #f1f5f9', borderRadius: '6px', background: '#f8fafc', color: '#64748b' }}
-                                />
-                            </div>
-
-                            <div style={{ gridColumn: '1 / -1' }}>
-                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Rua</label>
-                                <input
-                                    value={formData.rua}
-                                    onChange={e => setFormData({ ...formData, rua: e.target.value })}
-                                    style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
-                                />
-                            </div>
-
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Número</label>
-                                <input
-                                    value={formData.numero}
-                                    onChange={e => setFormData({ ...formData, numero: e.target.value })}
-                                    style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
-                                />
-                            </div>
-
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Complemento</label>
-                                <input
-                                    value={formData.complemento}
-                                    onChange={e => setFormData({ ...formData, complemento: e.target.value })}
-                                    style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
-                                />
-                            </div>
-
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Bairro</label>
-                                <input
-                                    value={formData.bairro}
-                                    onChange={e => setFormData({ ...formData, bairro: e.target.value })}
-                                    style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
-                                />
-                            </div>
-                            </div>
-                        )}
-
+                        {/* ==================== ABA: UNIDADES CONSUMIDORAS ==================== */}
                         {activeTab === 'ucs' && (
-                            <div style={{ paddingBottom: '1rem' }}>
-                            <div style={{ gridColumn: '1 / -1' }}>
-                                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
+                            <div style={{ animation: 'subFadeIn 0.2s ease-out', display: 'flex', flexDirection: 'column', gap: '1.15rem' }}>
+                                <div style={{
+                                    ...subCardStyle,
+                                    padding: '1rem 1.35rem',
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    flexWrap: 'wrap',
+                                    gap: '1rem'
+                                }}>
+                                    <div>
+                                        <h4 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                            <Zap size={18} color="#059669" /> Unidades Consumidoras Vinculadas
+                                        </h4>
+                                        <p style={{ margin: '0.2rem 0 0', fontSize: '0.78rem', color: '#64748b' }}>
+                                            Gerencie as UCs deste assinante, acompanhe o status de leitura da concessionária e configure parâmetros técnicos.
+                                        </p>
+                                    </div>
                                     {subscriber?.id && (
                                         <button
                                             type="button"
@@ -2325,35 +2669,34 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
                                                 setShowUcModal(true);
                                             }}
                                             style={{
-                                                display: 'flex', alignItems: 'center', gap: '0.3rem',
-                                                background: '#ecfdf5', color: '#059669', border: '1px solid #d1fae5',
-                                                padding: '0.4rem 0.8rem', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600
+                                                display: 'inline-flex', alignItems: 'center', gap: '0.45rem',
+                                                background: '#059669', color: '#ffffff', border: 'none',
+                                                padding: '0.6rem 1.15rem', borderRadius: '10px', cursor: 'pointer', fontSize: '0.84rem', fontWeight: 700,
+                                                boxShadow: '0 4px 10px rgba(5, 150, 105, 0.2)'
                                             }}
                                         >
-                                            <Plus size={16} /> Cadastrar UCs
+                                            <Plus size={16} /> Cadastrar Nova UC
                                         </button>
                                     )}
                                 </div>
 
                                 {consumerUnits.length > 0 ? (
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                    <div className="sub-uc-grid">
                                         {consumerUnits.map(uc => {
-                                            // Helper para cor do status da UC
                                             const getUCStatusColor = (status) => {
                                                 const colors = {
-                                                    'ativo': '#10b981',
-                                                    'aguardando_conexao': '#3b82f6',
-                                                    'em_atraso': '#ef4444',
-                                                    'ativacao': '#f59e0b',
-                                                    'em_ativacao': '#f59e0b',
-                                                    'vinculado': '#4f46e5',
-                                                    'cancelado': '#94a3b8',
+                                                    'ativo': '#15803d',
+                                                    'aguardando_conexao': '#1d4ed8',
+                                                    'em_atraso': '#b91c1c',
+                                                    'ativacao': '#b45309',
+                                                    'em_ativacao': '#b45309',
+                                                    'vinculado': '#4338ca',
+                                                    'cancelado': '#475569',
                                                     'cancelado_inadimplente': '#7f1d1d'
                                                 };
-                                                return colors[status] || '#94a3b8';
+                                                return colors[status] || '#475569';
                                             };
 
-                                            // Lógica de Status da Leitura (Priorizando o mês atual como padrão)
                                             const currentMonthStr = new Date().toISOString().substring(0, 7);
                                             const hasInvoiceThisMonth = invoices.some(inv => 
                                                 inv.uc_id === uc.id && 
@@ -2362,79 +2705,88 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
                                             );
 
                                             const getReadingStatus = () => {
-                                                if (hasInvoiceThisMonth) return { icon: <CheckCircle size={14} />, color: '#10b981', label: 'Sucesso' };
+                                                if (hasInvoiceThisMonth) return { icon: <CheckCircle size={14} />, color: '#15803d', bg: '#dcfce7', label: 'Leitura Realizada' };
                                                 
                                                 switch (uc.last_scraping_status) {
-                                                    case 'success': return { icon: <CheckCircle size={14} />, color: '#10b981', label: 'Sucesso' };
-                                                    case 'error': return { icon: <AlertCircle size={14} />, color: '#ef4444', label: 'Indisponível' };
-                                                    case 'processing': return { icon: <RefreshCw size={14} className="spin" />, color: '#3b82f6', label: 'Lendo...' };
-                                                    default: return { icon: <Clock size={14} />, color: '#94a3b8', label: 'Pendente' };
+                                                    case 'success': return { icon: <CheckCircle size={14} />, color: '#15803d', bg: '#dcfce7', label: 'Sucesso' };
+                                                    case 'error': return { icon: <AlertCircle size={14} />, color: '#b91c1c', bg: '#fee2e2', label: 'Indisponível' };
+                                                    case 'processing': return { icon: <RefreshCw size={14} className="sub-spin" />, color: '#1d4ed8', bg: '#dbeafe', label: 'Lendo...' };
+                                                    default: return { icon: <Clock size={14} />, color: '#475569', bg: '#f1f5f9', label: 'Pendente' };
                                                 }
                                             };
 
                                             const rStatus = getReadingStatus();
+                                            const stColor = getUCStatusColor(uc.status);
 
                                             return (
                                                 <div key={uc.id} style={{ 
                                                     background: '#ffffff', 
-                                                    padding: '1rem', 
-                                                    borderRadius: '12px', 
+                                                    padding: '1.15rem 1.25rem', 
+                                                    borderRadius: '14px', 
                                                     border: '1px solid #e2e8f0', 
-                                                    boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                                                    boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04)',
                                                     display: 'flex', 
                                                     flexDirection: 'column',
-                                                    gap: '0.75rem',
+                                                    gap: '0.85rem',
                                                     position: 'relative'
                                                 }}>
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                                        <div style={{ flex: 1 }}>
-                                                            <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.95rem', marginBottom: '0.2rem' }}>
-                                                                UC: {uc.numero_uc}
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.75rem' }}>
+                                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.2rem' }}>
+                                                                <span style={{
+                                                                    fontWeight: 800,
+                                                                    color: '#0f172a',
+                                                                    fontSize: '0.96rem',
+                                                                    fontVariantNumeric: 'tabular-nums'
+                                                                }}>
+                                                                    UC {uc.numero_uc}
+                                                                </span>
+                                                                {uc.concessionaria && (
+                                                                    <span style={{ fontSize: '0.7rem', fontWeight: 600, color: '#64748b', background: '#f1f5f9', padding: '0.1rem 0.45rem', borderRadius: '6px' }}>
+                                                                        {uc.concessionaria}
+                                                                    </span>
+                                                                )}
                                                             </div>
-                                                            <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 500 }}>
-                                                                {uc.titular_conta}
+                                                            <div style={{ fontSize: '0.82rem', color: '#475569', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                                {uc.titular_conta || 'Titular não informado'}
                                                             </div>
                                                         </div>
                                                         <div style={{ 
-                                                            fontSize: '0.65rem', 
-                                                            fontWeight: 900, 
-                                                            color: getUCStatusColor(uc.status),
-                                                            background: `${getUCStatusColor(uc.status)}10`,
-                                                            padding: '0.2rem 0.6rem',
-                                                            borderRadius: '4px',
+                                                            fontSize: '0.68rem', 
+                                                            fontWeight: 800, 
+                                                            color: stColor,
+                                                            background: `${stColor}14`,
+                                                            padding: '0.22rem 0.6rem',
+                                                            borderRadius: '999px',
                                                             textTransform: 'uppercase',
-                                                            border: `1px solid ${getUCStatusColor(uc.status)}30`
+                                                            border: `1px solid ${stColor}30`,
+                                                            whiteSpace: 'nowrap'
                                                         }}>
-                                                            {uc.status?.replace('_', ' ')}
+                                                            {uc.status?.replace(/_/g, ' ')}
                                                         </div>
                                                     </div>
 
-                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 0', borderTop: '1px solid #f1f5f9' }}>
-                                                        <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500 }}>
-                                                            {uc.concessionaria}
+                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.6rem 0.75rem', background: '#f8fafc', borderRadius: '10px', border: '1px solid #f1f5f9' }}>
+                                                        <div style={{ 
+                                                            display: 'inline-flex', 
+                                                            alignItems: 'center', 
+                                                            gap: '0.35rem', 
+                                                            color: rStatus.color,
+                                                            fontSize: '0.75rem',
+                                                            fontWeight: 700,
+                                                            background: rStatus.bg,
+                                                            padding: '0.2rem 0.55rem',
+                                                            borderRadius: '6px'
+                                                        }}>
+                                                            {rStatus.icon}
+                                                            <span>{rStatus.label}</span>
                                                         </div>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                            <div style={{ 
-                                                                display: 'flex', 
-                                                                alignItems: 'center', 
-                                                                gap: '0.3rem', 
-                                                                color: rStatus.color,
-                                                                fontSize: '0.75rem',
-                                                                fontWeight: 700,
-                                                                background: `${rStatus.color}10`,
-                                                                padding: '0.2rem 0.5rem',
-                                                                borderRadius: '6px'
-                                                            }}>
-                                                                {rStatus.icon}
-                                                                <span>{rStatus.label}</span>
-                                                            </div>
-                                                            <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#475569' }}>
-                                                                Leitura: <span style={{ color: 'var(--color-blue)' }}>{uc.dia_leitura || '--'}</span>
-                                                            </div>
+                                                        <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569', fontVariantNumeric: 'tabular-nums' }}>
+                                                            Dia de Leitura: <strong style={{ color: '#0f172a' }}>{uc.dia_leitura || '--'}</strong>
                                                         </div>
                                                     </div>
 
-                                                    <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', paddingTop: '0.5rem', borderTop: '1px solid #f1f5f9' }}>
+                                                    <div style={{ display: 'flex', gap: '0.45rem', justifyContent: 'flex-end', paddingTop: '0.25rem' }}>
                                                         <button
                                                             type="button"
                                                             onClick={() => {
@@ -2442,12 +2794,10 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
                                                                 setUcModalMode('all');
                                                                 setShowUcModal(true);
                                                             }}
-                                                            style={{ padding: '0.5rem', color: '#2563eb', background: '#eff6ff', borderRadius: '6px', border: '1px solid #bfdbfe', cursor: 'pointer', transition: 'all 0.2s' }}
-                                                            onMouseEnter={e => e.currentTarget.style.background = '#dbeafe'}
-                                                            onMouseLeave={e => e.currentTarget.style.background = '#eff6ff'}
+                                                            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', padding: '0.42rem 0.7rem', color: '#1d4ed8', background: '#eff6ff', borderRadius: '8px', border: '1px solid #bfdbfe', cursor: 'pointer', fontSize: '0.76rem', fontWeight: 700 }}
                                                             title="Editar Dados da UC"
                                                         >
-                                                            <Pencil size={16} />
+                                                            <Pencil size={14} /> Editar
                                                         </button>
                                                         <button
                                                             type="button"
@@ -2455,12 +2805,10 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
                                                                 setPreviewUC(uc);
                                                                 setShowPreviewModal(true);
                                                             }}
-                                                            style={{ padding: '0.5rem', color: '#94a3b8', background: '#f8fafc', borderRadius: '6px', border: '1px solid #e2e8f0', cursor: 'pointer', transition: 'all 0.2s' }}
-                                                            onMouseEnter={e => e.currentTarget.style.color = 'var(--color-blue)'}
-                                                            onMouseLeave={e => e.currentTarget.style.color = '#94a3b8'}
+                                                            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', padding: '0.42rem 0.7rem', color: '#475569', background: '#f8fafc', borderRadius: '8px', border: '1px solid #cbd5e1', cursor: 'pointer', fontSize: '0.76rem', fontWeight: 700 }}
                                                             title="Ver Detalhes"
                                                         >
-                                                            <Eye size={16} />
+                                                            <Eye size={14} /> Detalhes
                                                         </button>
                                                         <button
                                                             type="button"
@@ -2469,22 +2817,18 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
                                                                 setUcModalMode('technical');
                                                                 setShowUcModal(true);
                                                             }}
-                                                            style={{ padding: '0.5rem', color: '#f59e0b', background: '#fffbeb', borderRadius: '6px', border: '1px solid #fde68a', cursor: 'pointer', transition: 'all 0.2s' }}
-                                                            onMouseEnter={e => e.currentTarget.style.background = '#fef3c7'}
-                                                            onMouseLeave={e => e.currentTarget.style.background = '#fffbeb'}
+                                                            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', padding: '0.42rem 0.7rem', color: '#b45309', background: '#fffbeb', borderRadius: '8px', border: '1px solid #fde68a', cursor: 'pointer', fontSize: '0.76rem', fontWeight: 700 }}
                                                             title="Dados Técnicos e Comerciais"
                                                         >
-                                                            <DollarSign size={16} />
+                                                            <DollarSign size={14} /> Comercial
                                                         </button>
                                                         <button
                                                             type="button"
                                                             onClick={() => handleUnlinkUC(uc.id)}
-                                                            style={{ padding: '0.5rem', color: '#ef4444', background: '#fef2f2', borderRadius: '6px', border: '1px solid #fee2e2', cursor: 'pointer', transition: 'all 0.2s' }}
-                                                            onMouseEnter={e => e.currentTarget.style.background = '#fee2e2'}
-                                                            onMouseLeave={e => e.currentTarget.style.background = '#fef2f2'}
-                                                            title="Excluir UC"
+                                                            style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '0.42rem 0.55rem', color: '#dc2626', background: '#fef2f2', borderRadius: '8px', border: '1px solid #fecaca', cursor: 'pointer' }}
+                                                            title="Desvincular UC do assinante"
                                                         >
-                                                            <Trash2 size={16} />
+                                                            <Trash2 size={14} />
                                                         </button>
                                                     </div>
                                                 </div>
@@ -2492,379 +2836,382 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
                                         })}
                                     </div>
                                 ) : (
-                                    <div style={{ textAlign: 'center', color: '#94a3b8', padding: '1.5rem', border: '2px dashed #e2e8f0', borderRadius: '8px' }}>
-                                        <p style={{ margin: 0, fontSize: '0.9rem' }}>Nenhuma UC vinculada.</p>
+                                    <div style={{ textAlign: 'center', color: '#64748b', padding: '2.5rem', border: '1px dashed #cbd5e1', borderRadius: '14px', background: '#ffffff' }}>
+                                        <Zap size={32} color="#94a3b8" style={{ marginBottom: '0.5rem' }} />
+                                        <p style={{ margin: 0, fontSize: '0.92rem', fontWeight: 600, color: '#334155' }}>Nenhuma Unidade Consumidora vinculada</p>
+                                        <p style={{ margin: '0.25rem 0 0', fontSize: '0.8rem', color: '#64748b' }}>Clique em "Cadastrar Nova UC" acima para adicionar a primeira unidade deste assinante.</p>
                                     </div>
                                 )}
                             </div>
-                            </div>
                         )}
 
+                        {/* ==================== ABA: FATURAS ==================== */}
                         {activeTab === 'faturas' && (
-                            <div style={{ paddingBottom: '1rem' }}>
-                            <div style={{ gridColumn: '1 / -1' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem', padding: '1rem', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
-                                            <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Faturamento</span>
-                                            <div style={{ display: 'flex', background: '#f1f5f9', padding: '0.25rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleBillingModeChange('consolidada')}
-                                                    style={{
-                                                        padding: '0.4rem 0.8rem', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 600, transition: 'all 0.2s',
-                                                        background: billingMode === 'consolidada' ? 'white' : 'transparent',
-                                                        color: billingMode === 'consolidada' ? 'var(--color-blue)' : '#64748b',
-                                                        boxShadow: billingMode === 'consolidada' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                                                        border: 'none', cursor: 'pointer'
-                                                    }}
-                                                >Consolidada</button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleBillingModeChange('individualizada')}
-                                                    style={{
-                                                        padding: '0.4rem 0.8rem', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 600, transition: 'all 0.2s',
-                                                        background: billingMode === 'individualizada' ? 'white' : 'transparent',
-                                                        color: billingMode === 'individualizada' ? 'var(--color-blue)' : '#64748b',
-                                                        boxShadow: billingMode === 'individualizada' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                                                        border: 'none', cursor: 'pointer'
-                                                    }}
-                                                >Individualizada</button>
+                            <div style={{ animation: 'subFadeIn 0.2s ease-out', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                                {/* Barra Executiva de Faturamento e Saldos */}
+                                <div style={{
+                                    ...subCardStyle,
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: '1.15rem'
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem', paddingBottom: '1rem', borderBottom: '1px solid #f1f5f9' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flexWrap: 'wrap' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                                                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Modalidade:</span>
+                                                <div style={{ display: 'flex', background: '#f1f5f9', padding: '0.22rem', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleBillingModeChange('consolidada')}
+                                                        style={{
+                                                            padding: '0.42rem 0.85rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 700, transition: 'all 0.15s',
+                                                            background: billingMode === 'consolidada' ? '#ffffff' : 'transparent',
+                                                            color: billingMode === 'consolidada' ? '#1d4ed8' : '#64748b',
+                                                            boxShadow: billingMode === 'consolidada' ? '0 1px 2px rgba(15, 23, 42, 0.08)' : 'none',
+                                                            border: 'none', cursor: 'pointer'
+                                                        }}
+                                                    >Consolidada</button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleBillingModeChange('individualizada')}
+                                                        style={{
+                                                            padding: '0.42rem 0.85rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 700, transition: 'all 0.15s',
+                                                            background: billingMode === 'individualizada' ? '#ffffff' : 'transparent',
+                                                            color: billingMode === 'individualizada' ? '#1d4ed8' : '#64748b',
+                                                            boxShadow: billingMode === 'individualizada' ? '0 1px 2px rgba(15, 23, 42, 0.08)' : 'none',
+                                                            border: 'none', cursor: 'pointer'
+                                                        }}
+                                                    >Individualizada</button>
+                                                </div>
                                             </div>
-                                        </div>
 
-                                        {billingMode === 'consolidada' && (
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', position: 'relative' }}>
-                                                <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#64748b' }}>DIA VENC.:</span>
-                                                <button 
-                                                    type="button"
-                                                    onClick={() => setShowDueDatePicker(!showDueDatePicker)}
-                                                    style={{ padding: '0.3rem 0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem', background: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
-                                                >
-                                                    <Calendar size={14} />
-                                                    {specificDueDate.toLocaleDateString('pt-BR')}
-                                                </button>
-                                                
-                                                {showDueDatePicker && (
-                                                    <div style={{
-                                                        position: 'absolute', top: '110%', left: 0, background: 'white', 
-                                                        border: '1px solid #e2e8f0', borderRadius: '12px', 
-                                                        boxShadow: '0 10px 25px rgba(0,0,0,0.1)', zIndex: 100, 
-                                                        padding: '1rem', width: '280px'
-                                                    }}>
-                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                                                            <button 
-                                                                type="button"
-                                                                onClick={() => {
-                                                                    const newD = new Date(calendarViewDate);
-                                                                    newD.setMonth(newD.getMonth() - 1);
-                                                                    setCalendarViewDate(newD);
-                                                                }} 
-                                                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-blue)', fontWeight: 'bold' }}
-                                                            >&lt;</button>
-                                                            <span style={{ fontWeight: 'bold', fontSize: '0.9rem', textTransform: 'capitalize' }}>
-                                                                {calendarViewDate.toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}
-                                                            </span>
-                                                            <button 
-                                                                type="button"
-                                                                onClick={() => {
-                                                                    const newD = new Date(calendarViewDate);
-                                                                    newD.setMonth(newD.getMonth() + 1);
-                                                                    setCalendarViewDate(newD);
-                                                                }} 
-                                                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-blue)', fontWeight: 'bold' }}
-                                                            >&gt;</button>
-                                                        </div>
-                                                        
-                                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '4px', textAlign: 'center', marginBottom: '0.5rem' }}>
-                                                            {['D','S','T','Q','Q','S','S'].map((d, i) => (
-                                                                <div key={i} style={{ fontSize: '0.7rem', fontWeight: 'bold', color: '#94a3b8' }}>{d}</div>
-                                                            ))}
-                                                        </div>
-                                                        
-                                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '4px' }}>
-                                                            {(() => {
-                                                                const today = new Date();
-                                                                today.setHours(0,0,0,0);
-                                                                const minValid = new Date(today);
-                                                                minValid.setDate(minValid.getDate() + 2);
-                                                                
-                                                                const y = calendarViewDate.getFullYear();
-                                                                const m = calendarViewDate.getMonth();
-                                                                const firstDay = new Date(y, m, 1).getDay();
-                                                                const daysInMonth = new Date(y, m + 1, 0).getDate();
-                                                                
-                                                                const cells = [];
-                                                                for(let i=0; i<firstDay; i++) cells.push(<div key={`empty-${i}`} />);
-                                                                
-                                                                for(let d=1; d<=daysInMonth; d++) {
-                                                                    const date = new Date(y, m, d);
-                                                                    // Feriado bancario tambem sai: boleto que vence com banco
-                                                                    // fechado so compensa no dia seguinte.
-                                                                    const isValid = ehDiaUtil(date) && date >= minValid;
-                                                                    const isSelected = specificDueDate.getDate() === d && specificDueDate.getMonth() === m && specificDueDate.getFullYear() === y;
+                                            {billingMode === 'consolidada' && (
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', position: 'relative' }}>
+                                                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Vencimento:</span>
+                                                    <button 
+                                                        type="button"
+                                                        onClick={() => setShowDueDatePicker(!showDueDatePicker)}
+                                                        style={{ padding: '0.42rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.82rem', fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: '#0f172a', background: '#f8fafc', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+                                                    >
+                                                        <Calendar size={14} color="#2563eb" />
+                                                        {specificDueDate.toLocaleDateString('pt-BR')}
+                                                    </button>
+                                                    
+                                                    {showDueDatePicker && (
+                                                        <div style={{
+                                                            position: 'absolute', top: '110%', left: 0, background: 'white', 
+                                                            border: '1px solid #e2e8f0', borderRadius: '12px', 
+                                                            boxShadow: '0 10px 25px rgba(0,0,0,0.12)', zIndex: 100, 
+                                                            padding: '1rem', width: '280px'
+                                                        }}>
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                                                                <button 
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        const newD = new Date(calendarViewDate);
+                                                                        newD.setMonth(newD.getMonth() - 1);
+                                                                        setCalendarViewDate(newD);
+                                                                    }} 
+                                                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-blue)', fontWeight: 'bold' }}
+                                                                >&lt;</button>
+                                                                <span style={{ fontWeight: 'bold', fontSize: '0.9rem', textTransform: 'capitalize' }}>
+                                                                    {calendarViewDate.toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}
+                                                                </span>
+                                                                <button 
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        const newD = new Date(calendarViewDate);
+                                                                        newD.setMonth(newD.getMonth() + 1);
+                                                                        setCalendarViewDate(newD);
+                                                                    }} 
+                                                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-blue)', fontWeight: 'bold' }}
+                                                                >&gt;</button>
+                                                            </div>
+                                                            
+                                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '4px', textAlign: 'center', marginBottom: '0.5rem' }}>
+                                                                {['D','S','T','Q','Q','S','S'].map((d, i) => (
+                                                                    <div key={i} style={{ fontSize: '0.7rem', fontWeight: 'bold', color: '#94a3b8' }}>{d}</div>
+                                                                ))}
+                                                            </div>
+                                                            
+                                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '4px' }}>
+                                                                {(() => {
+                                                                    const today = new Date();
+                                                                    today.setHours(0,0,0,0);
+                                                                    const minValid = new Date(today);
+                                                                    minValid.setDate(minValid.getDate() + 2);
                                                                     
-                                                                    cells.push(
-                                                                        <button
-                                                                            key={d}
-                                                                            type="button"
-                                                                            disabled={!isValid}
-                                                                            onClick={() => {
-                                                                                setSpecificDueDate(date);
-                                                                                setConsolidatedDueDay(d);
-                                                                                setShowDueDatePicker(false);
-                                                                            }}
-                                                                            style={{
-                                                                                padding: '0.4rem 0',
-                                                                                border: 'none',
-                                                                                borderRadius: '4px',
-                                                                                background: isSelected ? 'var(--color-blue)' : (isValid ? '#f8fafc' : 'transparent'),
-                                                                                color: isSelected ? 'white' : (isValid ? '#1e293b' : '#cbd5e1'),
-                                                                                cursor: isValid ? 'pointer' : 'not-allowed',
-                                                                                fontWeight: isSelected ? 'bold' : 'normal',
-                                                                                fontSize: '0.8rem'
-                                                                            }}
-                                                                        >
-                                                                            {d}
-                                                                        </button>
-                                                                    );
-                                                                }
-                                                                return cells;
-                                                            })()}
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* Global Unpaid Total Box */}
-                                    <div style={{
-                                        border: '2px solid #ef4444',
-                                        background: '#fef2f2',
-                                        padding: '0.5rem 1rem',
-                                        borderRadius: '8px',
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        alignItems: 'flex-end',
-                                        minWidth: '150px'
-                                    }}>
-                                        <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#b91c1c' }}>Total a pagar R$</span>
-                                        <span style={{ fontSize: '1.2rem', fontWeight: 800, color: '#1e293b' }}>
-                                            {totalUnpaidGlobal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                                        </span>
-                                    </div>
-                                </div>
-
-                                {/* Top Summary & Actions */}
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
-                                    
-                                    {/* Botões à esquerda conforme solicitado */}
-                                    <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-                                        {billingMode === 'consolidada' && (
-                                            <div style={{ position: 'relative' }}
-                                                onMouseEnter={() => totalToConsolidate === 0 && setShowConsolidationHelp(true)}
-                                                onMouseLeave={() => setShowConsolidationHelp(false)}>
-                                                <button
-                                                    type="button"
-                                                    disabled={generating || totalToConsolidate === 0}
-                                                    onClick={async () => {
-                                                        const confirm = await showConfirm(
-                                                            `Deseja emitir uma fatura consolidada no valor de ${totalToConsolidate.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}?`,
-                                                            'Emitir Fatura Consolidada'
-                                                        );
-                                                        if (!confirm) return;
-
-                                                        setGenerating(true);
-                                                        try {
-                                                            const dueDate = specificDueDate.toISOString().split('T')[0];
-                                                            const result = await createAsaasCharge(subscriber.id, 'subscriber', {
-                                                                dueDate,
-                                                                invoice_ids: invoices
-                                                                    .filter(inv => {
-                                                                        const s = inv.status?.trim().toLowerCase();
-                                                                        return s !== 'pago' && 
-                                                                               s !== 'cancelado' && 
-                                                                               (!inv.consolidated_invoice_id || inv.consolidated_invoice_id === null);
-                                                                    })
-                                                                    .map(i => i.id)
-                                                            });
-
-                                                            if (result.semBoleto) {
-                                                                showAlert(result.mensagem, 'info');
-                                                                await fetchInvoices(subscriber.id);
-                                                            } else if (result.success) {
-                                                                showAlert('Fatura consolidada gerada com sucesso!', 'success');
-                                                                await Promise.all([
-                                                                    fetchInvoices(subscriber.id),
-                                                                    fetchConsolidatedInvoices(subscriber.id)
-                                                                ]);
-
-                                                                // Trigger download of the consolidated PDF
-                                                                if (result.consolidatedId) {
-                                                                    // Pequeno delay para garantir propagação no DB antes do fetch
-                                                                    await new Promise(resolve => setTimeout(resolve, 1500));
-                                                                    const { data: newCons } = await supabase
-                                                                        .from('consolidated_invoices')
-                                                                        .select('*')
-                                                                        .eq('id', result.consolidatedId)
-                                                                        .single();
-                                                                    if (newCons) {
-                                                                        const pdfBlob = await handleDownloadConsolidated(newCons);
-                                                                        if (pdfBlob) {
-                                                                            showAlert('Enviando notificações da consolidada...', 'info');
-                                                                            const monthYearStr = newCons.mes_referencia ? newCons.mes_referencia.substring(0, 7).split('-').reverse().join('_') : '';
-                                                                            const cleanSubName = (subscriber?.name || 'Cliente').normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '_').replace(/[^\w]/g, '');
-                                                                            const fileName = `Fatura_Consolidada_${cleanSubName}_${monthYearStr}.pdf`;
-                                                                            
-                                                                            await sendCombinedNotification({
-                                                                                recipientEmail: formData.email,
-                                                                                recipientPhone: formData.phone,
-                                                                                subscriberName: formData.name,
-                                                                                dueDate: new Date(newCons.due_date + 'T12:00:00').toLocaleDateString('pt-BR'),
-                                                                                value: Number(newCons.total_value || totalToConsolidate).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
-                                                                                pdfBlob: pdfBlob,
-                                                                                fileName: fileName,
-                                                                                subscriberId: subscriber.id,
-                                                                                profileId: profile?.id,
-                                                                                isConsolidated: true,
-                                                                                invoiceId: newCons.id
-                                                                            });
-                                                                            showAlert('Notificações consolidadas enviadas com sucesso!', 'success');
-                                                                        }
+                                                                    const y = calendarViewDate.getFullYear();
+                                                                    const m = calendarViewDate.getMonth();
+                                                                    const firstDay = new Date(y, m, 1).getDay();
+                                                                    const daysInMonth = new Date(y, m + 1, 0).getDate();
+                                                                    
+                                                                    const cells = [];
+                                                                    for(let i=0; i<firstDay; i++) cells.push(<div key={`empty-${i}`} />);
+                                                                    
+                                                                    for(let d=1; d<=daysInMonth; d++) {
+                                                                        const date = new Date(y, m, d);
+                                                                        const isValid = ehDiaUtil(date) && date >= minValid;
+                                                                        const isSelected = specificDueDate.getDate() === d && specificDueDate.getMonth() === m && specificDueDate.getFullYear() === y;
+                                                                        
+                                                                        cells.push(
+                                                                            <button
+                                                                                key={d}
+                                                                                type="button"
+                                                                                disabled={!isValid}
+                                                                                onClick={() => {
+                                                                                    setSpecificDueDate(date);
+                                                                                    setConsolidatedDueDay(d);
+                                                                                    setShowDueDatePicker(false);
+                                                                                }}
+                                                                                style={{
+                                                                                    padding: '0.4rem 0',
+                                                                                    border: 'none',
+                                                                                    borderRadius: '4px',
+                                                                                    background: isSelected ? 'var(--color-blue)' : (isValid ? '#f8fafc' : 'transparent'),
+                                                                                    color: isSelected ? 'white' : (isValid ? '#1e293b' : '#cbd5e1'),
+                                                                                    cursor: isValid ? 'pointer' : 'not-allowed',
+                                                                                    fontWeight: isSelected ? 'bold' : 'normal',
+                                                                                    fontSize: '0.8rem',
+                                                                                    fontVariantNumeric: 'tabular-nums'
+                                                                                }}
+                                                                            >
+                                                                                {d}
+                                                                            </button>
+                                                                        );
                                                                     }
-                                                                } else if (result.url) {
-                                                                    window.open(result.url, '_blank');
-                                                                }
-                                                            }
-                                                        } catch (error) {
-                                                            showAlert('Erro ao gerar consolidada: ' + error.message, 'error');
-                                                        } finally {
-                                                            setGenerating(false);
-                                                        }
-                                                    }}
-                                                    style={{
-                                                        display: 'flex', alignItems: 'center', gap: '0.5rem',
-                                                        background: '#f97316', color: 'white', border: 'none',
-                                                        padding: '0.6rem 1.25rem', borderRadius: '8px', cursor: (generating || totalToConsolidate === 0) ? 'not-allowed' : 'pointer',
-                                                        fontWeight: 'bold', boxShadow: (generating || totalToConsolidate === 0) ? 'none' : '0 4px 6px -1px rgba(249, 115, 22, 0.4)',
-                                                        opacity: (generating || totalToConsolidate === 0) ? 0.6 : 1
-                                                    }}
-                                                >
-                                                    <CreditCard size={18} /> {generating ? 'Gerando...' : 'Emitir Fatura Consolidada'}
-                                                </button>
-
-                                                {showConsolidationHelp && totalToConsolidate === 0 && (
-                                                    <div style={{
-                                                        position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)', marginBottom: '10px',
-                                                        width: '240px', background: '#1e293b', color: 'white', padding: '1rem', borderRadius: '8px',
-                                                        fontSize: '0.8rem', zIndex: 100, boxShadow: '0 10px 15px -3px rgba(0,0,0,0.3)', pointerEvents: 'none'
-                                                    }}>
-                                                        <div style={{ fontWeight: 'bold', marginBottom: '0.5rem', color: '#fb923c' }}>Consolidação Indisponível</div>
-                                                        Todas as faturas visíveis já possuem boletos emitidos individualmente. Para consolidar, cancele os boletos existentes.
-                                                        <div style={{ position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)', borderWidth: '6px', borderStyle: 'solid', borderColor: '#1e293b transparent transparent transparent' }}></div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        )}
-                                        <div style={{ position: 'relative' }}>
-                                            <button
-                                                type="button"
-                                                onClick={() => setShowMonthPicker(!showMonthPicker)}
-                                                style={{
-                                                    display: 'flex', alignItems: 'center', gap: '0.6rem',
-                                                    background: 'white', color: '#1e293b', border: '2px solid #e2e8f0',
-                                                    padding: '0.6rem 1.25rem', borderRadius: '10px', cursor: 'pointer',
-                                                    fontWeight: 700, fontSize: '0.9rem', transition: 'all 0.2s',
-                                                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                                                }}
-                                                onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--color-blue)'}
-                                                onMouseLeave={(e) => e.currentTarget.style.borderColor = '#e2e8f0'}
-                                            >
-                                                <Calendar size={18} color="#64748b" />
-                                                {invoiceMonthFilter === 'all' ? 'Todas as Datas' : (() => {
-                                                    const [y, m] = invoiceMonthFilter.split('-');
-                                                    const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-                                                    return `${months[parseInt(m) - 1]} / ${y}`;
-                                                })()}
-                                            </button>
-                                            {showMonthPicker && (
-                                                <div style={{
-                                                    position: 'absolute', top: '100%', left: 0, marginTop: '0.5rem',
-                                                    background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px',
-                                                    boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1)',
-                                                    padding: '1.2rem', zIndex: 100, width: '280px'
-                                                }}>
-                                                    <div style={{ marginBottom: '1rem', display: 'flex', gap: '0.5rem' }}>
-                                                        <select
-                                                            value={invoiceMonthFilter === 'all' ? new Date().getMonth() + 1 : parseInt(invoiceMonthFilter.split('-')[1])}
-                                                            onChange={(e) => {
-                                                                const currentYear = invoiceMonthFilter === 'all' ? new Date().getFullYear() : invoiceMonthFilter.split('-')[0];
-                                                                setInvoiceMonthFilter(`${currentYear}-${String(e.target.value).padStart(2, '0')}`);
-                                                            }}
-                                                            style={{ flex: 1, padding: '0.5rem', borderRadius: '6px', border: '1px solid #cbd5e1', outline: 'none' }}
-                                                        >
-                                                            {['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'].map((m, i) => (
-                                                                <option key={m} value={i + 1}>{m}</option>
-                                                            ))}
-                                                        </select>
-                                                        <select
-                                                            value={invoiceMonthFilter === 'all' ? new Date().getFullYear() : invoiceMonthFilter.split('-')[0]}
-                                                            onChange={(e) => {
-                                                                const currentMonth = invoiceMonthFilter === 'all' ? String(new Date().getMonth() + 1).padStart(2, '0') : invoiceMonthFilter.split('-')[1];
-                                                                setInvoiceMonthFilter(`${e.target.value}-${currentMonth}`);
-                                                            }}
-                                                            style={{ flex: 1, padding: '0.5rem', borderRadius: '6px', border: '1px solid #cbd5e1', outline: 'none' }}
-                                                        >
-                                                            {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() + 2 - i).map(year => (
-                                                                <option key={year} value={year}>{year}</option>
-                                                            ))}
-                                                        </select>
-                                                    </div>
-                                                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                                        <button
-                                                            onClick={() => {
-                                                                setInvoiceMonthFilter('all');
-                                                                setShowMonthPicker(false);
-                                                            }}
-                                                            style={{ flex: 1, padding: '0.6rem', background: '#f1f5f9', border: 'none', borderRadius: '6px', fontSize: '0.85rem', color: '#475569', fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s' }}
-                                                            onMouseEnter={(e) => e.currentTarget.style.background = '#e2e8f0'}
-                                                            onMouseLeave={(e) => e.currentTarget.style.background = '#f1f5f9'}
-                                                        >Todas as Datas</button>
-                                                        <button onClick={() => setShowMonthPicker(false)} style={{ padding: '0.6rem 1rem', background: 'var(--color-blue)', color: 'white', border: 'none', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer' }}>OK</button>
-                                                    </div>
+                                                                    return cells;
+                                                                })()}
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             )}
                                         </div>
+
+                                        {/* KPIs de Faturamento */}
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', flexWrap: 'wrap' }}>
+                                            <div style={{
+                                                border: '1px solid #bbf7d0',
+                                                background: '#f0fdf4',
+                                                padding: '0.5rem 1rem',
+                                                borderRadius: '10px',
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                alignItems: 'flex-end',
+                                                minWidth: '155px'
+                                            }}>
+                                                <span style={{ fontSize: '0.66rem', fontWeight: 700, color: '#166534', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                                                    Total a Pagar (Filtro)
+                                                </span>
+                                                <span style={{ fontSize: '1.15rem', fontWeight: 800, color: '#14532d', fontVariantNumeric: 'tabular-nums' }}>
+                                                    {totalVisibleInvoicesValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                                </span>
+                                            </div>
+
+                                            <div style={{
+                                                border: '1px solid #fecaca',
+                                                background: '#fef2f2',
+                                                padding: '0.5rem 1rem',
+                                                borderRadius: '10px',
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                alignItems: 'flex-end',
+                                                minWidth: '155px'
+                                            }}>
+                                                <span style={{ fontSize: '0.66rem', fontWeight: 700, color: '#991b1b', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                                                    Total Geral em Aberto
+                                                </span>
+                                                <span style={{ fontSize: '1.15rem', fontWeight: 800, color: '#7f1d1d', fontVariantNumeric: 'tabular-nums' }}>
+                                                    {totalUnpaidGlobal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                                </span>
+                                            </div>
+                                        </div>
                                     </div>
 
-                                    {/* Resumo à direita conforme solicitado */}
-                                    <div style={{
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        alignItems: 'flex-end',
-                                        background: '#f0fdf4',
-                                        border: '2px solid #22c55e',
-                                        borderRadius: '12px',
-                                        padding: '0.6rem 1.2rem',
-                                        minWidth: '180px'
-                                    }}>
-                                        <div style={{ color: '#166534', fontWeight: 'bold', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.025em', marginBottom: '0.2rem' }}>
-                                            TOTAL A PAGAR NO MÊS
-                                        </div>
-                                        <div style={{ fontSize: '1.5rem', fontWeight: '800', color: '#1e293b' }}>
-                                            {totalVisibleInvoicesValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                    {/* Ações de Emissão e Filtro de Competência */}
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.85rem' }}>
+                                        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                                            {billingMode === 'consolidada' && (
+                                                <div style={{ position: 'relative' }}
+                                                    onMouseEnter={() => totalToConsolidate === 0 && setShowConsolidationHelp(true)}
+                                                    onMouseLeave={() => setShowConsolidationHelp(false)}>
+                                                    <button
+                                                        type="button"
+                                                        disabled={generating || totalToConsolidate === 0}
+                                                        onClick={async () => {
+                                                            const confirm = await showConfirm(
+                                                                `Deseja emitir uma fatura consolidada no valor de ${totalToConsolidate.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}?`,
+                                                                'Emitir Fatura Consolidada'
+                                                            );
+                                                            if (!confirm) return;
+
+                                                            setGenerating(true);
+                                                            try {
+                                                                const dueDate = specificDueDate.toISOString().split('T')[0];
+                                                                const result = await createAsaasCharge(subscriber.id, 'subscriber', {
+                                                                    dueDate,
+                                                                    invoice_ids: invoices
+                                                                        .filter(inv => {
+                                                                            const s = inv.status?.trim().toLowerCase();
+                                                                            return s !== 'pago' && 
+                                                                                   s !== 'cancelado' && 
+                                                                                   (!inv.consolidated_invoice_id || inv.consolidated_invoice_id === null);
+                                                                        })
+                                                                        .map(i => i.id)
+                                                                });
+
+                                                                if (result.semBoleto) {
+                                                                    showAlert(result.mensagem, 'info');
+                                                                    await fetchInvoices(subscriber.id);
+                                                                } else if (result.success) {
+                                                                    showAlert('Fatura consolidada gerada com sucesso!', 'success');
+                                                                    await Promise.all([
+                                                                        fetchInvoices(subscriber.id),
+                                                                        fetchConsolidatedInvoices(subscriber.id)
+                                                                    ]);
+
+                                                                    if (result.consolidatedId) {
+                                                                        await new Promise(resolve => setTimeout(resolve, 1500));
+                                                                        const { data: newCons } = await supabase
+                                                                            .from('consolidated_invoices')
+                                                                            .select('*')
+                                                                            .eq('id', result.consolidatedId)
+                                                                            .single();
+                                                                        if (newCons) {
+                                                                            const pdfBlob = await handleDownloadConsolidated(newCons);
+                                                                            if (pdfBlob) {
+                                                                                showAlert('Enviando notificações da consolidada...', 'info');
+                                                                                const monthYearStr = newCons.mes_referencia ? newCons.mes_referencia.substring(0, 7).split('-').reverse().join('_') : '';
+                                                                                const cleanSubName = (subscriber?.name || 'Cliente').normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '_').replace(/[^\w]/g, '');
+                                                                                const fileName = `Fatura_Consolidada_${cleanSubName}_${monthYearStr}.pdf`;
+                                                                                
+                                                                                await sendCombinedNotification({
+                                                                                    recipientEmail: formData.email,
+                                                                                    recipientPhone: formData.phone,
+                                                                                    subscriberName: formData.name,
+                                                                                    dueDate: new Date(newCons.due_date + 'T12:00:00').toLocaleDateString('pt-BR'),
+                                                                                    value: Number(newCons.total_value || totalToConsolidate).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+                                                                                    pdfBlob: pdfBlob,
+                                                                                    fileName: fileName,
+                                                                                    subscriberId: subscriber.id,
+                                                                                    profileId: profile?.id,
+                                                                                    isConsolidated: true,
+                                                                                    invoiceId: newCons.id
+                                                                                });
+                                                                                showAlert('Notificações consolidadas enviadas com sucesso!', 'success');
+                                                                            }
+                                                                        }
+                                                                    } else if (result.url) {
+                                                                        window.open(result.url, '_blank');
+                                                                    }
+                                                                }
+                                                            } catch (error) {
+                                                                showAlert('Erro ao gerar consolidada: ' + error.message, 'error');
+                                                            } finally {
+                                                                setGenerating(false);
+                                                            }
+                                                        }}
+                                                        style={{
+                                                            display: 'flex', alignItems: 'center', gap: '0.5rem',
+                                                            background: '#ea580c', color: 'white', border: 'none',
+                                                            padding: '0.58rem 1.15rem', borderRadius: '10px', cursor: (generating || totalToConsolidate === 0) ? 'not-allowed' : 'pointer',
+                                                            fontWeight: 700, fontSize: '0.84rem',
+                                                            opacity: (generating || totalToConsolidate === 0) ? 0.55 : 1
+                                                        }}
+                                                    >
+                                                        <CreditCard size={16} /> {generating ? 'Gerando...' : 'Emitir Fatura Consolidada'}
+                                                    </button>
+
+                                                    {showConsolidationHelp && totalToConsolidate === 0 && (
+                                                        <div style={{
+                                                            position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)', marginBottom: '10px',
+                                                            width: '250px', background: '#0f172a', color: 'white', padding: '0.9rem', borderRadius: '10px',
+                                                            fontSize: '0.78rem', zIndex: 100, boxShadow: '0 10px 15px -3px rgba(0,0,0,0.3)', pointerEvents: 'none'
+                                                        }}>
+                                                            <div style={{ fontWeight: 700, marginBottom: '0.4rem', color: '#fb923c' }}>Consolidação Indisponível</div>
+                                                            Todas as faturas visíveis já possuem boletos emitidos individualmente. Para consolidar, cancele os boletos existentes.
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            <div style={{ position: 'relative' }}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowMonthPicker(!showMonthPicker)}
+                                                    style={{
+                                                        display: 'flex', alignItems: 'center', gap: '0.5rem',
+                                                        background: '#f8fafc', color: '#0f172a', border: '1px solid #cbd5e1',
+                                                        padding: '0.55rem 1rem', borderRadius: '10px', cursor: 'pointer',
+                                                        fontWeight: 700, fontSize: '0.84rem', fontVariantNumeric: 'tabular-nums'
+                                                    }}
+                                                >
+                                                    <Calendar size={16} color="#2563eb" />
+                                                    {invoiceMonthFilter === 'all' ? 'Todas as Competências' : (() => {
+                                                        const [y, m] = invoiceMonthFilter.split('-');
+                                                        const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+                                                        return `${months[parseInt(m) - 1]} / ${y}`;
+                                                    })()}
+                                                </button>
+                                                {showMonthPicker && (
+                                                    <div style={{
+                                                        position: 'absolute', top: '100%', left: 0, marginTop: '0.5rem',
+                                                        background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px',
+                                                        boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)',
+                                                        padding: '1rem', zIndex: 100, width: '270px'
+                                                    }}>
+                                                        <div style={{ marginBottom: '0.85rem', display: 'flex', gap: '0.5rem' }}>
+                                                            <select
+                                                                value={invoiceMonthFilter === 'all' ? new Date().getMonth() + 1 : parseInt(invoiceMonthFilter.split('-')[1])}
+                                                                onChange={(e) => {
+                                                                    const currentYear = invoiceMonthFilter === 'all' ? new Date().getFullYear() : invoiceMonthFilter.split('-')[0];
+                                                                    setInvoiceMonthFilter(`${currentYear}-${String(e.target.value).padStart(2, '0')}`);
+                                                                }}
+                                                                style={{ flex: 1, padding: '0.45rem', borderRadius: '8px', border: '1px solid #cbd5e1', outline: 'none' }}
+                                                            >
+                                                                {['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'].map((m, i) => (
+                                                                    <option key={m} value={i + 1}>{m}</option>
+                                                                ))}
+                                                            </select>
+                                                            <select
+                                                                value={invoiceMonthFilter === 'all' ? new Date().getFullYear() : invoiceMonthFilter.split('-')[0]}
+                                                                onChange={(e) => {
+                                                                    const currentMonth = invoiceMonthFilter === 'all' ? String(new Date().getMonth() + 1).padStart(2, '0') : invoiceMonthFilter.split('-')[1];
+                                                                    setInvoiceMonthFilter(`${e.target.value}-${currentMonth}`);
+                                                                }}
+                                                                style={{ flex: 1, padding: '0.45rem', borderRadius: '8px', border: '1px solid #cbd5e1', outline: 'none' }}
+                                                            >
+                                                                {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() + 2 - i).map(year => (
+                                                                    <option key={year} value={year}>{year}</option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
+                                                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setInvoiceMonthFilter('all');
+                                                                    setShowMonthPicker(false);
+                                                                }}
+                                                                style={{ flex: 1, padding: '0.5rem', background: '#f1f5f9', border: 'none', borderRadius: '8px', fontSize: '0.8rem', color: '#475569', fontWeight: 700, cursor: 'pointer' }}
+                                                            >Todas as Datas</button>
+                                                            <button type="button" onClick={() => setShowMonthPicker(false)} style={{ padding: '0.5rem 0.9rem', background: '#2563eb', color: 'white', border: 'none', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer' }}>OK</button>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
 
                                 {/* Consolidated Invoices Section */}
                                 {billingMode === 'consolidada' && consolidatedInvoices.length > 0 && (
-                                    <div style={{ marginBottom: '2rem' }}>
-                                        <h4 style={{ fontSize: '0.9rem', color: '#475569', fontWeight: 'bold', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                            <FileText size={16} /> Faturas Consolidadas Emitidas
+                                    <div style={subCardStyle}>
+                                        <h4 style={{ fontSize: '0.95rem', color: '#0f172a', fontWeight: 700, margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                            <FileText size={17} color="#2563eb" /> Faturas Consolidadas Emitidas
                                         </h4>
-                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '0.75rem' }}>
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '0.85rem' }}>
                                             {consolidatedInvoices
                                                 .filter(ci => {
                                                     const status = ci.status?.toLowerCase();
@@ -2872,18 +3219,20 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
                                                 })
                                                 .map(ci => (
                                                 <div key={ci.id} style={{
-                                                    background: 'white', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '0.75rem',
+                                                    background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '0.9rem 1rem',
                                                     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                                                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)', position: 'relative'
+                                                    position: 'relative'
                                                 }}>
                                                     <div>
-                                                        <div style={{ fontSize: '0.9rem', fontWeight: 'bold', color: '#1e293b' }}>
+                                                        <div style={{ fontSize: '1rem', fontWeight: 800, color: '#0f172a', fontVariantNumeric: 'tabular-nums' }}>
                                                             {ci.total_value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                                                         </div>
-                                                        <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Vencimento: {new Date(ci.due_date + (ci.due_date.includes('T') ? '' : 'T12:00:00')).toLocaleDateString('pt-BR')}</div>
-                                                        <div style={{ marginTop: '0.3rem' }}>
+                                                        <div style={{ fontSize: '0.76rem', color: '#64748b', fontVariantNumeric: 'tabular-nums', marginTop: '0.15rem' }}>
+                                                            Vencimento: <strong>{new Date(ci.due_date + (ci.due_date.includes('T') ? '' : 'T12:00:00')).toLocaleDateString('pt-BR')}</strong>
+                                                        </div>
+                                                        <div style={{ marginTop: '0.4rem' }}>
                                                             <span style={{
-                                                                fontSize: '0.6rem', fontWeight: 800, padding: '0.1rem 0.4rem', borderRadius: '4px',
+                                                                fontSize: '0.66rem', fontWeight: 800, padding: '0.15rem 0.5rem', borderRadius: '999px',
                                                                 background: ci.status === 'paid' ? '#dcfce7' : ci.status === 'canceled' ? '#fee2e2' : '#fef9c3',
                                                                 color: ci.status === 'paid' ? '#166534' : ci.status === 'canceled' ? '#991b1b' : '#854d0e',
                                                                 textTransform: 'uppercase'
@@ -2897,16 +3246,16 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
                                                                     type="button"
                                                                     onClick={() => window.open(ci.asaas_boleto_url, '_blank')}
                                                                     title="Visualizar Boleto"
-                                                                    style={{ padding: '0.3rem', borderRadius: '6px', border: '1px solid #e0f2fe', background: '#f0f9ff', color: '#0369a1', cursor: 'pointer' }}
+                                                                    style={{ padding: '0.4rem', borderRadius: '8px', border: '1px solid #bae6fd', background: '#f0f9ff', color: '#0369a1', cursor: 'pointer' }}
                                                                 >
                                                                     <Eye size={16} />
                                                                 </button>
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => handleDownloadConsolidated(ci)}
-                                                                    title="Download PDF Consolidado (Silencioso)"
+                                                                    title="Download PDF Consolidado"
                                                                     disabled={isGeneratingPdf}
-                                                                    style={{ padding: '0.3rem', borderRadius: '6px', border: '1px solid #ffedd5', background: '#fff7ed', color: '#c2410c', cursor: 'pointer' }}
+                                                                    style={{ padding: '0.4rem', borderRadius: '8px', border: '1px solid #fed7aa', background: '#fff7ed', color: '#c2410c', cursor: 'pointer' }}
                                                                 >
                                                                     {isGeneratingPdf && consolidatedToDownload?.id === ci.id ? <Loader2 size={16} className="spin-animation" /> : <Download size={16} />}
                                                                 </button>
@@ -2915,7 +3264,7 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
                                                                     onClick={() => handleResendNotification(ci, true)}
                                                                     title="Reenviar Fatura (Email/WhatsApp)"
                                                                     disabled={isGeneratingPdf}
-                                                                    style={{ padding: '0.3rem', borderRadius: '6px', border: '1px solid #dcfce7', background: '#f0fdf4', color: '#166534', cursor: 'pointer' }}
+                                                                    style={{ padding: '0.4rem', borderRadius: '8px', border: '1px solid #bbf7d0', background: '#f0fdf4', color: '#166534', cursor: 'pointer' }}
                                                                 >
                                                                     {isGeneratingPdf && consolidatedToDownload?.id === ci.id ? <Loader2 size={16} className="spin-animation" /> : <Send size={16} />}
                                                                 </button>
@@ -2928,10 +3277,7 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
                                                                     const confirm = await showConfirm('Deseja cancelar esta fatura consolidada? O boleto no Asaas também será cancelado.', 'Cancelar Fatura Consolidada');
                                                                     if (!confirm) return;
                                                                     try {
-                                                                        // 1. Cancelar na API (Asaas + Local DB via Edge Function)
                                                                         await cancelAsaasCharge(ci.id, 'consolidated_invoice');
-
-                                                                        // 2. Liberar faturas individuais associadas (limpando também IDs do Asaas)
                                                                         const { error: unlinkError } = await supabase
                                                                             .from('invoices')
                                                                             .update({ 
@@ -2947,7 +3293,6 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
 
                                                                         await addHistory('consolidated_invoice', ci.id, 'canceled', { asaas_id: ci.asaas_payment_id, detail: 'Fatura consolidada cancelada e faturas individuais liberadas' });
                                                                         
-                                                                        // 3. Recarregar dados
                                                                         fetchConsolidatedInvoices(subscriber.id);
                                                                         fetchInvoices(subscriber.id);
                                                                         
@@ -2957,7 +3302,7 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
                                                                     }
                                                                 }}
                                                                 title="Cancelar Fatura"
-                                                                style={{ padding: '0.3rem', borderRadius: '6px', border: '1px solid #fee2e2', background: '#fef2f2', color: '#dc2626', cursor: 'pointer' }}
+                                                                style={{ padding: '0.4rem', borderRadius: '8px', border: '1px solid #fecaca', background: '#fef2f2', color: '#dc2626', cursor: 'pointer' }}
                                                             >
                                                                 <Ban size={16} />
                                                             </button>
@@ -2971,11 +3316,11 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
 
                                 {/* Faturas Individuais Section */}
                                 {billingMode === 'individualizada' && invoices.length > 0 && (
-                                    <div style={{ marginBottom: '2rem' }}>
-                                        <h4 style={{ fontSize: '0.9rem', color: '#475569', fontWeight: 'bold', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                            <FileText size={16} /> Faturas Individuais Emitidas
+                                    <div style={subCardStyle}>
+                                        <h4 style={{ fontSize: '0.95rem', color: '#0f172a', fontWeight: 700, margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                            <FileText size={17} color="#2563eb" /> Faturas Individuais Emitidas
                                         </h4>
-                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '0.75rem' }}>
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '0.85rem' }}>
                                             {invoices
                                                 .filter(inv => {
                                                     const status = inv.status?.toLowerCase();
@@ -2985,19 +3330,23 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
                                                     const ucNum = consumerUnits.find(u => u.id === inv.uc_id)?.numero_uc || 'N/A';
                                                     return (
                                                         <div key={inv.id} style={{
-                                                            background: 'white', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '0.75rem',
+                                                            background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '0.9rem 1rem',
                                                             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                                                            boxShadow: '0 1px 2px rgba(0,0,0,0.05)', position: 'relative'
+                                                            position: 'relative'
                                                         }}>
                                                             <div>
-                                                                <div style={{ fontSize: '0.9rem', fontWeight: 'bold', color: '#1e293b' }}>
+                                                                <div style={{ fontSize: '1rem', fontWeight: 800, color: '#0f172a', fontVariantNumeric: 'tabular-nums' }}>
                                                                     {Number(inv.valor_a_pagar).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                                                                 </div>
-                                                                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>UC: {ucNum}</div>
-                                                                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Vencimento: {inv.vencimento ? new Date(inv.vencimento + 'T12:00:00').toLocaleDateString('pt-BR') : 'N/A'}</div>
-                                                                <div style={{ marginTop: '0.3rem' }}>
+                                                                <div style={{ fontSize: '0.76rem', color: '#475569', fontVariantNumeric: 'tabular-nums', marginTop: '0.1rem' }}>
+                                                                    UC: <strong>{ucNum}</strong>
+                                                                </div>
+                                                                <div style={{ fontSize: '0.75rem', color: '#64748b', fontVariantNumeric: 'tabular-nums' }}>
+                                                                    Vencimento: {inv.vencimento ? new Date(inv.vencimento + 'T12:00:00').toLocaleDateString('pt-BR') : 'N/A'}
+                                                                </div>
+                                                                <div style={{ marginTop: '0.4rem' }}>
                                                                     <span style={{
-                                                                        fontSize: '0.6rem', fontWeight: 800, padding: '0.1rem 0.4rem', borderRadius: '4px',
+                                                                        fontSize: '0.66rem', fontWeight: 800, padding: '0.15rem 0.5rem', borderRadius: '999px',
                                                                         background: inv.status === 'pago' ? '#dcfce7' : inv.status === 'atrasado' ? '#fee2e2' : '#fef9c3',
                                                                         color: inv.status === 'pago' ? '#166534' : inv.status === 'atrasado' ? '#991b1b' : '#854d0e',
                                                                         textTransform: 'uppercase'
@@ -3010,7 +3359,7 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
                                                                         type="button"
                                                                         onClick={() => window.open(inv.asaas_boleto_url, '_blank')}
                                                                         title="Visualizar Boleto"
-                                                                        style={{ padding: '0.3rem', borderRadius: '6px', border: '1px solid #e0f2fe', background: '#f0f9ff', color: '#0369a1', cursor: 'pointer' }}
+                                                                        style={{ padding: '0.4rem', borderRadius: '8px', border: '1px solid #bae6fd', background: '#f0f9ff', color: '#0369a1', cursor: 'pointer' }}
                                                                     >
                                                                         <Eye size={16} />
                                                                     </button>
@@ -3020,7 +3369,7 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
                                                                     onClick={() => handleDownloadCombined(inv)}
                                                                     title="Imprimir Fatura"
                                                                     disabled={isGeneratingPdf}
-                                                                    style={{ padding: '0.3rem', borderRadius: '6px', border: '1px solid #ffedd5', background: '#fff7ed', color: '#c2410c', cursor: 'pointer' }}
+                                                                    style={{ padding: '0.4rem', borderRadius: '8px', border: '1px solid #fed7aa', background: '#fff7ed', color: '#c2410c', cursor: 'pointer' }}
                                                                 >
                                                                     {isGeneratingPdf && invoiceToDownload?.id === inv.id ? <Loader2 size={16} className="spin-animation" /> : <Printer size={16} />}
                                                                 </button>
@@ -3032,52 +3381,49 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
                                     </div>
                                 )}
                             </div>
-                        </div>
-                    )}
+                        )}
 
+                        {/* ==================== ABA: COMUNICADOS ==================== */}
                         {activeTab === 'comunicacao' && (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', paddingBottom: '1rem' }}>
+                            <div style={{ animation: 'subFadeIn 0.2s ease-out' }} className="sub-modal-grid-2">
                                 {/* Composer */}
-                                <div style={{ 
-                                    background: 'white', 
-                                    padding: '1.5rem', 
-                                    borderRadius: '12px', 
-                                    border: '1px solid #e2e8f0',
-                                    boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)'
-                                }}>
-                                    <h4 style={{ margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b' }}>
-                                        <MessageSquare size={18} color="#25D366" />
-                                        Enviar Novo Comunicado (WhatsApp)
-                                    </h4>
+                                <div style={subCardStyle}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', paddingBottom: '0.75rem', borderBottom: '1px solid #f1f5f9' }}>
+                                        <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#0f172a', fontSize: '0.98rem', fontWeight: 700 }}>
+                                            <MessageSquare size={18} color="#16a34a" /> Enviar Novo Comunicado (WhatsApp)
+                                        </h4>
+                                        {formData.phone && (
+                                            <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#15803d', background: '#dcfce7', padding: '0.18rem 0.55rem', borderRadius: '999px', fontVariantNumeric: 'tabular-nums' }}>
+                                                Destino: {formData.phone}
+                                            </span>
+                                        )}
+                                    </div>
 
                                     <textarea
+                                        className="sub-modal-input"
                                         value={manualMessage}
                                         onChange={(e) => setManualMessage(e.target.value)}
-                                        placeholder="Digite a mensagem para o assinante..."
+                                        placeholder="Digite a mensagem personalizada para enviar ao WhatsApp do assinante..."
                                         style={{
-                                            width: '100%',
-                                            height: '120px',
-                                            padding: '1rem',
-                                            border: '1px solid #cbd5e1',
-                                            borderRadius: '8px',
-                                            fontSize: '0.95rem',
-                                            outline: 'none',
+                                            ...subInputStyle,
+                                            height: '140px',
                                             resize: 'vertical',
                                             marginBottom: '1rem',
-                                            fontFamily: 'inherit'
+                                            fontFamily: 'inherit',
+                                            lineHeight: 1.5
                                         }}
                                     />
 
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.85rem' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
                                             <label style={{ 
-                                                display: 'flex', alignItems: 'center', gap: '0.5rem', 
-                                                padding: '0.5rem 1rem', background: '#f1f5f9', 
-                                                borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem',
-                                                color: '#475569', fontWeight: 600, border: '1px solid #e2e8f0'
+                                                display: 'inline-flex', alignItems: 'center', gap: '0.45rem', 
+                                                padding: '0.52rem 0.95rem', background: '#f8fafc', 
+                                                borderRadius: '8px', cursor: 'pointer', fontSize: '0.82rem',
+                                                color: '#334155', fontWeight: 700, border: '1px solid #cbd5e1'
                                             }}>
-                                                <Paperclip size={16} />
-                                                {manualFile ? 'Alterar Arquivo' : 'Anexar Arquivo'}
+                                                <Paperclip size={15} />
+                                                {manualFile ? 'Trocar Anexo' : 'Anexar Arquivo'}
                                                 <input 
                                                     type="file" 
                                                     style={{ display: 'none' }} 
@@ -3085,12 +3431,12 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
                                                 />
                                             </label>
                                             {manualFile && (
-                                                <span style={{ fontSize: '0.8rem', color: '#003366', fontWeight: 600 }}>
+                                                <span style={{ fontSize: '0.78rem', color: '#0f172a', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.4rem', background: '#f1f5f9', padding: '0.3rem 0.65rem', borderRadius: '8px' }}>
                                                     {manualFile.name} ({(manualFile.size / 1024).toFixed(0)} KB)
                                                     <button 
                                                         type="button"
                                                         onClick={() => setManualFile(null)}
-                                                        style={{ marginLeft: '0.5rem', border: 'none', background: 'none', color: '#ef4444', cursor: 'pointer' }}
+                                                        style={{ border: 'none', background: 'none', color: '#dc2626', cursor: 'pointer', display: 'inline-flex', padding: 0 }}
                                                     >
                                                         <Trash2 size={14} />
                                                     </button>
@@ -3103,26 +3449,26 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
                                             onClick={handleSendManualWA}
                                             disabled={isSendingManualWA || !manualMessage.trim()}
                                             style={{
-                                                display: 'flex', alignItems: 'center', gap: '0.6rem',
-                                                background: '#25D366', color: 'white', border: 'none',
-                                                padding: '0.6rem 1.5rem', borderRadius: '8px',
-                                                fontWeight: 'bold', cursor: (isSendingManualWA || !manualMessage.trim()) ? 'not-allowed' : 'pointer',
-                                                opacity: (isSendingManualWA || !manualMessage.trim()) ? 0.7 : 1,
-                                                boxShadow: '0 4px 6px -1px rgba(37, 211, 102, 0.4)'
+                                                display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
+                                                background: '#16a34a', color: 'white', border: 'none',
+                                                padding: '0.6rem 1.35rem', borderRadius: '10px',
+                                                fontWeight: 700, fontSize: '0.85rem',
+                                                cursor: (isSendingManualWA || !manualMessage.trim()) ? 'not-allowed' : 'pointer',
+                                                opacity: (isSendingManualWA || !manualMessage.trim()) ? 0.6 : 1
                                             }}
                                         >
-                                            {isSendingManualWA ? <Loader2 size={18} className="spin-animation" /> : <Send size={18} />}
-                                            {isSendingManualWA ? 'Enviando...' : 'Enviar Comunicado'}
+                                            {isSendingManualWA ? <Loader2 size={16} className="spin-animation" /> : <Send size={16} />}
+                                            {isSendingManualWA ? 'Enviando...' : 'Enviar WhatsApp'}
                                         </button>
                                     </div>
                                 </div>
 
                                 {/* History Section */}
-                                <div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem', paddingLeft: '0.5rem' }}>
-                                        <History size={18} color="#64748b" />
-                                        <h4 style={{ margin: 0, fontSize: '0.9rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>
-                                            Histórico de Interações
+                                <div style={subCardStyle}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem', paddingBottom: '0.75rem', borderBottom: '1px solid #f1f5f9' }}>
+                                        <History size={18} color="#2563eb" />
+                                        <h4 style={{ margin: 0, fontSize: '0.98rem', color: '#0f172a', fontWeight: 700 }}>
+                                            Histórico de Interações e Eventos
                                         </h4>
                                     </div>
                                     <HistoryTimeline
@@ -3137,39 +3483,35 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
                             </div>
                         )}
 
+                        {/* ==================== ABA: CONTRATOS ==================== */}
                         {activeTab === 'contratos' && (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', maxWidth: '800px', margin: '0 auto', paddingBottom: '1.5rem' }}>
-                                <div style={{ 
-                                    background: 'white', 
-                                    padding: '2rem', 
-                                    borderRadius: '12px', 
-                                    border: '1px solid #e2e8f0', 
-                                    boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' 
-                                }}>
-                                    <h4 style={{ margin: '0 0 1.5rem 0', display: 'flex', alignItems: 'center', gap: '0.75rem', color: '#1e293b' }}>
-                                        <FileText size={20} color="#003366" />
-                                        Novo Contrato para Assinatura
-                                    </h4>
+                            <div style={{ animation: 'subFadeIn 0.2s ease-out' }} className="sub-modal-grid-2">
+                                <div style={subCardStyle}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', paddingBottom: '0.75rem', borderBottom: '1px solid #f1f5f9' }}>
+                                        <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#0f172a', fontSize: '0.98rem', fontWeight: 700 }}>
+                                            <FileText size={18} color="#1d4ed8" /> Minuta e Emissão de Contrato (Autentique)
+                                        </h4>
+                                    </div>
 
-                                    <div style={{ marginBottom: '1.5rem', padding: '1rem', background: '#f0f9ff', borderRadius: '8px', border: '1px solid #bae6fd' }}>
-                                        <p style={{ margin: 0, fontSize: '0.85rem', color: '#0369a1', lineHeight: '1.4' }}>
+                                    <div style={{ marginBottom: '1.15rem', padding: '0.8rem 1rem', background: '#f0f9ff', borderRadius: '10px', border: '1px solid #bae6fd' }}>
+                                        <p style={{ margin: 0, fontSize: '0.8rem', color: '#0369a1', lineHeight: 1.45 }}>
                                             <Info size={14} style={{ marginRight: '0.4rem', verticalAlign: 'middle' }} />
-                                            O contrato será <strong>gerado automaticamente</strong> com os dados do assinante e as UCs vinculadas. Não é necessário anexar arquivos.
+                                            O contrato é <strong>gerado automaticamente</strong> com os dados cadastrais, endereço e UCs vinculadas.
                                         </p>
                                     </div>
 
-                                    <div style={{ marginBottom: '1.5rem' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
-                                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem', fontWeight: 600, color: '#475569', flexWrap: 'wrap' }}>
-                                                Minuta do Contrato (Para conferência)
+                                    <div style={{ marginBottom: '1.15rem' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '0.45rem' }}>
+                                            <label style={{ ...subLabelStyle, marginBottom: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                                                Minuta do Contrato (Conferência)
                                                 {minutaEditada && (
                                                     <span style={{
-                                                        display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
-                                                        padding: '0.2rem 0.6rem', borderRadius: '999px',
+                                                        display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
+                                                        padding: '0.15rem 0.55rem', borderRadius: '999px',
                                                         background: '#fffbeb', border: '1px solid #fde68a',
-                                                        color: '#92400e', fontSize: '0.72rem', fontWeight: 700
+                                                        color: '#92400e', fontSize: '0.68rem', fontWeight: 700, textTransform: 'none'
                                                     }}>
-                                                        <AlertCircle size={13} /> editada à mão — não acompanha o cadastro
+                                                        <AlertCircle size={12} /> Editada manualmente
                                                     </span>
                                                 )}
                                             </label>
@@ -3177,54 +3519,38 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
                                                 <button
                                                     type="button"
                                                     onClick={() => setContractDraft(textoGeradoAssinante)}
-                                                    style={{ padding: '0.45rem 0.8rem', background: 'white', color: '#92400e', border: '1px solid #fde68a', borderRadius: '8px', fontWeight: 600, cursor: 'pointer', fontSize: '0.8rem' }}
+                                                    style={{ padding: '0.32rem 0.7rem', background: '#ffffff', color: '#92400e', border: '1px solid #fde68a', borderRadius: '6px', fontWeight: 700, cursor: 'pointer', fontSize: '0.74rem' }}
                                                 >
-                                                    Descartar edições
+                                                    Restaurar padrão
                                                 </button>
                                             )}
                                         </div>
                                         <textarea
+                                            className="sub-modal-input"
                                             value={contractDraft}
                                             onChange={(e) => setContractDraft(e.target.value)}
                                             placeholder="A minuta será gerada automaticamente..."
                                             style={{
-                                                width: '100%',
-                                                height: '250px',
-                                                padding: '1rem',
-                                                border: '1px solid #cbd5e1',
-                                                borderRadius: '8px',
-                                                fontSize: '0.9rem',
-                                                lineHeight: '1.5',
-                                                outline: 'none',
+                                                ...subInputStyle,
+                                                height: '240px',
+                                                fontSize: '0.84rem',
+                                                lineHeight: 1.5,
                                                 resize: 'vertical',
-                                                transition: 'border-color 0.2s',
-                                                fontFamily: 'monospace',
-                                                background: '#f8fafc'
+                                                fontFamily: 'monospace'
                                             }}
-                                            onFocus={(e) => e.target.style.borderColor = '#003366'}
-                                            onBlur={(e) => e.target.style.borderColor = '#cbd5e1'}
                                         />
                                     </div>
 
-                                    <div style={{ marginBottom: '1.5rem' }}>
-                                        <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600, color: '#475569', marginBottom: '0.5rem' }}>
-                                            Link de Assinatura (Autentique)
-                                        </label>
+                                    <div style={{ marginBottom: '1.25rem' }}>
+                                        <label style={subLabelStyle}>Link de Assinatura Digital (Autentique)</label>
                                         <div style={{ display: 'flex', gap: '0.5rem' }}>
                                             <input
+                                                className="sub-modal-input"
                                                 type="text"
                                                 value={signatureLink}
                                                 onChange={(e) => setSignatureLink(e.target.value)}
                                                 placeholder="Link será exibido aqui após geração..."
-                                                style={{
-                                                    flex: 1,
-                                                    padding: '0.75rem',
-                                                    border: '1px solid #cbd5e1',
-                                                    borderRadius: '8px',
-                                                    fontSize: '0.95rem',
-                                                    outline: 'none',
-                                                    background: '#ffffff'
-                                                }}
+                                                style={{ ...subInputStyle, flex: 1, background: '#ffffff' }}
                                             />
                                             {signatureLink && (
                                                 <button
@@ -3234,21 +3560,24 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
                                                         showAlert('Link copiado!', 'success');
                                                     }}
                                                     style={{
-                                                        padding: '0.75rem',
-                                                        background: '#f1f5f9',
+                                                        padding: '0 0.85rem',
+                                                        background: '#f8fafc',
                                                         border: '1px solid #cbd5e1',
-                                                        borderRadius: '8px',
-                                                        cursor: 'pointer'
+                                                        borderRadius: '10px',
+                                                        cursor: 'pointer',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '0.35rem',
+                                                        fontWeight: 700,
+                                                        fontSize: '0.78rem',
+                                                        color: '#334155'
                                                     }}
                                                     title="Copiar Link"
                                                 >
-                                                    <Copy size={18} color="#475569" />
+                                                    <Copy size={15} /> Copiar
                                                 </button>
                                             )}
                                         </div>
-                                        <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.5rem' }}>
-                                            Este link é salvo automaticamente para facilitar reenvios futuros.
-                                        </p>
                                     </div>
 
                                     <button
@@ -3257,81 +3586,79 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
                                         disabled={isCreatingContract || !subscriber?.id}
                                         style={{
                                             width: '100%',
-                                            padding: '0.8rem',
-                                            background: isCreatingContract ? '#f1f5f9' : '#003366',
-                                            color: isCreatingContract ? '#94a3b8' : 'white',
+                                            padding: '0.75rem 1rem',
+                                            background: isCreatingContract ? '#f1f5f9' : '#0f172a',
+                                            color: isCreatingContract ? '#94a3b8' : '#ffffff',
                                             border: 'none',
-                                            borderRadius: '8px',
+                                            borderRadius: '10px',
                                             fontWeight: 700,
-                                            cursor: isCreatingContract ? 'not-allowed' : 'pointer',
+                                            fontSize: '0.86rem',
+                                            cursor: (isCreatingContract || !subscriber?.id) ? 'not-allowed' : 'pointer',
                                             display: 'flex',
                                             alignItems: 'center',
                                             justifyContent: 'center',
-                                            gap: '0.75rem',
-                                            transition: 'all 0.2s',
-                                            boxShadow: isCreatingContract ? 'none' : '0 4px 12px rgba(0, 51, 102, 0.2)'
+                                            gap: '0.6rem',
+                                            transition: 'all 0.15s'
                                         }}
                                     >
-                                        {isCreatingContract ? <Loader2 size={20} className="spin-animation" /> : <Send size={20} />}
+                                        {isCreatingContract ? <Loader2 size={18} className="spin-animation" /> : <Send size={18} />}
                                         {isCreatingContract ? 'Gerando e Enviando...' : 'Gerar e Enviar para Assinatura Eletrônica'}
                                     </button>
                                 </div>
 
                                 {/* Histórico de Contratos */}
-                                <div style={{ 
-                                    background: 'white', 
-                                    padding: '2rem', 
-                                    borderRadius: '12px', 
-                                    border: '1px solid #e2e8f0' 
-                                }}>
-                                    <h4 style={{ margin: '0 0 1.5rem 0', fontSize: '1rem', color: '#1e293b', fontWeight: 700 }}>
-                                        Histórico de Assinaturas
-                                    </h4>
+                                <div style={subCardStyle}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', paddingBottom: '0.75rem', borderBottom: '1px solid #f1f5f9' }}>
+                                        <h4 style={{ margin: 0, fontSize: '0.98rem', color: '#0f172a', fontWeight: 700 }}>
+                                            Histórico de Assinaturas Eletrônicas
+                                        </h4>
+                                        <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#475569', background: '#f1f5f9', padding: '0.15rem 0.55rem', borderRadius: '999px', fontVariantNumeric: 'tabular-nums' }}>
+                                            {signatures.length} {signatures.length === 1 ? 'documento' : 'documentos'}
+                                        </span>
+                                    </div>
                                     
                                     {loadingSignatures ? (
-                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '2rem', gap: '0.5rem' }}>
-                                            <Loader2 size={32} className="spin-animation" color="#003366" />
-                                            <span style={{ fontSize: '0.9rem', color: '#64748b' }}>Carregando histórico...</span>
+                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '2.5rem', gap: '0.5rem' }}>
+                                            <Loader2 size={28} className="spin-animation" color="#2563eb" />
+                                            <span style={{ fontSize: '0.85rem', color: '#64748b' }}>Carregando histórico...</span>
                                         </div>
                                     ) : signatures.length > 0 ? (
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
                                             {signatures.map(sig => (
                                                 <div key={sig.id} style={{
-                                                    padding: '1.25rem',
-                                                    border: '1px solid #f1f5f9',
-                                                    borderRadius: '10px',
+                                                    padding: '1rem 1.15rem',
+                                                    border: '1px solid #e2e8f0',
+                                                    borderRadius: '12px',
                                                     display: 'flex',
                                                     justifyContent: 'space-between',
                                                     alignItems: 'center',
-                                                    background: '#f8fafc',
-                                                    transition: 'transform 0.2s'
+                                                    gap: '0.75rem',
+                                                    background: '#f8fafc'
                                                 }}>
-                                                    <div style={{ flex: 1 }}>
-                                                        <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#1e293b', marginBottom: '0.25rem' }}>
+                                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                                        <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#0f172a', marginBottom: '0.25rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                             {sig.document_name}
                                                         </div>
-                                                        <div style={{ fontSize: '0.8rem', color: '#64748b', display: 'flex', gap: '1rem' }}>
-                                                            <span>📅 {new Date(sig.created_at).toLocaleDateString('pt-BR')}</span>
-                                                            <span>⏰ {new Date(sig.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                                                        <div style={{ fontSize: '0.76rem', color: '#64748b', display: 'flex', gap: '0.85rem', fontVariantNumeric: 'tabular-nums' }}>
+                                                            <span>Data: {new Date(sig.created_at).toLocaleDateString('pt-BR')}</span>
+                                                            <span>Hora: {new Date(sig.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
                                                         </div>
-                                                        <div style={{ marginTop: '0.75rem' }}>
+                                                        <div style={{ marginTop: '0.6rem' }}>
                                                             <select
                                                                 value={sig.status}
                                                                 onChange={(e) => handleUpdateSignatureStatus(sig.id, e.target.value)}
                                                                 style={{
-                                                                    fontSize: '0.7rem',
+                                                                    fontSize: '0.68rem',
                                                                     fontWeight: 800,
-                                                                    padding: '0.25rem 0.75rem',
-                                                                    borderRadius: '20px',
+                                                                    padding: '0.22rem 0.65rem',
+                                                                    borderRadius: '999px',
                                                                     background: (sig.status === 'signed' || sig.status === 'CLOSED') ? '#dcfce7' : sig.status === 'rejected' ? '#fee2e2' : sig.status === 'created' ? '#dbeafe' : '#fef9c3',
                                                                     color: (sig.status === 'signed' || sig.status === 'CLOSED') ? '#166534' : sig.status === 'rejected' ? '#991b1b' : sig.status === 'created' ? '#1e40af' : '#854d0e',
                                                                     border: `1px solid ${(sig.status === 'signed' || sig.status === 'CLOSED') ? '#bbf7d0' : sig.status === 'rejected' ? '#fecaca' : sig.status === 'created' ? '#bfdbfe' : '#fef08a'}`,
                                                                     textTransform: 'uppercase',
-                                                                    letterSpacing: '0.05em',
+                                                                    letterSpacing: '0.04em',
                                                                     cursor: 'pointer',
-                                                                    outline: 'none',
-                                                                    appearance: 'none',
-                                                                    textAlign: 'center'
+                                                                    outline: 'none'
                                                                 }}
                                                             >
                                                                 <option value="pending">Pendente</option>
@@ -3341,42 +3668,22 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
                                                             </select>
                                                         </div>
                                                     </div>
-                                                    <div style={{ display: 'flex', gap: '0.6rem' }}>
+                                                    <div style={{ display: 'flex', gap: '0.45rem' }}>
                                                         <button
                                                             type="button"
                                                             onClick={() => window.open(sig.autentique_url, '_blank')}
                                                             title="Ver no Autentique"
-                                                            style={{
-                                                                padding: '0.6rem',
-                                                                borderRadius: '8px',
-                                                                border: '1px solid #e2e8f0',
-                                                                background: 'white',
-                                                                color: '#64748b',
-                                                                cursor: 'pointer',
-                                                                transition: 'all 0.2s'
-                                                            }}
-                                                            onMouseOver={e => { e.currentTarget.style.backgroundColor = '#f8fafc'; e.currentTarget.style.borderColor = '#cbd5e1' }}
-                                                            onMouseOut={e => { e.currentTarget.style.backgroundColor = 'white'; e.currentTarget.style.borderColor = '#e2e8f0' }}
+                                                            style={{ padding: '0.5rem', borderRadius: '8px', border: '1px solid #cbd5e1', background: 'white', color: '#475569', cursor: 'pointer' }}
                                                         >
-                                                            <Eye size={18} />
+                                                            <Eye size={16} />
                                                         </button>
                                                         <button
                                                             type="button"
                                                             onClick={() => handleResendContractLink(sig)}
                                                             title="Reenviar Links (WhatsApp/Email)"
-                                                            style={{
-                                                                padding: '0.6rem',
-                                                                borderRadius: '8px',
-                                                                border: '1px solid #dcfce7',
-                                                                background: '#f0fdf4',
-                                                                color: '#166534',
-                                                                cursor: 'pointer',
-                                                                transition: 'all 0.2s'
-                                                            }}
-                                                            onMouseOver={e => { e.currentTarget.style.backgroundColor = '#dcfce7' }}
-                                                            onMouseOut={e => { e.currentTarget.style.backgroundColor = '#f0fdf4' }}
+                                                            style={{ padding: '0.5rem', borderRadius: '8px', border: '1px solid #bbf7d0', background: '#f0fdf4', color: '#166534', cursor: 'pointer' }}
                                                         >
-                                                            <RefreshCw size={18} />
+                                                            <RefreshCw size={16} />
                                                         </button>
                                                         {sig.status === 'pending' && (
                                                             <button
@@ -3384,19 +3691,9 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
                                                                 disabled={cancelingSignature === sig.id}
                                                                 onClick={() => handleCancelContract(sig)}
                                                                 title="Cancelar na Autentique e invalidar o link"
-                                                                style={{
-                                                                    padding: '0.6rem',
-                                                                    borderRadius: '8px',
-                                                                    border: '1px solid #fecaca',
-                                                                    background: '#fef2f2',
-                                                                    color: '#b91c1c',
-                                                                    cursor: cancelingSignature === sig.id ? 'not-allowed' : 'pointer',
-                                                                    transition: 'all 0.2s'
-                                                                }}
+                                                                style={{ padding: '0.5rem', borderRadius: '8px', border: '1px solid #fecaca', background: '#fef2f2', color: '#b91c1c', cursor: cancelingSignature === sig.id ? 'not-allowed' : 'pointer' }}
                                                             >
-                                                                {cancelingSignature === sig.id
-                                                                    ? <Loader2 size={18} className="spin-animation" />
-                                                                    : <Ban size={18} />}
+                                                                {cancelingSignature === sig.id ? <Loader2 size={16} className="spin-animation" /> : <Ban size={16} />}
                                                             </button>
                                                         )}
                                                     </div>
@@ -3406,39 +3703,35 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
                                     ) : (
                                         <div style={{ 
                                             textAlign: 'center', 
-                                            color: '#94a3b8', 
-                                            padding: '3rem 2rem', 
-                                            border: '2px dashed #f1f5f9', 
+                                            color: '#64748b', 
+                                            padding: '2.5rem 1.5rem', 
+                                            border: '1px dashed #cbd5e1', 
                                             borderRadius: '12px',
-                                            display: 'flex',
-                                            flexDirection: 'column',
-                                            alignItems: 'center',
-                                            gap: '1rem'
+                                            background: '#f8fafc'
                                         }}>
-                                            <FileText size={48} style={{ opacity: 0.2 }} />
-                                            <div>
-                                                <p style={{ margin: 0, fontWeight: 600 }}>Nenhum contrato enviado ainda.</p>
-                                                <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.85rem' }}>Os documentos enviados via Autentique aparecerão aqui.</p>
-                                            </div>
+                                            <FileText size={36} color="#94a3b8" style={{ marginBottom: '0.5rem' }} />
+                                            <p style={{ margin: 0, fontWeight: 700, color: '#334155', fontSize: '0.9rem' }}>Nenhum contrato enviado ainda</p>
+                                            <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.8rem' }}>Os documentos enviados via Autentique aparecerão listados aqui.</p>
                                         </div>
                                     )}
                                 </div>
                             </div>
                         )}
 
+                        {/* ==================== ABA: DOCUMENTOS ==================== */}
                         {activeTab === 'documentos' && (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', maxWidth: '800px', margin: '0 auto', paddingBottom: '1.5rem' }}>
-                                <div style={{
-                                    background: 'white',
-                                    padding: '2rem',
-                                    borderRadius: '12px',
-                                    border: '1px solid #e2e8f0',
-                                    boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)'
-                                }}>
-                                    <h4 style={{ margin: '0 0 1.5rem 0', display: 'flex', alignItems: 'center', gap: '0.75rem', color: '#1e293b' }}>
-                                        <Paperclip size={20} color="#8b5cf6" />
-                                        Documentos do Assinante
-                                    </h4>
+                            <div style={{ animation: 'subFadeIn 0.2s ease-out' }}>
+                                <div style={subCardStyle}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.15rem', paddingBottom: '0.75rem', borderBottom: '1px solid #f1f5f9' }}>
+                                        <div>
+                                            <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#0f172a', fontSize: '0.98rem', fontWeight: 700 }}>
+                                                <Paperclip size={18} color="#7c3aed" /> Dossiê e Documentos do Assinante
+                                            </h4>
+                                            <p style={{ margin: '0.2rem 0 0', fontSize: '0.78rem', color: '#64748b' }}>
+                                                Documentos pessoais, societários, procurações e contas de energia anexadas.
+                                            </p>
+                                        </div>
+                                    </div>
                                     {subscriber?.id ? (
                                         <DocumentosAssinante
                                             subscriberId={subscriber.id}
@@ -3454,38 +3747,83 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
                                 </div>
                             </div>
                         )}
+                    </div>
 
-
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '2rem', padding: '1rem 0', borderTop: '1px solid #eee', alignItems: 'center' }}>
-                            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-                                {subscriber?.id && (
-                                    <ConvidarAppButton tipo="subscriber" id={subscriber.id} nome={subscriber.name} />
-                                )}
-                                {subscriber && onDelete && (
-                                    <button type="button" onClick={handleDelete} style={{ padding: '0.6rem 1.25rem', background: '#fee2e2', color: '#dc2626', borderRadius: '6px', border: '1px solid #fecaca', fontWeight: 600 }}>
-                                        Excluir
-                                    </button>
-                                )}
-                                <button type="button" onClick={onClose} style={{ padding: '0.6rem 1.25rem', background: '#f1f5f9', color: '#475569', borderRadius: '6px', border: '1px solid #e2e8f0', fontWeight: 600 }}>Cancelar</button>
+                    {/* Pinned Modal Footer */}
+                    <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: '1rem 1.75rem',
+                        background: '#ffffff',
+                        borderTop: '1px solid #e2e8f0',
+                        flexShrink: 0,
+                        gap: '1rem',
+                        flexWrap: 'wrap'
+                    }}>
+                        <div>
+                            {subscriber && onDelete && (
                                 <button
-                                    type="submit"
-                                    disabled={loading}
+                                    type="button"
+                                    onClick={handleDelete}
                                     style={{
-                                        padding: '0.6rem 1.25rem',
-                                        background: 'var(--color-blue)',
-                                        color: 'white',
-                                        borderRadius: '6px',
-                                        fontWeight: 600,
-                                        border: 'none',
-                                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '0.4rem',
+                                        padding: '0.62rem 1.15rem',
+                                        background: '#fef2f2',
+                                        color: '#dc2626',
+                                        borderRadius: '10px',
+                                        border: '1px solid #fecaca',
+                                        fontWeight: 700,
+                                        fontSize: '0.84rem',
+                                        cursor: 'pointer'
                                     }}
                                 >
-                                    {loading ? 'Salvando...' : 'Salvar Assinante'}
+                                    <Trash2 size={15} /> Excluir Assinante
                                 </button>
-                            </div>
+                            )}
                         </div>
-                    </form>
-                </div>
+                        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                            {subscriber?.id && (
+                                <ConvidarAppButton tipo="subscriber" id={subscriber.id} nome={subscriber.name} style={{ borderRadius: '10px', padding: '0.62rem 1.1rem', fontSize: '0.84rem' }} />
+                            )}
+                            <button
+                                type="button"
+                                onClick={onClose}
+                                style={{
+                                    padding: '0.62rem 1.25rem',
+                                    background: '#ffffff',
+                                    color: '#475569',
+                                    borderRadius: '10px',
+                                    border: '1px solid #cbd5e1',
+                                    fontWeight: 700,
+                                    fontSize: '0.84rem',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="submit"
+                                disabled={loading}
+                                style={{
+                                    padding: '0.62rem 1.5rem',
+                                    background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+                                    color: 'white',
+                                    borderRadius: '10px',
+                                    fontWeight: 700,
+                                    fontSize: '0.86rem',
+                                    border: 'none',
+                                    cursor: loading ? 'not-allowed' : 'pointer',
+                                    boxShadow: '0 4px 12px rgba(37, 99, 235, 0.25)'
+                                }}
+                            >
+                                {loading ? 'Salvando...' : 'Salvar Assinante'}
+                            </button>
+                        </div>
+                    </div>
+                </form>
             </div>
 
             {showHistory && subscriber && (
