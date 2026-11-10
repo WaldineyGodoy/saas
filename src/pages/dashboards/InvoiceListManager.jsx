@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 import { valorDoCodigoDeBarras } from '../../lib/codigoBarras';
 import { createAsaasCharge } from '../../lib/api';
@@ -36,9 +36,82 @@ let pageSessionState = {
         statusFaturaFilter: '',
         sortBy: 'ref_desc',
         filterCriterion: 'vencimento',
-        readingStatusFilter: ''
+        readingStatusFilter: '',
+        readingDateFrom: '',
+        readingDateTo: ''
     },
     activeTab: null
+};
+
+// Formata entrada para D/M/A (DD/MM/AAAA)
+const formatDmaInput = (raw) => {
+    const trimmed = String(raw || '').trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+        const [y, m, d] = trimmed.split('-');
+        return `${d}/${m}/${y}`;
+    }
+    const digits = trimmed.replace(/\D/g, '').slice(0, 8);
+    if (digits.length <= 2) return digits;
+    if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+    return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4, 8)}`;
+};
+
+// Converte string D/M/A (DD/MM/AAAA) para YYYY-MM-DD (somente quando completa e válida)
+const parseDmaToIso = (dmaStr) => {
+    if (!dmaStr) return '';
+    const trimmed = String(dmaStr).trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+    const m = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (!m) return '';
+    const d = Number(m[1]);
+    const mo = Number(m[2]);
+    const y = Number(m[3]);
+    if (mo < 1 || mo > 12 || d < 1 || d > 31 || y < 1900 || y > 2100) return '';
+    return `${String(y).padStart(4, '0')}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+};
+
+const isoToDma = (isoStr) => {
+    if (!isoStr || !/^\d{4}-\d{2}-\d{2}/.test(isoStr)) return '';
+    const [y, m, d] = isoStr.split('T')[0].split('-');
+    return `${d}/${m}/${y}`;
+};
+
+const normalizeReadingDateToIso = (dateStr) => {
+    if (!dateStr) return '';
+    const raw = String(dateStr).trim().split('T')[0];
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+    return parseDmaToIso(raw);
+};
+
+const normalizarTextoBusca = (str) =>
+    String(str || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[-_]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+const usinaCasaComBusca = (nomeUsina, termo) => {
+    const uNorm = normalizarTextoBusca(nomeUsina);
+    const tNorm = normalizarTextoBusca(termo);
+    if (!uNorm || !tNorm) return false;
+
+    const idx = uNorm.indexOf(tNorm);
+    if (idx === -1) return false;
+
+    // Quando o termo termina com algarismo romano (ex: "UFV Bom Jesus I", "Santa Maria I")
+    // ou número, exige limite de palavra para não confundir "I" com "II" / "III".
+    const tokens = tNorm.split(' ');
+    const lastToken = tokens[tokens.length - 1];
+    if (/^(i|ii|iii|iv|v|vi|vii|viii|ix|x|\d+)$/.test(lastToken)) {
+        const afterIdx = idx + tNorm.length;
+        const nextChar = uNorm[afterIdx];
+        if (nextChar && /[a-z0-9]/.test(nextChar)) {
+            return false;
+        }
+    }
+    return true;
 };
 
 // O cadastro guarda o numero da UC so com digitos (a Neoenergia passou ao formato
@@ -171,7 +244,13 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
     const [monthFilter, setMonthFilter] = useState(() => savedState.monthFilter || new Date().toISOString().substring(0, 7));
     const [statusFilter, setStatusFilter] = useState(() => savedState.statusFilter || '');
     const [statusFaturaFilter, setStatusFaturaFilter] = useState(() => savedState.statusFaturaFilter || '');
+    const [readingDateFrom, setReadingDateFrom] = useState(() => savedState.readingDateFrom || '');
+    const [readingDateTo, setReadingDateTo] = useState(() => savedState.readingDateTo || '');
     const [searchTerm, setSearchTerm] = useState('');
+    const [showUsinaSuggestions, setShowUsinaSuggestions] = useState(false);
+    const readingFromPickerRef = useRef(null);
+    const readingToPickerRef = useRef(null);
+    const searchContainerRef = useRef(null);
     const [generatingId, setGeneratingId] = useState(null);
     const [showMonthPicker, setShowMonthPicker] = useState(false);
     const [showTooltip, setShowTooltip] = useState(false);
@@ -240,6 +319,8 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
             if (saved.sortBy) setSortBy(saved.sortBy);
             if (saved.filterCriterion) setFilterCriterion(saved.filterCriterion);
             if (saved.readingStatusFilter !== undefined) setReadingStatusFilter(saved.readingStatusFilter);
+            setReadingDateFrom(saved.readingDateFrom || '');
+            setReadingDateTo(saved.readingDateTo || '');
         }
     }, [initialTab]);
 
@@ -255,8 +336,10 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
         pageSessionState[activeTab].sortBy = sortBy;
         pageSessionState[activeTab].filterCriterion = filterCriterion;
         pageSessionState[activeTab].readingStatusFilter = readingStatusFilter;
+        pageSessionState[activeTab].readingDateFrom = readingDateFrom;
+        pageSessionState[activeTab].readingDateTo = readingDateTo;
         pageSessionState.activeTab = activeTab;
-    }, [viewMode, monthFilter, statusFilter, statusFaturaFilter, sortBy, filterCriterion, readingStatusFilter, activeTab]);
+    }, [viewMode, monthFilter, statusFilter, statusFaturaFilter, sortBy, filterCriterion, readingStatusFilter, readingDateFrom, readingDateTo, activeTab]);
 
     const handleTabChange = (tab) => {
         setActiveTab(tab);
@@ -287,6 +370,8 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
         if (saved.sortBy) setSortBy(saved.sortBy);
         if (saved.filterCriterion) setFilterCriterion(saved.filterCriterion);
         if (saved.readingStatusFilter !== undefined) setReadingStatusFilter(saved.readingStatusFilter);
+        setReadingDateFrom(saved.readingDateFrom || '');
+        setReadingDateTo(saved.readingDateTo || '');
     };
 
     const getAnteriorLeitura = (currentInvoice) => {
@@ -313,6 +398,61 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
         }
         
         return '-';
+    };
+
+    // Lista de Usinas disponíveis para busca/filtro
+    const availableUsinas = Array.from(
+        new Set(
+            [
+                ...invoices.map(inv => inv.consumer_units?.usinas?.name),
+                ...ucs.map(u => u.usinas?.name)
+            ].filter(Boolean)
+        )
+    ).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+
+    const readingFromIso = parseDmaToIso(readingDateFrom);
+    const readingToIso = parseDmaToIso(readingDateTo);
+
+    const matchesReadingDatePeriod = (inv) => {
+        if (activeTab !== 'contas_energia') return true;
+        if (!readingFromIso && !readingToIso) return true;
+        const invLeituraIso = normalizeReadingDateToIso(inv?.data_leitura);
+        if (!invLeituraIso) return false;
+        if (readingFromIso && invLeituraIso < readingFromIso) return false;
+        if (readingToIso && invLeituraIso > readingToIso) return false;
+        return true;
+    };
+
+    const matchesSearchFilter = (inv) => {
+        if (!searchTerm || !searchTerm.trim()) return true;
+        const cu = inv?.consumer_units || inv;
+        const usinaName = cu?.usinas?.name || '';
+
+        // Quando o termo pesquisado casa com uma Usina cadastrada,
+        // exibe somente as contas vinculadas à usina pesquisada.
+        const matchingUsinas = availableUsinas.filter(uName => usinaCasaComBusca(uName, searchTerm));
+        if (matchingUsinas.length > 0) {
+            return Boolean(usinaName && usinaCasaComBusca(usinaName, searchTerm));
+        }
+
+        if (usinaName && usinaCasaComBusca(usinaName, searchTerm)) {
+            return true;
+        }
+
+        const lower = searchTerm.toLowerCase().trim();
+        const titular = cu?.titular_conta?.toLowerCase() || '';
+        const titularFatura = cu?.titular_fatura?.name?.toLowerCase() || '';
+        const assinante = (getDisplayName(inv) || '').toLowerCase();
+        const ucNumero = cu?.numero_uc || '';
+        const invoiceId = inv?.id?.toLowerCase() || '';
+
+        return (
+            titular.includes(lower) ||
+            titularFatura.includes(lower) ||
+            assinante.includes(lower) ||
+            ucCasaComBusca(ucNumero, searchTerm) ||
+            invoiceId.includes(lower)
+        );
     };
 
     const filteredInvoices = invoices.filter(inv => {
@@ -348,6 +488,8 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
             // Contas 'sem_faturamento' (apenas operacionais) devem aparecer aqui, pois são contas da concessionária.
             // if (inv.status === 'sem_faturamento') return false;
 
+            if (!matchesReadingDatePeriod(inv)) return false;
+
             if (statusFilter) {
                 const resolvedStatus = resolveEnergyStatus(inv);
                 if (!energyStatusMatchesFilter(resolvedStatus, statusFilter)) return false;
@@ -358,16 +500,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
             }
         }
 
-        if (searchTerm) {
-            const lower = searchTerm.toLowerCase();
-            const titular = inv.consumer_units?.titular_conta?.toLowerCase() || '';
-            const assinante = (getDisplayName(inv) || '').toLowerCase();
-            const ucNumero = inv.consumer_units?.numero_uc || '';
-            const invoiceId = inv.id?.toLowerCase() || '';
-            if (!titular.includes(lower) && !assinante.includes(lower) && !ucCasaComBusca(ucNumero, searchTerm) && !invoiceId.includes(lower)) {
-                return false;
-            }
-        }
+        if (!matchesSearchFilter(inv)) return false;
         return true;
     });
 
@@ -799,18 +932,10 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
             if (valPagar <= 0 && valConcessionaria <= 0) return false;
         } else {
             if (!['auto_consumo_remoto', 'geracao_compartilhada'].includes(inv.consumer_units?.modalidade)) return false;
+            if (!matchesReadingDatePeriod(inv)) return false;
         }
 
-        if (searchTerm) {
-            const lower = searchTerm.toLowerCase();
-            const titular = inv.consumer_units?.titular_conta?.toLowerCase() || '';
-            const assinante = (getDisplayName(inv) || '').toLowerCase();
-            const ucNumero = inv.consumer_units?.numero_uc || '';
-            const invoiceId = inv.id?.toLowerCase() || '';
-            if (!titular.includes(lower) && !assinante.includes(lower) && !ucCasaComBusca(ucNumero, searchTerm) && !invoiceId.includes(lower)) {
-                return false;
-            }
-        }
+        if (!matchesSearchFilter(inv)) return false;
         return true;
     });
 
@@ -849,6 +974,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                         concessionaria,
                         modalidade,
                         tipo_unidade,
+                        usina_id,
                         fatura_consumo_terceiro,
                         status,
                         dia_vencimento,
@@ -858,7 +984,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                         address,
                         subscribers!consumer_units_subscriber_id_fkey(id, name, email, phone, cpf_cnpj),
                         titular_fatura:subscribers!consumer_units_titular_fatura_id_fkey(id, name, email, phone, cpf_cnpj),
-                        usinas!consumer_units_usina_id_fkey(name),
+                        usinas!consumer_units_usina_id_fkey(id, name),
                         suppliers!consumer_units_supplier_id_fkey(name)
                     )
                 `);
@@ -921,11 +1047,13 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
         const { data, error } = await supabase
             .from('consumer_units')
             .select(`
-                id, numero_uc, concessionaria, titular_conta, 
+                id, numero_uc, concessionaria, titular_conta, tipo_unidade, usina_id,
                 tarifa_concessionaria, desconto_assinante, tipo_ligacao, dia_vencimento,
                 status, dia_leitura, created_at, last_scraping_status,
                 subscribers!consumer_units_subscriber_id_fkey(name, cpf_cnpj),
-                titular_fatura:subscribers!consumer_units_titular_fatura_id_fkey(name, cpf_cnpj)
+                titular_fatura:subscribers!consumer_units_titular_fatura_id_fkey(name, cpf_cnpj),
+                usinas!consumer_units_usina_id_fkey(id, name),
+                suppliers!consumer_units_supplier_id_fkey(name)
             `)
             .in('status', ['aguardando_conexao', 'ativo', 'sem_geracao', 'em_atraso', 'desconectado', 'desligado_por_tt'])
             .order('titular_conta');
@@ -1859,6 +1987,16 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
         ? sortedInvoices.reduce((sum, inv) => sum + (inv.parent_invoice_id ? 0 : (Number(inv.valor_a_pagar) || 0)), 0)
         : sortedInvoices.reduce((sum, inv) => sum + getEnergyBillValue(inv), 0);
 
+    const currentTotalConsumo = sortedInvoices.reduce((sum, inv) => sum + (Number(inv.consumo_kwh) || 0), 0);
+    const currentTotalCompensado = sortedInvoices.reduce((sum, inv) => sum + (Number(inv.consumo_compensado) || 0), 0);
+
+    const filteredUsinaSuggestions = availableUsinas.filter(uName =>
+        !searchTerm.trim() || usinaCasaComBusca(uName, searchTerm)
+    );
+    const activeMatchedUsina = searchTerm.trim()
+        ? availableUsinas.find(uName => normalizarTextoBusca(uName) === normalizarTextoBusca(searchTerm))
+        : null;
+
     return (
         <div style={{ padding: '0 2rem 2rem 2rem', maxWidth: '1600px', margin: '0 auto', width: '100%' }}>
             {activeInfoTab && (
@@ -2172,6 +2310,144 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                             </>
                         )}
 
+                        {activeTab === 'contas_energia' && (
+                            <>
+                                <div style={{ width: '1px', height: '18px', background: '#e2e8f0' }}></div>
+                                {/* Filtro Período de Leitura (De / Até em D/M/A) */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontVariantNumeric: 'tabular-nums' }}>
+                                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', whiteSpace: 'nowrap' }}>Leitura:</span>
+                                    <div style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '0.28rem',
+                                        background: readingDateFrom ? '#eff6ff' : '#f8fafc',
+                                        border: readingDateFrom ? '1px solid #93c5fd' : '1px solid #e2e8f0',
+                                        borderRadius: '6px',
+                                        padding: '0.2rem 0.45rem',
+                                        position: 'relative'
+                                    }}>
+                                        <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>De</span>
+                                        <input
+                                            type="text"
+                                            inputMode="numeric"
+                                            placeholder="dd/mm/aaaa"
+                                            maxLength={10}
+                                            value={readingDateFrom}
+                                            onChange={e => setReadingDateFrom(formatDmaInput(e.target.value))}
+                                            style={{
+                                                border: 'none',
+                                                background: 'transparent',
+                                                outline: 'none',
+                                                fontSize: '0.76rem',
+                                                fontWeight: 600,
+                                                color: '#0f172a',
+                                                width: '76px',
+                                                padding: '0.08rem 0',
+                                                fontVariantNumeric: 'tabular-nums'
+                                            }}
+                                            title="Data inicial da leitura atual (Dia/Mês/Ano)"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                if (readingFromPickerRef.current?.showPicker) {
+                                                    readingFromPickerRef.current.showPicker();
+                                                } else {
+                                                    readingFromPickerRef.current?.focus();
+                                                }
+                                            }}
+                                            style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: '#64748b', display: 'inline-flex', alignItems: 'center' }}
+                                            title="Selecionar data inicial no calendário"
+                                        >
+                                            <CalendarIcon size={12} />
+                                        </button>
+                                        <input
+                                            ref={readingFromPickerRef}
+                                            type="date"
+                                            value={readingFromIso}
+                                            onChange={e => setReadingDateFrom(isoToDma(e.target.value))}
+                                            tabIndex={-1}
+                                            style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', width: 0, height: 0 }}
+                                        />
+                                    </div>
+
+                                    <div style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '0.28rem',
+                                        background: readingDateTo ? '#eff6ff' : '#f8fafc',
+                                        border: readingDateTo ? '1px solid #93c5fd' : '1px solid #e2e8f0',
+                                        borderRadius: '6px',
+                                        padding: '0.2rem 0.45rem',
+                                        position: 'relative'
+                                    }}>
+                                        <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Até</span>
+                                        <input
+                                            type="text"
+                                            inputMode="numeric"
+                                            placeholder="dd/mm/aaaa"
+                                            maxLength={10}
+                                            value={readingDateTo}
+                                            onChange={e => setReadingDateTo(formatDmaInput(e.target.value))}
+                                            style={{
+                                                border: 'none',
+                                                background: 'transparent',
+                                                outline: 'none',
+                                                fontSize: '0.76rem',
+                                                fontWeight: 600,
+                                                color: '#0f172a',
+                                                width: '76px',
+                                                padding: '0.08rem 0',
+                                                fontVariantNumeric: 'tabular-nums'
+                                            }}
+                                            title="Data final da leitura atual (Dia/Mês/Ano)"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                if (readingToPickerRef.current?.showPicker) {
+                                                    readingToPickerRef.current.showPicker();
+                                                } else {
+                                                    readingToPickerRef.current?.focus();
+                                                }
+                                            }}
+                                            style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: '#64748b', display: 'inline-flex', alignItems: 'center' }}
+                                            title="Selecionar data final no calendário"
+                                        >
+                                            <CalendarIcon size={12} />
+                                        </button>
+                                        <input
+                                            ref={readingToPickerRef}
+                                            type="date"
+                                            value={readingToIso}
+                                            onChange={e => setReadingDateTo(isoToDma(e.target.value))}
+                                            tabIndex={-1}
+                                            style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', width: 0, height: 0 }}
+                                        />
+                                    </div>
+
+                                    {(readingDateFrom || readingDateTo) && (
+                                        <button
+                                            type="button"
+                                            onClick={() => { setReadingDateFrom(''); setReadingDateTo(''); }}
+                                            style={{
+                                                background: 'none',
+                                                border: 'none',
+                                                color: '#94a3b8',
+                                                cursor: 'pointer',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                padding: '0.1rem'
+                                            }}
+                                            title="Limpar período de leitura"
+                                        >
+                                            <X size={13} />
+                                        </button>
+                                    )}
+                                </div>
+                            </>
+                        )}
+
                         <div style={{ width: '1px', height: '18px', background: '#e2e8f0' }}></div>
 
                         {/* Ordenação */}
@@ -2197,31 +2473,128 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
 
                         <div style={{ width: '1px', height: '18px', background: '#e2e8f0' }}></div>
 
-                        {/* Busca Rápida */}
-                        <div style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.35rem',
-                            background: '#f8fafc',
-                            border: '1px solid #e2e8f0',
-                            borderRadius: '6px',
-                            padding: '0.22rem 0.5rem'
-                        }}>
-                            <Search size={14} color="#64748b" />
+                        {/* Busca Rápida (UC, Assinante ou Usina) */}
+                        <div
+                            ref={searchContainerRef}
+                            style={{
+                                position: 'relative',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.35rem',
+                                background: activeMatchedUsina ? '#eff6ff' : '#f8fafc',
+                                border: activeMatchedUsina ? '1px solid #93c5fd' : '1px solid #e2e8f0',
+                                borderRadius: '6px',
+                                padding: '0.22rem 0.5rem'
+                            }}
+                        >
+                            <Search size={14} color={activeMatchedUsina ? '#2563eb' : '#64748b'} />
+                            {activeMatchedUsina && (
+                                <span style={{
+                                    fontSize: '0.62rem',
+                                    fontWeight: 800,
+                                    textTransform: 'uppercase',
+                                    letterSpacing: '0.03em',
+                                    color: '#1d4ed8',
+                                    background: '#dbeafe',
+                                    padding: '0.06rem 0.35rem',
+                                    borderRadius: '4px',
+                                    flexShrink: 0
+                                }}>
+                                    Usina
+                                </span>
+                            )}
                             <input
-                                placeholder="Buscar UC ou assinante..."
+                                placeholder="Buscar UC, assinante ou usina..."
                                 value={searchTerm}
-                                onChange={e => setSearchTerm(e.target.value)}
-                                style={{ padding: '0.12rem 0', border: 'none', background: 'transparent', outline: 'none', fontSize: '0.8rem', width: '155px', color: '#0f172a' }}
+                                onFocus={() => setShowUsinaSuggestions(true)}
+                                onBlur={() => setTimeout(() => setShowUsinaSuggestions(false), 160)}
+                                onChange={e => {
+                                    setSearchTerm(e.target.value);
+                                    setShowUsinaSuggestions(true);
+                                }}
+                                style={{ padding: '0.12rem 0', border: 'none', background: 'transparent', outline: 'none', fontSize: '0.8rem', width: activeMatchedUsina ? '160px' : '195px', color: '#0f172a', fontWeight: activeMatchedUsina ? 700 : 500 }}
                             />
                             {searchTerm && (
                                 <button
-                                    onClick={() => setSearchTerm('')}
+                                    type="button"
+                                    onClick={() => { setSearchTerm(''); setShowUsinaSuggestions(false); }}
                                     style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0 }}
                                     title="Limpar busca"
                                 >
                                     <X size={13} />
                                 </button>
+                            )}
+
+                            {showUsinaSuggestions && filteredUsinaSuggestions.length > 0 && (
+                                <div style={{
+                                    position: 'absolute',
+                                    top: 'calc(100% + 6px)',
+                                    left: 0,
+                                    minWidth: '240px',
+                                    maxHeight: '220px',
+                                    overflowY: 'auto',
+                                    background: 'white',
+                                    border: '1px solid #e2e8f0',
+                                    borderRadius: '10px',
+                                    boxShadow: '0 10px 25px -5px rgba(15, 23, 42, 0.12)',
+                                    zIndex: 130,
+                                    padding: '0.35rem'
+                                }}>
+                                    <div style={{
+                                        padding: '0.25rem 0.5rem',
+                                        fontSize: '0.65rem',
+                                        fontWeight: 800,
+                                        color: '#64748b',
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '0.05em',
+                                        borderBottom: '1px solid #f1f5f9',
+                                        marginBottom: '0.2rem'
+                                    }}>
+                                        Filtrar por Usina ({filteredUsinaSuggestions.length})
+                                    </div>
+                                    {filteredUsinaSuggestions.map(uName => {
+                                        const isSelectedUsina = normalizarTextoBusca(searchTerm) === normalizarTextoBusca(uName);
+                                        return (
+                                            <button
+                                                key={uName}
+                                                type="button"
+                                                onMouseDown={(e) => {
+                                                    e.preventDefault();
+                                                    setSearchTerm(isSelectedUsina ? '' : uName);
+                                                    setShowUsinaSuggestions(false);
+                                                }}
+                                                style={{
+                                                    width: '100%',
+                                                    textAlign: 'left',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'space-between',
+                                                    gap: '0.5rem',
+                                                    padding: '0.38rem 0.55rem',
+                                                    border: 'none',
+                                                    borderRadius: '6px',
+                                                    background: isSelectedUsina ? '#eff6ff' : 'transparent',
+                                                    color: isSelectedUsina ? '#1d4ed8' : '#334155',
+                                                    fontSize: '0.76rem',
+                                                    fontWeight: isSelectedUsina ? 700 : 600,
+                                                    cursor: 'pointer'
+                                                }}
+                                                onMouseEnter={e => {
+                                                    if (!isSelectedUsina) e.currentTarget.style.background = '#f8fafc';
+                                                }}
+                                                onMouseLeave={e => {
+                                                    if (!isSelectedUsina) e.currentTarget.style.background = 'transparent';
+                                                }}
+                                            >
+                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                    <Zap size={12} color={isSelectedUsina ? '#2563eb' : '#f59e0b'} />
+                                                    {uName}
+                                                </span>
+                                                <span style={{ fontSize: '0.64rem', color: '#64748b', fontWeight: 700 }}>Usina</span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
                             )}
                         </div>
                     </div>
@@ -2541,63 +2914,95 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                 </div>
                             </div>
 
-                            {/* Sub-linha 2: Status da Fatura */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap', borderTop: '1px solid #f1f5f9', paddingTop: '0.38rem' }}>
-                                <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '98px', flexShrink: 0 }}>
-                                    Status Fatura:
-                                </span>
-                                <button
-                                    onClick={() => setStatusFaturaFilter('')}
-                                    style={{
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: '0.35rem',
-                                        height: '26px',
-                                        padding: '0 0.55rem',
-                                        borderRadius: '999px',
-                                        border: statusFaturaFilter === '' ? '1.5px solid #475569' : '1px solid #e2e8f0',
-                                        background: statusFaturaFilter === '' ? '#f1f5f9' : 'white',
-                                        color: '#334155',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.18s',
-                                        outline: 'none',
-                                        flexShrink: 0,
-                                        whiteSpace: 'nowrap'
-                                    }}
-                                >
-                                    <span style={{ fontSize: '0.7rem', fontWeight: statusFaturaFilter === '' ? 700 : 600 }}>Todas</span>
-                                    <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#64748b' }}>{invoicesForTotals.length}</span>
-                                </button>
-                                {faturasStatuses.map(status => {
-                                    const count = faturasCounts[status.key] || 0;
-                                    const isActive = statusFaturaFilter === status.key;
-                                    return (
-                                        <button
-                                            key={`fatura-${status.key}`}
-                                            onClick={() => setStatusFaturaFilter(isActive ? '' : status.key)}
-                                            style={{
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: '0.35rem',
-                                                height: '26px',
-                                                padding: '0 0.55rem',
-                                                borderRadius: '999px',
-                                                border: isActive ? `1.5px solid ${status.color}` : '1px solid #e2e8f0',
-                                                background: isActive ? status.bg : 'white',
-                                                cursor: 'pointer',
-                                                transition: 'all 0.18s',
-                                                outline: 'none',
-                                                flexShrink: 0,
-                                                whiteSpace: 'nowrap',
-                                                opacity: (!isActive && count === 0) ? 0.5 : 1
-                                            }}
-                                        >
-                                            <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', backgroundColor: status.color, flexShrink: 0 }}></span>
-                                            <span style={{ fontSize: '0.7rem', color: isActive ? '#0f172a' : '#475569', fontWeight: isActive ? 700 : 600 }}>{status.label}</span>
-                                            <span style={{ fontSize: '0.65rem', color: status.color, fontWeight: 800 }}>{count}</span>
-                                        </button>
-                                    );
-                                })}
+                            {/* Sub-linha 2: Status da Fatura + Consumo e Energia Compensada abaixo do Total */}
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.6rem', flexWrap: 'wrap', borderTop: '1px solid #f1f5f9', paddingTop: '0.38rem' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap', flex: 1 }}>
+                                    <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '98px', flexShrink: 0 }}>
+                                        Status Fatura:
+                                    </span>
+                                    <button
+                                        onClick={() => setStatusFaturaFilter('')}
+                                        style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '0.35rem',
+                                            height: '26px',
+                                            padding: '0 0.55rem',
+                                            borderRadius: '999px',
+                                            border: statusFaturaFilter === '' ? '1.5px solid #475569' : '1px solid #e2e8f0',
+                                            background: statusFaturaFilter === '' ? '#f1f5f9' : 'white',
+                                            color: '#334155',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.18s',
+                                            outline: 'none',
+                                            flexShrink: 0,
+                                            whiteSpace: 'nowrap'
+                                        }}
+                                    >
+                                        <span style={{ fontSize: '0.7rem', fontWeight: statusFaturaFilter === '' ? 700 : 600 }}>Todas</span>
+                                        <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#64748b' }}>{invoicesForTotals.length}</span>
+                                    </button>
+                                    {faturasStatuses.map(status => {
+                                        const count = faturasCounts[status.key] || 0;
+                                        const isActive = statusFaturaFilter === status.key;
+                                        return (
+                                            <button
+                                                key={`fatura-${status.key}`}
+                                                onClick={() => setStatusFaturaFilter(isActive ? '' : status.key)}
+                                                style={{
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '0.35rem',
+                                                    height: '26px',
+                                                    padding: '0 0.55rem',
+                                                    borderRadius: '999px',
+                                                    border: isActive ? `1.5px solid ${status.color}` : '1px solid #e2e8f0',
+                                                    background: isActive ? status.bg : 'white',
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.18s',
+                                                    outline: 'none',
+                                                    flexShrink: 0,
+                                                    whiteSpace: 'nowrap',
+                                                    opacity: (!isActive && count === 0) ? 0.5 : 1
+                                                }}
+                                            >
+                                                <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', backgroundColor: status.color, flexShrink: 0 }}></span>
+                                                <span style={{ fontSize: '0.7rem', color: isActive ? '#0f172a' : '#475569', fontWeight: isActive ? 700 : 600 }}>{status.label}</span>
+                                                <span style={{ fontSize: '0.65rem', color: status.color, fontWeight: 800 }}>{count}</span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+
+                                <div style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.55rem',
+                                    padding: '0.24rem 0.7rem',
+                                    background: '#f8fafc',
+                                    borderRadius: '8px',
+                                    border: '1px solid #e2e8f0',
+                                    flexShrink: 0,
+                                    fontVariantNumeric: 'tabular-nums'
+                                }}>
+                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.32rem' }}>
+                                        <span style={{ fontSize: '0.66rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                                            Consumo:
+                                        </span>
+                                        <span style={{ fontSize: '0.8rem', fontWeight: 800, color: '#0f172a' }}>
+                                            {currentTotalConsumo.toLocaleString('pt-BR')} kWh
+                                        </span>
+                                    </div>
+                                    <div style={{ width: '1px', height: '13px', background: '#cbd5e1' }} />
+                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.32rem' }}>
+                                        <span style={{ fontSize: '0.66rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                                            Compensada:
+                                        </span>
+                                        <span style={{ fontSize: '0.8rem', fontWeight: 800, color: '#15803d' }}>
+                                            {currentTotalCompensado.toLocaleString('pt-BR')} kWh
+                                        </span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     )}
@@ -2625,9 +3030,9 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                             : (monthFilter === 'all' ? 'Nenhuma fatura encontrada' : 'Nenhuma fatura emitida para o período selecionado')
                         }
                     </h3>
-                    {(statusFilter || statusFaturaFilter || searchTerm) && (
+                    {(statusFilter || statusFaturaFilter || searchTerm || readingDateFrom || readingDateTo) && (
                         <button
-                            onClick={() => { setStatusFilter(''); setStatusFaturaFilter(''); setSearchTerm(''); }}
+                            onClick={() => { setStatusFilter(''); setStatusFaturaFilter(''); setSearchTerm(''); setReadingDateFrom(''); setReadingDateTo(''); }}
                             style={{ marginTop: '0.85rem', padding: '0.45rem 0.9rem', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#f8fafc', color: '#334155', fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer' }}
                         >
                             Limpar filtros ativos
@@ -3388,6 +3793,9 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                 invoices={invoices}
                                 monthFilter={monthFilter}
                                 searchTerm={searchTerm}
+                                availableUsinas={availableUsinas}
+                                readingFromIso={readingFromIso}
+                                readingToIso={readingToIso}
                                 readingStatusFilter={readingStatusFilter}
                                 onCardClick={handleCalendarCardClick}
                             />
@@ -3544,7 +3952,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
     );
 }
 
-function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusFilter, onCardClick }) {
+function CalendarView({ units, invoices, monthFilter, searchTerm, availableUsinas = [], readingFromIso = '', readingToIso = '', readingStatusFilter, onCardClick }) {
     const today = new Date();
     const currentYearNum = today.getFullYear();
     const currentMonthNum = today.getMonth() + 1;
@@ -3560,6 +3968,11 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
 
     // 1. Filtrar UCs a partir de Aguardando Conexão, exceto cancelados
     const calendarUnits = units.filter(u => ['aguardando_conexao', 'ativo', 'sem_geracao', 'em_atraso', 'desconectado', 'desligado_por_tt'].includes(u.status));
+
+    const matchedUsinasForCalendar = searchTerm?.trim()
+        ? availableUsinas.filter(uName => usinaCasaComBusca(uName, searchTerm))
+        : [];
+    const isSearchingUsinaInCalendar = matchedUsinasForCalendar.length > 0;
 
     // 2. Agrupar e Calcular Status
     const groupedUnits = calendarUnits.reduce((acc, unit) => {
@@ -3578,6 +3991,13 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
             !['cancelado', 'cancelada'].includes(inv.status?.trim().toLowerCase())
         );
         const hasInvoice = !!matchingInvoice;
+
+        if (readingFromIso || readingToIso) {
+            const invReadIso = normalizeReadingDateToIso(matchingInvoice?.data_leitura);
+            if (!invReadIso) return acc;
+            if (readingFromIso && invReadIso < readingFromIso) return acc;
+            if (readingToIso && invReadIso > readingToIso) return acc;
+        }
 
         let status = 'pendente';
 
@@ -3600,13 +4020,22 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
         if (readingStatusFilter && status !== readingStatusFilter) return acc;
 
         if (searchTerm) {
-            const lower = searchTerm.toLowerCase();
-            const matchesSearch = 
-                ucCasaComBusca(unit.numero_uc, searchTerm) ||
-                (unit.tipo_unidade === 'geradora' ? (unit.usinas?.name || unit.suppliers?.name || '') : (unit.subscribers?.name || '')).toLowerCase().includes(lower) ||
-                unit.titular_fatura?.name?.toLowerCase().includes(lower) ||
-                unit.concessionaria?.toLowerCase().includes(lower);
-            if (!matchesSearch) return acc;
+            const unitUsinaName = unit.usinas?.name || '';
+            if (isSearchingUsinaInCalendar) {
+                if (!unitUsinaName || !usinaCasaComBusca(unitUsinaName, searchTerm)) return acc;
+            } else {
+                const normQuery = normalizarTextoBusca(searchTerm);
+                const displayName = unit.tipo_unidade === 'geradora'
+                    ? (unit.usinas?.name || unit.suppliers?.name || '')
+                    : (unit.subscribers?.name || '');
+                const matchesSearch = 
+                    ucCasaComBusca(unit.numero_uc, searchTerm) ||
+                    normalizarTextoBusca(displayName).includes(normQuery) ||
+                    normalizarTextoBusca(unit.titular_fatura?.name).includes(normQuery) ||
+                    normalizarTextoBusca(unit.concessionaria).includes(normQuery) ||
+                    normalizarTextoBusca(unitUsinaName).includes(normQuery);
+                if (!matchesSearch) return acc;
+            }
         }
 
         if (!acc[day]) acc[day] = [];
