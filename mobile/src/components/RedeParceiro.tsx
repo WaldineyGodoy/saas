@@ -5,7 +5,7 @@ import type { ClienteParceiro } from '../lib/api';
 import { fmtBRL, fmtKwh, iniciais } from '../lib/format';
 import { grupoParceiro, ROTULO_PARCEIRO, type GrupoParceiro } from '../lib/status';
 import { colors, type } from '../theme/tokens';
-import { Badge, Card, Chip, Empty, Icon, Row } from './ui';
+import { Badge, Card, Chip, Divider, Empty, Icon, Row } from './ui';
 
 const ABAS: { key: GrupoParceiro | 'todos'; label: string }[] = [
   { key: 'todos', label: 'Todos' },
@@ -55,6 +55,7 @@ export function RedeParceiro({ clientes }: { clientes: ClienteParceiro[] }) {
               </View>
               <Badge label={rotulo} tone={tom} />
             </Row>
+            <Divider />
             <Row style={{ justifyContent: 'space-between', alignItems: 'center' }}>
               <Text style={[type.bodySm, { color: colors.inkSecondary, flexShrink: 1 }]} numberOfLines={1}>
                 {c.consumo_kwh ? `Consumo: ${fmtKwh(c.consumo_kwh)} kWh/mês` : c.grupo === 'interessado' ? 'Fez a simulação' : ' '}

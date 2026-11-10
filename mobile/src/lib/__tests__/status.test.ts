@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../theme/tokens', () => ({ colors: {} }));
-const { grupoParceiro, grupoRede, pedidoUcStatus, ucStatus } = await import('../status');
+const { grupoParceiro, grupoRede, pedidoUcStatus, ROTULO_REDE, ucStatus } = await import('../status');
 
 describe('grupoRede', () => {
   it('agrupa nas abas do Home Connect', () => {
@@ -16,6 +16,7 @@ describe('grupoRede', () => {
   it('status desconhecido nao quebra', () => {
     expect(ucStatus('algo_novo')).toEqual(['algo novo', 'neutral']);
     expect(ucStatus(null)).toEqual(['—', 'neutral']);
+    expect(ROTULO_REDE.atrasado).toEqual(['Em atraso', 'bad']);
   });
 });
 

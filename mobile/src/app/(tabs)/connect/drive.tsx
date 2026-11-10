@@ -39,16 +39,16 @@ export default function DriveConnect() {
               {[enderecoCurto(p.endereco), p.potencia_kw ? `${fmtKwh(p.potencia_kw)} kW` : null].filter(Boolean).join(' · ')}
             </Text>
             <Row>
-              <Metric label="Carga / mês" value={fmtKwh(p.kwh_mes)} unit="kWh" icon="bolt" />
-              <Metric label="Participação" value={fmtPct(p.percentual)} icon="pie-chart" iconColor={colors.secondary} foot={`Receita ${fmtBRL((Number(p.receita_mes) || 0) * ((Number(p.percentual) || 0) / 100))}`} />
+              <Metric embedded label="Carga / mês" value={fmtKwh(p.kwh_mes)} unit="kWh" icon="bolt" iconColor={colors.accentEnergy} />
+              <Metric embedded label="Participação" value={fmtPct(p.percentual)} icon="pie-chart" iconColor={colors.accentConnect} foot={`Receita ${fmtBRL((Number(p.receita_mes) || 0) * ((Number(p.percentual) || 0) / 100))}`} />
             </Row>
           </Card>
         );
       })}
       {(postos.data ?? []).length > 1 && (
         <Row>
-          <Metric label="Consumo da rede" value={fmtKwh(kwh)} unit="kWh" icon="bolt" />
-          <Metric label="Rendimentos" value={fmtBRL(receita)} icon="speed" iconColor={colors.secondary} foot="Sua parte no mês" footIcon="verified" />
+          <Metric label="Consumo da rede" value={fmtKwh(kwh)} unit="kWh" icon="bolt" iconColor={colors.accentEnergy} />
+          <Metric label="Rendimentos" value={fmtBRL(receita)} icon="payments" iconColor={colors.statusVerified} foot="Sua parte no mês" footColor={colors.statusVerified} footIcon="verified" />
         </Row>
       )}
       <SectionLabel title="Indique motoristas" />

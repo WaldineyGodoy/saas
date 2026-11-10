@@ -14,7 +14,7 @@ export const pedidoUcStatus = (s: string): [string, Tone] => ({
 // Funcao, nao objeto: precisa ler a paleta do tema atual a cada render.
 const coresDoTom = (): Record<Tone, string> => ({
   ok: colors.statusVerified,
-  warn: colors.secondary,
+  warn: colors.statusWarning,
   bad: colors.statusProvisional,
   neutral: colors.inkSecondary,
   info: colors.statusCalculated,
@@ -59,6 +59,12 @@ const FATURA: Record<string, [string, Tone]> = {
 
 /** Status do assinante indicado, agrupado nas abas da tela Home Connect. */
 export type GrupoRede = 'ativo' | 'cadastrado' | 'atrasado' | 'cancelado';
+export const ROTULO_REDE: Record<GrupoRede, [string, Tone]> = {
+  ativo: ['Ativo', 'ok'],
+  cadastrado: ['Cadastrado', 'info'],
+  atrasado: ['Em atraso', 'bad'],
+  cancelado: ['Cancelado', 'neutral'],
+};
 export const grupoRede = (status: string, faturaStatus?: string | null): GrupoRede => {
   if (status === 'cancelado' || status === 'cancelado_inadimplente' || status === 'transferido') return 'cancelado';
   if (status === 'ativo_inadimplente' || faturaStatus === 'atrasado') return 'atrasado';
