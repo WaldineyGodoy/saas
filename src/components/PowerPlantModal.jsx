@@ -1491,7 +1491,7 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
             let ucPeriodoIni = null;
             let ucPeriodoFim = null;
             if (!isYear) {
-                ({ ini: ucPeriodoIni, fim: ucPeriodoFim } = periodoLeituraUcs(ugDataFim, firstDay));
+                ({ ini: ucPeriodoIni, fim: ucPeriodoFim } = periodoLeituraUcs(ugDataFim));
             } else {
                 ucPeriodoIni = `${yearStr}-01-01`;
                 ucPeriodoFim = `${yearStr}-12-31`;
@@ -2572,7 +2572,7 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
             let ucPeriodoIni = null;
             let ucPeriodoFim = null;
             if (!isYear) {
-                ({ ini: ucPeriodoIni, fim: ucPeriodoFim } = periodoLeituraUcs(ugDataFim, `${referenceMonth}-01`));
+                ({ ini: ucPeriodoIni, fim: ucPeriodoFim } = periodoLeituraUcs(ugDataFim));
             } else {
                 ucPeriodoIni = `${curYear}-01-01`;
                 ucPeriodoFim = `${curYear}-12-31`;
