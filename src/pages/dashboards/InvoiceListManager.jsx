@@ -623,28 +623,116 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
 
         const doc = new jsPDF('l', 'mm', 'a4');
         const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const marginX = 10;
+        const contentWidth = pageWidth - marginX * 2;
         const generationDate = new Date().toLocaleString('pt-BR');
+
+        const renderFilterCell = (x, y, label, value, maxValWidth) => {
+            doc.setFontSize(8);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(71, 85, 105); // Slate 600
+            doc.text(label, x, y);
+            const labelWidth = doc.getTextWidth(label);
+
+            if (value) {
+                doc.setFont('helvetica', 'normal');
+                doc.setTextColor(15, 23, 42); // Slate 900
+                let displayVal = String(value);
+                if (maxValWidth && doc.getTextWidth(displayVal) > maxValWidth) {
+                    while (displayVal.length > 1 && doc.getTextWidth(displayVal + '...') > maxValWidth) {
+                        displayVal = displayVal.slice(0, -1);
+                    }
+                    displayVal += '...';
+                }
+                doc.text(displayVal, x + labelWidth + 1, y);
+            }
+        };
+
+        const mesRefDisplay = monthFilter === 'all'
+            ? 'Qualquer'
+            : (() => {
+                const [y, m] = (monthFilter || '').split('-');
+                return m && y ? `${m}/${y}` : monthFilter;
+            })();
+
+        const periodoDisplay = readingDateFrom && readingDateTo
+            ? `${readingDateFrom} a ${readingDateTo}`
+            : readingDateFrom
+                ? `${readingDateFrom} a `
+                : readingDateTo
+                    ? ` a ${readingDateTo}`
+                    : '';
+
+        const buscaDisplay = searchTerm ? searchTerm.trim() : '';
 
         if (activeTab === 'contas_energia') {
             // ==========================================
             // EXTRATO DE CONTAS DE ENERGIA CONCESSIONÁRIA
             // ==========================================
-            doc.setFontSize(14);
+            doc.setFontSize(13.5);
             doc.setFont('helvetica', 'bold');
-            doc.setTextColor(0, 51, 102); // Navy Blue
-            doc.text('EXTRATO DE CONTAS DE ENERGIA CONCESSIONÁRIA', 14, 18);
+            doc.setTextColor(15, 38, 74); // Deep Navy
+            doc.text('EXTRATO DE CONTAS DE ENERGIA CONCESSIONÁRIA', marginX, 15);
             
-            doc.setFontSize(9);
+            doc.setFontSize(8.5);
             doc.setFont('helvetica', 'normal');
-            doc.setTextColor(100, 116, 139); // Slate Grey
-            doc.text(`Gerado em: ${generationDate}`, pageWidth - 14, 18, { align: 'right' });
+            doc.setTextColor(100, 116, 139); // Slate 500
+            doc.text(`Gerado em: ${generationDate}`, pageWidth - marginX, 15, { align: 'right' });
 
-            // Linha divisória
+            // Linha divisória superior
             doc.setDrawColor(226, 232, 240);
-            doc.setLineWidth(0.5);
-            doc.line(14, 22, pageWidth - 14, 22);
+            doc.setLineWidth(0.35);
+            doc.line(marginX, 18.2, pageWidth - marginX, 18.2);
+
+            const stContaMap = {
+                'pendente': 'Pendente',
+                'indisponivel': 'Indisponível',
+                'baixada': 'Baixada',
+                'processada': 'Processada',
+                'a_vencer': 'A Vencer',
+                'inconsistente': 'Inconsistente',
+                'inconsistente_pago': 'Inconsistente Pago',
+                'contestada': 'Contestada',
+                'contestada_pago': 'Contestado Pago',
+                'parcelada': 'Parcelada',
+                'atrasada': 'Atrasada',
+                'pago': 'Paga'
+            };
+
+            const stFaturaFilterMap = {
+                'sem_faturamento': 'Sem Faturamento',
+                'a_vencer': 'A Vencer',
+                'atrasado': 'Atrasado',
+                'confirmado': 'Confirmado',
+                'pago': 'Pago',
+                'cancelada': 'Cancelada'
+            };
+
+            let statusDisplay = statusFilter ? (stContaMap[statusFilter] || statusFilter) : 'Todas';
+            if (statusFaturaFilter) {
+                const fatLabel = stFaturaFilterMap[statusFaturaFilter] || statusFaturaFilter;
+                statusDisplay = statusFilter ? `${statusDisplay} (Fatura: ${fatLabel})` : `Todas (Fatura: ${fatLabel})`;
+            }
+
+            // Barra de Filtros Aplicados (entre o título e o valor das contas)
+            doc.setFillColor(248, 250, 252); // Slate 50
+            doc.setDrawColor(226, 232, 240); // Slate 200
+            doc.setLineWidth(0.3);
+            doc.roundedRect(marginX, 20.2, contentWidth, 7.6, 1.4, 1.4, 'FD');
+
+            const filterY = 25.1;
+            renderFilterCell(marginX + 3, filterY, 'Mês de ref.:', mesRefDisplay, 32);
+            doc.line(64, 21.6, 64, 26.4);
+            renderFilterCell(67, filterY, 'Período:', periodoDisplay, 55);
+            doc.line(138, 21.6, 138, 26.4);
+            renderFilterCell(141, filterY, 'Status:', statusDisplay, 48);
+            doc.line(204, 21.6, 204, 26.4);
+            renderFilterCell(207, filterY, 'Busca aplicada:', buscaDisplay, 52);
 
             const totalEnergy = sortedInvoices.reduce((sum, inv) => sum + getEnergyBillValue(inv), 0);
+            const totalConsumoPdf = sortedInvoices.reduce((sum, inv) => sum + (Number(inv.consumo_kwh) || 0), 0);
+            const totalCompensadoPdf = sortedInvoices.reduce((sum, inv) => sum + (Number(inv.consumo_compensado) || 0), 0);
             
             const totalAtrasada = sortedInvoices
                 .filter(inv => resolveEnergyStatus(inv) === 'atrasada')
@@ -680,29 +768,25 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
 
             doc.setFontSize(10);
             doc.setFont('helvetica', 'bold');
-            doc.setTextColor(15, 23, 42); // Charcoal
-            doc.text(`Total Contas: ${formatCurrency(totalEnergy)}`, 14, 29);
-            doc.text(`Total Registros: ${sortedInvoices.length}`, pageWidth - 14, 29, { align: 'right' });
+            doc.setTextColor(15, 23, 42); // Slate 900
+            const totalContasLabel = `Total Contas: ${formatCurrency(totalEnergy)}`;
+            doc.text(totalContasLabel, marginX, 33.8);
 
-            doc.setFontSize(9);
+            const totalContasWidth = doc.getTextWidth(totalContasLabel);
+            doc.setFontSize(8.5);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(100, 116, 139);
+            doc.text(`|   Consumo: ${totalConsumoPdf.toLocaleString('pt-BR')} kWh   |   Compensada: ${totalCompensadoPdf.toLocaleString('pt-BR')} kWh`, marginX + totalContasWidth + 4, 33.8);
+
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(15, 23, 42);
+            doc.text(`Total Registros: ${sortedInvoices.length}`, pageWidth - marginX, 33.8, { align: 'right' });
+
+            doc.setFontSize(8.5);
             doc.setFont('helvetica', 'normal');
             doc.setTextColor(71, 85, 105); // Slate 600
-            doc.text(statusSummaryText, 14, 35);
-
-            const stContaMap = {
-                'pendente': 'Pendente',
-                'indisponivel': 'Indisponível',
-                'baixada': 'Baixada',
-                'processada': 'Processada',
-                'a_vencer': 'A Vencer',
-                'inconsistente': 'Inconsistente',
-                'inconsistente_pago': 'Inconsistente Pago',
-                'contestada': 'Contestada',
-                'contestada_pago': 'Contestado Pago',
-                'parcelada': 'Parcelada',
-                'atrasada': 'Atrasada',
-                'pago': 'Paga'
-            };
+            doc.text(statusSummaryText, marginX, 39.2);
 
             const tableBody = sortedInvoices.map(inv => {
                 const billValue = getEnergyBillValue(inv);
@@ -719,7 +803,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
 
                 return [
                     inv.consumer_units?.numero_uc || '-',
-                    abbreviateName(getDisplayName(inv) !== '-' ? getDisplayName(inv) : inv.consumer_units?.titular_conta, 20),
+                    abbreviateName(getDisplayName(inv) !== '-' ? getDisplayName(inv) : inv.consumer_units?.titular_conta, 22),
                     inv.mes_referencia ? (() => {
                         const [year, month] = inv.mes_referencia.split('-');
                         return `${month}/${year}`;
@@ -728,16 +812,16 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                     formattedVenc,
                     getAnteriorLeitura(inv),
                     inv.data_leitura ? inv.data_leitura.split('T')[0].split('-').reverse().join('/') : '-',
-                    inv.consumo_kwh ? `${inv.consumo_kwh} kWh` : '-',
-                    inv.consumo_compensado ? `${inv.consumo_compensado} kWh` : '-',
-                    inv.energia_injetada ? `${inv.energia_injetada} kWh` : '-',
+                    inv.consumo_kwh ? `${Number(inv.consumo_kwh).toLocaleString('pt-BR')} kWh` : '-',
+                    inv.consumo_compensado ? `${Number(inv.consumo_compensado).toLocaleString('pt-BR')} kWh` : '-',
+                    inv.energia_injetada ? `${Number(inv.energia_injetada).toLocaleString('pt-BR')} kWh` : '-',
                     stConta,
                     stFatura
                 ];
             });
 
             autoTable(doc, {
-                startY: 40,
+                startY: 43,
                 head: [[
                     'Cód. Cliente', 
                     'Assinante / Usina', 
@@ -754,30 +838,66 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                 ]],
                 body: tableBody,
                 theme: 'striped',
-                headStyles: { fillColor: [0, 51, 102], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 7.5 },
-                bodyStyles: { fontSize: 7.5, textColor: [51, 65, 85] },
+                headStyles: {
+                    fillColor: [15, 38, 74],
+                    textColor: [255, 255, 255],
+                    fontStyle: 'bold',
+                    fontSize: 7.5,
+                    cellPadding: { top: 2.3, right: 2, bottom: 2.3, left: 2 }
+                },
+                bodyStyles: {
+                    fontSize: 7.5,
+                    textColor: [30, 41, 59],
+                    cellPadding: { top: 2, right: 2, bottom: 2, left: 2 }
+                },
                 alternateRowStyles: { fillColor: [248, 250, 252] },
-                margin: { left: 10, right: 10 },
+                margin: { left: marginX, right: marginX },
                 columnStyles: {
                     0: { cellWidth: 26 },
                     1: { cellWidth: 40 },
                     2: { cellWidth: 16, halign: 'center' },
-                    3: { cellWidth: 24, halign: 'right' },
+                    3: { cellWidth: 24, halign: 'right', fontStyle: 'bold' },
                     4: { cellWidth: 22, halign: 'center' },
                     5: { cellWidth: 20, halign: 'center' },
                     6: { cellWidth: 20, halign: 'center' },
-                    7: { cellWidth: 22, halign: 'center' },
-                    8: { cellWidth: 22, halign: 'center' },
-                    9: { cellWidth: 22, halign: 'center' },
+                    7: { cellWidth: 22, halign: 'right' },
+                    8: { cellWidth: 22, halign: 'right' },
+                    9: { cellWidth: 22, halign: 'right' },
                     10: { cellWidth: 21, halign: 'center' },
                     11: { cellWidth: 22, halign: 'center' }
+                },
+                didParseCell: (data) => {
+                    if (data.section === 'head') {
+                        if ([2, 4, 5, 6, 10, 11].includes(data.column.index)) {
+                            data.cell.styles.halign = 'center';
+                        } else if ([3, 7, 8, 9].includes(data.column.index)) {
+                            data.cell.styles.halign = 'right';
+                        }
+                    } else if (data.section === 'body') {
+                        if (data.column.index === 8 && data.cell.raw && data.cell.raw !== '-') {
+                            data.cell.styles.textColor = [21, 128, 61]; // Emerald 700 para Compensada
+                        }
+                        if (data.column.index === 10 || data.column.index === 11) {
+                            const val = String(data.cell.raw || '');
+                            data.cell.styles.fontStyle = 'bold';
+                            if (val === 'Paga' || val === 'Pago' || val === 'Processada') {
+                                data.cell.styles.textColor = [22, 101, 52];
+                            } else if (val === 'Atrasada' || val === 'Atrasado' || val === 'Indisponível') {
+                                data.cell.styles.textColor = [185, 28, 28];
+                            } else if (val === 'Parcelada') {
+                                data.cell.styles.textColor = [133, 77, 14];
+                            } else if (val === 'A Vencer' || val === 'Baixada') {
+                                data.cell.styles.textColor = [29, 78, 216];
+                            }
+                        }
+                    }
                 },
                 didDrawPage: (data) => {
                     const str = `Página ${data.pageNumber}`;
                     doc.setFontSize(8);
                     doc.setFont('helvetica', 'normal');
                     doc.setTextColor(148, 163, 184);
-                    doc.text(str, pageWidth - 10, doc.internal.pageSize.getHeight() - 10, { align: 'right' });
+                    doc.text(str, pageWidth - marginX, pageHeight - 8, { align: 'right' });
                 }
             });
 
@@ -787,20 +907,45 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
             // ==========================================
             // EXTRATO DE FATURAS E EVENTOS
             // ==========================================
-            doc.setFontSize(14);
+            doc.setFontSize(13.5);
             doc.setFont('helvetica', 'bold');
-            doc.setTextColor(0, 51, 102); // Navy Blue
-            doc.text('EXTRATO DE FATURAS E EVENTOS', 14, 18);
+            doc.setTextColor(15, 38, 74); // Deep Navy
+            doc.text('EXTRATO DE FATURAS E EVENTOS', marginX, 15);
             
-            doc.setFontSize(9);
+            doc.setFontSize(8.5);
             doc.setFont('helvetica', 'normal');
-            doc.setTextColor(100, 116, 139); // Slate Grey
-            doc.text(`Gerado em: ${generationDate}`, pageWidth - 14, 18, { align: 'right' });
+            doc.setTextColor(100, 116, 139); // Slate 500
+            doc.text(`Gerado em: ${generationDate}`, pageWidth - marginX, 15, { align: 'right' });
 
-            // Linha divisória
+            // Linha divisória superior
             doc.setDrawColor(226, 232, 240);
-            doc.setLineWidth(0.5);
-            doc.line(14, 22, pageWidth - 14, 22);
+            doc.setLineWidth(0.35);
+            doc.line(marginX, 18.2, pageWidth - marginX, 18.2);
+
+            const stFaturaFilterMap = {
+                'sem_faturamento': 'Sem Faturamento',
+                'a_vencer': 'A Vencer',
+                'atrasado': 'Atrasado',
+                'confirmado': 'Confirmado',
+                'pago': 'Pago',
+                'cancelada': 'Cancelada'
+            };
+            const statusFaturaDisplay = statusFilter ? (stFaturaFilterMap[statusFilter] || statusFilter) : 'Todas';
+
+            // Barra de Filtros Aplicados
+            doc.setFillColor(248, 250, 252);
+            doc.setDrawColor(226, 232, 240);
+            doc.setLineWidth(0.3);
+            doc.roundedRect(marginX, 20.2, contentWidth, 7.6, 1.4, 1.4, 'FD');
+
+            const filterY = 25.1;
+            renderFilterCell(marginX + 3, filterY, 'Mês de ref.:', mesRefDisplay, 32);
+            doc.line(64, 21.6, 64, 26.4);
+            renderFilterCell(67, filterY, 'Período:', periodoDisplay, 55);
+            doc.line(138, 21.6, 138, 26.4);
+            renderFilterCell(141, filterY, 'Status:', statusFaturaDisplay, 48);
+            doc.line(204, 21.6, 204, 26.4);
+            renderFilterCell(207, filterY, 'Busca aplicada:', buscaDisplay, 52);
 
             // Resumo financeiro / Filtros aplicados
             const totalFact = sortedInvoices.reduce((sum, inv) => sum + (inv.parent_invoice_id ? 0 : (Number(inv.valor_a_pagar) || 0)), 0);
@@ -826,13 +971,13 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
             doc.setFontSize(10);
             doc.setFont('helvetica', 'bold');
             doc.setTextColor(15, 23, 42); // Charcoal
-            doc.text(`Total Faturas: ${formatCurrency(totalFact)}`, 14, 29);
-            doc.text(`Total Registros: ${sortedInvoices.length}`, pageWidth - 14, 29, { align: 'right' });
+            doc.text(`Total Faturas: ${formatCurrency(totalFact)}`, marginX, 33.8);
+            doc.text(`Total Registros: ${sortedInvoices.length}`, pageWidth - marginX, 33.8, { align: 'right' });
 
-            doc.setFontSize(9);
+            doc.setFontSize(8.5);
             doc.setFont('helvetica', 'normal');
             doc.setTextColor(71, 85, 105); // Slate 600
-            doc.text(statusSummaryText, 14, 35);
+            doc.text(statusSummaryText, marginX, 39.2);
 
             // Mapear dados para a tabela
             const tableBody = sortedInvoices.map(inv => {
@@ -851,12 +996,12 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
 
                 return [
                     inv.consumer_units?.numero_uc || '-',
-                    abbreviateName(getDisplayName(inv) !== '-' ? getDisplayName(inv) : inv.consumer_units?.titular_conta, 20),
+                    abbreviateName(getDisplayName(inv) !== '-' ? getDisplayName(inv) : inv.consumer_units?.titular_conta, 22),
                     inv.mes_referencia ? (() => {
                         const [year, month] = inv.mes_referencia.split('-');
                         return `${month}/${year}`;
                     })() : '-',
-                    inv.consumo_compensado ? `${inv.consumo_compensado} kWh` : '-',
+                    inv.consumo_compensado ? `${Number(inv.consumo_compensado).toLocaleString('pt-BR')} kWh` : '-',
                     formatCurrency(energyBillValue),
                     vencStr,
                     getAnteriorLeitura(inv),
@@ -867,7 +1012,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
             });
 
             autoTable(doc, {
-                startY: 40,
+                startY: 43,
                 head: [[
                     'Unidade Consumidora', 
                     'Assinante / Titular', 
@@ -882,28 +1027,47 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                 ]],
                 body: tableBody,
                 theme: 'striped',
-                headStyles: { fillColor: [0, 51, 102], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8 },
-                bodyStyles: { fontSize: 8, textColor: [51, 65, 85] },
+                headStyles: {
+                    fillColor: [15, 38, 74],
+                    textColor: [255, 255, 255],
+                    fontStyle: 'bold',
+                    fontSize: 8,
+                    cellPadding: { top: 2.3, right: 2, bottom: 2.3, left: 2 }
+                },
+                bodyStyles: {
+                    fontSize: 8,
+                    textColor: [30, 41, 59],
+                    cellPadding: { top: 2, right: 2, bottom: 2, left: 2 }
+                },
                 alternateRowStyles: { fillColor: [248, 250, 252] },
-                margin: { left: 14, right: 14 },
+                margin: { left: marginX, right: marginX },
                 columnStyles: {
                     0: { cellWidth: 32 },
-                    1: { cellWidth: 45 },
-                    2: { cellWidth: 16, halign: 'center' },
-                    3: { cellWidth: 28, halign: 'center' },
+                    1: { cellWidth: 49 },
+                    2: { cellWidth: 18, halign: 'center' },
+                    3: { cellWidth: 28, halign: 'right' },
                     4: { cellWidth: 26, halign: 'right' },
                     5: { cellWidth: 24, halign: 'center' },
                     6: { cellWidth: 22, halign: 'center' },
                     7: { cellWidth: 22, halign: 'center' },
-                    8: { cellWidth: 26, halign: 'right' },
-                    9: { cellWidth: 28, halign: 'center' }
+                    8: { cellWidth: 26, halign: 'right', fontStyle: 'bold' },
+                    9: { cellWidth: 30, halign: 'center' }
+                },
+                didParseCell: (data) => {
+                    if (data.section === 'head') {
+                        if ([2, 5, 6, 7, 9].includes(data.column.index)) {
+                            data.cell.styles.halign = 'center';
+                        } else if ([3, 4, 8].includes(data.column.index)) {
+                            data.cell.styles.halign = 'right';
+                        }
+                    }
                 },
                 didDrawPage: (data) => {
                     const str = `Página ${data.pageNumber}`;
                     doc.setFontSize(8);
                     doc.setFont('helvetica', 'normal');
                     doc.setTextColor(148, 163, 184);
-                    doc.text(str, pageWidth - 14, doc.internal.pageSize.getHeight() - 10, { align: 'right' });
+                    doc.text(str, pageWidth - marginX, pageHeight - 8, { align: 'right' });
                 }
             });
 
