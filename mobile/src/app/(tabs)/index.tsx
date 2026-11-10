@@ -1,22 +1,23 @@
 import { Redirect, router, type Href } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { Text } from 'react-native';
+import { Text, View } from 'react-native';
 import { Button, Card, Empty, ErrorState, Hero, ListItem, Loading, Metric, Row, Screen, SearchInput, SectionLabel, type IconName } from '../../components/ui';
 import { useAuth } from '../../contexts/AuthContext';
 import { useMinhasUcs, useMinhasUsinas, usePerfil } from '../../lib/api';
 import { lerIndicacaoPendente } from '../../lib/indicacao';
 import { lerObjetivo } from '../../lib/objetivo';
 import { fmtBRL, primeiroNome } from '../../lib/format';
-import { colors, type } from '../../theme/tokens';
+import { colors, radius, type } from '../../theme/tokens';
 
-type Modalidade = { key: string; icon: IconName; title: string; subtitle: string; href: Href; tags: string; badge?: string };
+type ToneKey = 'accentSolar' | 'accentEnergy' | 'accentEv' | 'accentConnect' | 'primary';
+type Modalidade = { key: string; icon: IconName; tone: ToneKey; title: string; subtitle: string; href: Href; tags: string; badge?: string };
 
 const MODALIDADES: Modalidade[] = [
-  { key: 'usinas', icon: 'solar-power', title: 'Usinas de Investimento', subtitle: 'Gere energia para sua rede', href: '/invest', tags: 'solar usina invest gd' },
-  { key: 'energia', icon: 'swap-horiz', title: 'Energia por assinatura', subtitle: 'Energia com descontos', href: '/energia', tags: 'energia assinatura uc conta fatura' },
-  { key: 'eletroposto', icon: 'ev-station', title: 'Eletropostos', subtitle: 'Recargas em eletropostos', href: '/eletroposto', tags: 'eletroposto recarga carro ve' },
-  { key: 'drive', icon: 'router', title: 'Drive Connect', subtitle: 'Sua rede de recargas', href: '/connect/drive', tags: 'drive connect motorista rede', badge: 'HOT' },
-  { key: 'home', icon: 'badge', title: 'Home Connect', subtitle: 'Indique e ganhe', href: '/connect/home', tags: 'home connect indicar indicacao cashback' },
+  { key: 'usinas', icon: 'solar-power', tone: 'accentSolar', title: 'Usinas de Investimento', subtitle: 'Gere energia para sua rede', href: '/invest', tags: 'solar usina invest gd' },
+  { key: 'energia', icon: 'bolt', tone: 'accentEnergy', title: 'Energia por assinatura', subtitle: 'Energia com descontos na conta de luz', href: '/energia', tags: 'energia assinatura uc conta fatura' },
+  { key: 'eletroposto', icon: 'ev-station', tone: 'accentEv', title: 'Eletropostos', subtitle: 'Recargas em eletropostos B2W', href: '/eletroposto', tags: 'eletroposto recarga carro ve' },
+  { key: 'drive', icon: 'electric-car', tone: 'accentConnect', title: 'Drive Connect', subtitle: 'Sua rede de recargas', href: '/connect/drive', tags: 'drive connect motorista rede', badge: 'HOT' },
+  { key: 'home', icon: 'diversity-3', tone: 'primary', title: 'Home Connect', subtitle: 'Indique assinantes e ganhe cashback', href: '/connect/home', tags: 'home connect indicar indicacao cashback' },
 ];
 
 export default function Inicio() {
@@ -92,8 +93,8 @@ export default function Inicio() {
       ) : null}
       <SearchInput value={busca} onChangeText={setBusca} placeholder="Buscar solução (ex: Solar, Recarga, Indicar…)" />
       <Row>
-        <Metric label="Economia no mês" value={fmtBRL(economia)} icon="savings" iconColor={colors.secondary} foot={`${ucs.data?.length ?? 0} UCs`} footIcon="bolt" />
-        <Metric label="Receita usinas" value={fmtBRL(receita)} icon="payments" foot={`${usinas.data?.length ?? 0} usinas`} footIcon="solar-power" />
+        <Metric label="Economia no mês" value={fmtBRL(economia)} icon="savings" iconColor={colors.statusVerified} foot={`${ucs.data?.length ?? 0} UCs`} footIcon="bolt" />
+        <Metric label="Receita usinas" value={fmtBRL(receita)} icon="payments" iconColor={colors.accentSolar} foot={`${usinas.data?.length ?? 0} usinas`} footIcon="solar-power" />
       </Row>
       <SectionLabel title="Selecione a modalidade" aside={`${MODALIDADES.length} disponíveis`} />
       {lista.length === 0 ? (
@@ -103,10 +104,15 @@ export default function Inicio() {
           <ListItem
             key={m.key}
             icon={m.icon}
+            iconColor={colors[m.tone]}
             title={m.title}
             subtitle={m.subtitle}
             onPress={() => router.push(m.href)}
-            right={m.badge ? <Text style={[type.labelSm, { color: colors.primary }]}>{m.badge}</Text> : undefined}
+            right={m.badge ? (
+              <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.full, backgroundColor: `${colors.primary}22`, borderWidth: 1, borderColor: `${colors.primary}55` }}>
+                <Text style={[type.labelSm, { color: colors.primary }]}>{m.badge}</Text>
+              </View>
+            ) : undefined}
           />
         ))
       )}

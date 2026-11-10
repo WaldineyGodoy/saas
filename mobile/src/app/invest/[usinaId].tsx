@@ -45,16 +45,16 @@ export default function UsinaDetalhe() {
       </Card>
 
       <Row>
-        <Metric label="Geração do mês" value={fmtKwh(atual?.geracao_mensal_kwh)} unit="kWh" icon="solar-power"
+        <Metric label="Geração do mês" value={fmtKwh(atual?.geracao_mensal_kwh)} unit="kWh" icon="solar-power" iconColor={colors.accentSolar}
           foot={vsPrev === null ? fmtCiclo(atual?.mes_referencia) : `${vsPrev > 0 ? '+' : ''}${fmtPct(vsPrev)} vs projetado`}
           footIcon={vsPrev === null ? undefined : vsPrev >= 0 ? 'trending-up' : 'trending-down'}
           footColor={vsPrev !== null && vsPrev >= 0 ? colors.statusVerified : colors.inkSecondary} />
-        <Metric label="Receita do mês" value={fmtBRL(atual?.saldo_receber)} icon="payments" iconColor={colors.secondary}
-          foot={rentab === null ? undefined : `Rentabilidade ${fmtPct(rentab)} a.m.`} footIcon="verified" />
+        <Metric label="Receita do mês" value={fmtBRL(atual?.saldo_receber)} icon="payments" iconColor={colors.statusVerified}
+          foot={rentab === null ? undefined : `Rentabilidade ${fmtPct(rentab)} a.m.`} footColor={colors.statusVerified} footIcon="verified" />
       </Row>
       <Row>
-        <Metric label="Valor investido" value={fmtBRL(investido)} icon="account-balance" />
-        <Metric label="Payback estimado" value={paybackAnos === null ? '—' : `${paybackAnos.toFixed(1).replace('.', ',')} anos`} icon="hourglass-top"
+        <Metric label="Valor investido" value={fmtBRL(investido)} icon="account-balance" iconColor={colors.accentEnergy} />
+        <Metric label="Payback estimado" value={paybackAnos === null ? '—' : `${paybackAnos.toFixed(1).replace('.', ',')} anos`} icon="schedule" iconColor={colors.secondary}
           foot={investido > 0 ? `Amortizado: ${fmtPct(Math.min(100, (acumulado / investido) * 100))}` : undefined} />
       </Row>
 

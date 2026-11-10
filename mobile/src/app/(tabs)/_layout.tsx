@@ -31,10 +31,10 @@ export default function TabsLayout() {
         tabBarLabelStyle: { fontFamily: fonts.bodySemi, fontSize: 11, lineHeight: 15 },
       }}
     >
-      <Tabs.Screen name="index" options={{ title: 'Início', tabBarIcon: icon('play-circle-outline') }} />
+      <Tabs.Screen name="index" options={{ title: 'Início', tabBarIcon: icon('grid-view') }} />
       <Tabs.Screen name="eletroposto" options={{ title: 'Eletroposto', tabBarIcon: icon('ev-station') }} />
       <Tabs.Screen name="energia" options={{ title: 'Energia', tabBarIcon: icon('bolt') }} />
-      <Tabs.Screen name="invest" options={{ title: 'B2W Invest', tabBarIcon: icon('trending-up') }} />
+      <Tabs.Screen name="invest" options={{ title: 'B2W Invest', tabBarIcon: icon('solar-power') }} />
       <Tabs.Screen name="mais" options={{ title: 'Mais', tabBarIcon: icon('more-horiz') }} />
       {/* Home e Drive Connect: telas do ecossistema com o mesmo cabeçalho e
           menu das abas, mas sem botão próprio no menu (11/10/2026). */}

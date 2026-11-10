@@ -63,15 +63,14 @@ export function TopBar({ initials, onAvatar }: { initials?: string; onAvatar?: (
 
 export function Hero({ kicker, title, subtitle }: { kicker?: string; title: string; subtitle?: string }) {
   return (
-    <View style={{ gap: 4, paddingTop: space.xs }}>
+    <View style={{ gap: 4, paddingTop: 2, paddingBottom: 2 }}>
       {kicker ? (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.primary }} />
-          <Text style={[type.labelMono, { color: colors.primaryLight, textTransform: 'uppercase' }]}>{kicker}</Text>
-        </View>
+        <Text style={{ fontFamily: fonts.bodySemi, fontSize: 13, lineHeight: 18, color: colors.primaryLight, letterSpacing: 0.2 }}>
+          {kicker}
+        </Text>
       ) : null}
       <Text style={[type.headlineLg, { color: colors.onSurface }]}>{title}</Text>
-      {subtitle ? <Text style={[type.body, { color: colors.onSurfaceVariant }]}>{subtitle}</Text> : null}
+      {subtitle ? <Text style={[type.body, { color: colors.onSurfaceVariant, marginTop: 2 }]}>{subtitle}</Text> : null}
     </View>
   );
 }
@@ -79,7 +78,7 @@ export function Hero({ kicker, title, subtitle }: { kicker?: string; title: stri
 export function Card({ children, style, onPress }: { children: ReactNode; style?: StyleProp<ViewStyle>; onPress?: () => void }) {
   if (onPress) {
     return (
-      <Pressable onPress={onPress} style={({ pressed }) => [s.card, pressed && { opacity: 0.85 }, style]}>
+      <Pressable onPress={onPress} style={({ pressed }) => [s.card, pressed && { opacity: 0.88, transform: [{ scale: 0.995 }] }, style]}>
         {children}
       </Pressable>
     );
@@ -88,7 +87,7 @@ export function Card({ children, style, onPress }: { children: ReactNode; style?
 }
 
 export function Metric({
-  label, value, unit, icon, iconColor = colors.tertiaryContainer, foot, footColor = colors.inkSecondary, footIcon,
+  label, value, unit, icon, iconColor = colors.tertiary, foot, footColor = colors.inkSecondary, footIcon, embedded,
 }: {
   label: string;
   value: string;
@@ -98,21 +97,30 @@ export function Metric({
   foot?: string;
   footColor?: string;
   footIcon?: IconName;
+  embedded?: boolean;
 }) {
+  const tamanhoValor = value.length > 12 ? 16 : value.length >= 10 ? 18 : 21;
   return (
-    <View style={[s.card, { flex: 1, padding: 12, gap: 4 }]}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+    <View style={[embedded ? s.metricEmbedded : s.card, { flex: 1, padding: 12, gap: 6 }]}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
         <Text style={[type.labelSm, { color: colors.onSurfaceVariant, textTransform: 'uppercase', flex: 1 }]} numberOfLines={1}>{label}</Text>
-        <Icon name={icon} size={16} color={iconColor} />
+        <View style={{ width: 26, height: 26, borderRadius: 7, backgroundColor: `${iconColor}1A`, alignItems: 'center', justifyContent: 'center' }}>
+          <Icon name={icon} size={15} color={iconColor} />
+        </View>
       </View>
-      <Text style={[type.metric, { color: colors.onSurface }, value.length > 11 && { fontSize: 17, lineHeight: 26 }]} numberOfLines={1} adjustsFontSizeToFit>
+      <Text
+        style={[type.metric, { color: colors.onSurface, fontSize: tamanhoValor, lineHeight: 25 }]}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.75}
+      >
         {value}
-        {unit ? <Text style={{ fontFamily: fonts.body, fontSize: 11, color: colors.onSurfaceVariant }}>{`  ${unit}`}</Text> : null}
+        {unit ? <Text style={{ fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.onSurfaceVariant }}>{` ${unit}`}</Text> : null}
       </Text>
       {foot ? (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
           {footIcon ? <Icon name={footIcon} size={13} color={footColor} /> : null}
-          <Text style={[type.bodySm, { color: footColor }]} numberOfLines={1}>{foot}</Text>
+          <Text style={[type.bodySm, { color: footColor, flex: 1 }]} numberOfLines={1}>{foot}</Text>
         </View>
       ) : null}
     </View>
@@ -125,17 +133,26 @@ export const Row = ({ children, gap = space.sm, style }: { children: ReactNode; 
 
 export function SectionLabel({ title, aside, asideColor = colors.secondary }: { title: string; aside?: string; asideColor?: string }) {
   return (
-    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 4 }}>
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 2, marginTop: 4 }}>
       <Text style={[type.labelMono, { color: colors.onSurfaceVariant, textTransform: 'uppercase', flexShrink: 1 }]}>{title}</Text>
       {aside ? <Text style={[type.labelSm, { color: asideColor, textTransform: 'uppercase' }]}>{aside}</Text> : null}
     </View>
   );
 }
 
+const TONE_ICON: Record<Tone, IconName> = {
+  ok: 'check-circle',
+  warn: 'warning-amber',
+  bad: 'error-outline',
+  info: 'schedule',
+  neutral: 'radio-button-unchecked',
+};
+
 export function Badge({ label, tone }: { label: string; tone: Tone }) {
   const c = toneColor[tone];
   return (
-    <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.full, backgroundColor: `${c}22`, borderWidth: 1, borderColor: `${c}55` }}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.full, backgroundColor: `${c}1F`, borderWidth: 1, borderColor: `${c}4D` }}>
+      <MaterialIcons name={TONE_ICON[tone]} size={11} color={c} />
       <Text style={[type.labelSm, { color: c, textTransform: 'uppercase' }]}>{label}</Text>
     </View>
   );
@@ -147,13 +164,25 @@ export function Button({
   label: string;
   icon?: IconName;
   onPress?: () => void;
-  variant?: 'primary' | 'secondary' | 'ghost';
+  variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
   loading?: boolean;
   disabled?: boolean;
   style?: StyleProp<ViewStyle>;
 }) {
-  const bg = variant === 'primary' ? colors.primary : variant === 'secondary' ? colors.surfaceHigh : 'transparent';
-  const fg = variant === 'primary' ? colors.onPrimary : colors.onSurface;
+  const bg = variant === 'primary'
+    ? colors.primary
+    : variant === 'secondary'
+      ? colors.surfaceHigh
+      : variant === 'danger'
+        ? `${colors.statusProvisional}1A`
+        : 'transparent';
+  const fg = variant === 'primary'
+    ? colors.onPrimary
+    : variant === 'danger'
+      ? colors.statusProvisional
+      : variant === 'ghost'
+        ? colors.inkSecondary
+        : colors.onSurface;
   const off = disabled || loading;
   return (
     <Pressable
@@ -161,12 +190,13 @@ export function Button({
       onPress={off ? undefined : onPress}
       style={({ pressed }) => [
         s.btn,
-        { backgroundColor: bg, opacity: off ? 0.5 : pressed ? 0.85 : 1 },
-        variant === 'ghost' && { borderWidth: 1, borderColor: colors.borderStrong },
+        { backgroundColor: bg, opacity: off ? 0.5 : pressed ? 0.82 : 1 },
+        variant === 'secondary' && { borderWidth: 1, borderColor: colors.borderSubtle },
+        variant === 'danger' && { borderWidth: 1, borderColor: `${colors.statusProvisional}4D` },
         style,
       ]}
     >
-      {loading ? <ActivityIndicator color={fg} /> : icon ? <Icon name={icon} size={20} color={fg} /> : null}
+      {loading ? <ActivityIndicator color={fg} /> : icon ? <Icon name={icon} size={19} color={fg} /> : null}
       <Text style={[type.headlineSm, { color: fg, fontSize: 15 }]}>{label}</Text>
     </Pressable>
   );
@@ -177,7 +207,7 @@ export function Chip({ label, active, onPress }: { label: string; active?: boole
     <Pressable
       onPress={onPress}
       style={{
-        paddingHorizontal: 12, paddingVertical: 7, borderRadius: radius.full,
+        paddingHorizontal: 13, paddingVertical: 7, borderRadius: radius.full,
         backgroundColor: active ? colors.primary : colors.surfaceLowest,
         borderWidth: 1, borderColor: active ? colors.primary : colors.borderSubtle,
       }}
@@ -195,7 +225,7 @@ export function SearchInput({ value, onChangeText, placeholder }: { value: strin
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor={`${colors.onSurfaceVariant}99`}
+        placeholderTextColor={`${colors.onSurfaceVariant}B3`}
         style={[type.body, { flex: 1, color: colors.onSurface, paddingVertical: 0 }]}
         autoCorrect={false}
       />
@@ -219,8 +249,8 @@ export function ListItem({
   onPress?: () => void;
 }) {
   return (
-    <Card onPress={onPress} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12 }}>
-      <View style={[s.iconBox, { backgroundColor: `${iconColor}1F` }]}>
+    <Card onPress={onPress} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 13 }}>
+      <View style={[s.iconBox, { backgroundColor: `${iconColor}1A`, borderWidth: 1, borderColor: `${iconColor}2E` }]}>
         <Icon name={icon} size={22} color={iconColor} />
       </View>
       <View style={{ flex: 1, gap: 2 }}>
@@ -228,7 +258,7 @@ export function ListItem({
         {subtitle ? <Text style={[type.bodySm, { color: colors.inkSecondary }]} numberOfLines={2}>{subtitle}</Text> : null}
       </View>
       {right}
-      {onPress ? <Icon name="arrow-forward" size={18} color={colors.inkMuted} /> : null}
+      {onPress ? <Icon name="chevron-right" size={20} color={colors.inkMuted} /> : null}
     </Card>
   );
 }
@@ -281,15 +311,16 @@ export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () =>
 const criarFolha = () => StyleSheet.create({
   topbar: { backgroundColor: colors.header, borderBottomWidth: 1, borderBottomColor: colors.headerBorder },
   topbarRow: { height: 56, paddingHorizontal: space.gutterMobile, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  online: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.full, backgroundColor: `${colors.headerAccent}1A` },
+  online: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 9, paddingVertical: 4, borderRadius: radius.full, backgroundColor: `${colors.headerAccent}1C`, borderWidth: 1, borderColor: `${colors.headerAccent}38` },
   onlineDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.headerAccent },
-  onlineTxt: { fontFamily: fonts.mono, fontSize: 9, color: colors.headerAccent, textTransform: 'uppercase' },
-  avatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.headerChip, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.headerBorder },
+  onlineTxt: { fontFamily: fonts.mono, fontSize: 9, color: colors.headerAccent, textTransform: 'uppercase', letterSpacing: 0.6 },
+  avatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.headerChip, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.headerBorder },
   avatarTxt: { fontFamily: fonts.headline, fontSize: 12, color: colors.headerInk },
   card: { backgroundColor: colors.surfaceLowest, borderRadius: radius.xl, padding: space.md, borderWidth: 1, borderColor: colors.borderSubtle },
+  metricEmbedded: { backgroundColor: colors.surfaceLow, borderRadius: radius.lg },
   btn: { minHeight: 48, borderRadius: radius.xl, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 16 },
-  search: { height: 44, borderRadius: radius.xl, backgroundColor: colors.surfaceLowest, borderWidth: 1, borderColor: colors.borderSubtle, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12 },
-  iconBox: { width: 40, height: 40, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center' },
+  search: { height: 46, borderRadius: radius.xl, backgroundColor: colors.surfaceLowest, borderWidth: 1, borderColor: colors.borderSubtle, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14 },
+  iconBox: { width: 42, height: 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
 });
 const folhas: Partial<Record<Esquema, ReturnType<typeof criarFolha>>> = {};
 const s = new Proxy({} as ReturnType<typeof criarFolha>, {

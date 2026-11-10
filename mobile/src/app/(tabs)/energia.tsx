@@ -39,8 +39,8 @@ export default function Energia() {
       />
       <SearchInput value={busca} onChangeText={setBusca} placeholder="Buscar UC ou endereço" />
       <Row>
-        <Metric label="Consumo do mês" value={fmtKwh(tot.consumo)} unit="kWh" icon="payments" foot={`Vr. ${fmtBRL(tot.valor)}`} footColor={colors.secondary} />
-        <Metric label="Economia" value={fmtBRL(tot.economia)} icon="speed" iconColor={colors.secondary} foot="Economia no mês" footIcon="verified" />
+        <Metric label="Consumo do mês" value={fmtKwh(tot.consumo)} unit="kWh" icon="bolt" iconColor={colors.accentEnergy} foot={`Vr. ${fmtBRL(tot.valor)}`} footColor={colors.inkSecondary} />
+        <Metric label="Economia" value={fmtBRL(tot.economia)} icon="savings" iconColor={colors.statusVerified} foot="Economia no mês" footColor={colors.statusVerified} footIcon="verified" />
       </Row>
       <SectionLabel title="Unidades consumidoras (UCs)" aside={`${ucs.data?.length ?? 0} cadastradas`} />
       {ucs.isLoading ? <Loading /> : ucs.error ? <ErrorState error={ucs.error} onRetry={() => ucs.refetch()} /> : lista.length === 0 ? (
@@ -59,6 +59,7 @@ export default function Energia() {
             <ListItem
               key={u.id}
               icon="bolt"
+              iconColor={colors.accentEnergy}
               title={`UC: ${u.numero_uc}`}
               subtitle={enderecoCurto(u.address) || u.concessionaria || ''}
               right={<Badge label={label} tone={tone} />}

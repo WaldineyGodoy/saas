@@ -53,7 +53,7 @@ export default function Eletroposto() {
       ) : lista.map(({ item: p, km }) => {
         const [label, tone] = eletropostoStatus(p.status);
         return (
-          <ListItem key={p.id} icon="ev-station" title={p.nome}
+          <ListItem key={p.id} icon="ev-station" iconColor={colors.accentEv} title={p.nome}
             subtitle={[km != null ? `${km.toFixed(1).replace('.', ',')} km` : null, enderecoCurto(p.endereco), p.potencia_kw ? `${fmtKwh(p.potencia_kw)} kW` : null, p.tarifa_kwh ? `${fmtBRL(p.tarifa_kwh)}/kWh` : null].filter(Boolean).join(' · ')}
             right={<Badge label={label} tone={tone} />}
             onPress={() => WebBrowser.openBrowserAsync(urlCheckoutRecarga(p.id, '1'))} />

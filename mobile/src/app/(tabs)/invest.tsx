@@ -34,10 +34,10 @@ export default function Invest() {
         return (
           <Card key={u.id} onPress={abrir} style={{ gap: 12 }}>
             <Row style={{ alignItems: 'center', gap: 12 }}>
-              <View style={{ width: 40, height: 40, borderRadius: 8, backgroundColor: `${colors.primary}1F`, alignItems: 'center', justifyContent: 'center' }}>
-                <Icon name="bolt" color={colors.primary} size={22} />
+              <View style={{ width: 42, height: 42, borderRadius: 12, backgroundColor: `${colors.accentSolar}1A`, borderWidth: 1, borderColor: `${colors.accentSolar}2E`, alignItems: 'center', justifyContent: 'center' }}>
+                <Icon name="solar-power" color={colors.accentSolar} size={22} />
               </View>
-              <View style={{ flex: 1 }}>
+              <View style={{ flex: 1, gap: 2 }}>
                 <Row style={{ alignItems: 'center', justifyContent: 'space-between' }}>
                   <Text style={[type.headlineSm, { color: colors.onSurface, flexShrink: 1 }]} numberOfLines={1}>{u.name}</Text>
                   <Badge label={label} tone={tone} />
@@ -46,15 +46,15 @@ export default function Invest() {
               </View>
             </Row>
             <Row>
-              <Metric label="Geração do mês" value={fmtKwh(u.geracao_mes_kwh)} unit="kWh" icon="bolt" foot={fmtCiclo(u.mes_referencia)} />
-              <Metric label="Receita" value={fmtBRL(u.receita_mes)} icon="speed" iconColor={colors.secondary} foot="Receita do mês" footIcon="verified" />
+              <Metric embedded label="Geração do mês" value={fmtKwh(u.geracao_mes_kwh)} unit="kWh" icon="bolt" iconColor={colors.accentSolar} foot={fmtCiclo(u.mes_referencia)} />
+              <Metric embedded label="Receita" value={fmtBRL(u.receita_mes)} icon="payments" iconColor={colors.statusVerified} foot="Receita do mês" footColor={colors.statusVerified} footIcon="verified" />
             </Row>
-            <Pressable onPress={abrir} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Pressable onPress={abrir} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 2 }}>
               <Text style={[type.bodySm, { color: colors.inkSecondary }]}>
                 {eficiencia === null ? 'Eficiência: aguardando fechamento' : `Eficiência operacional: ${fmtPct(eficiencia)}`}
               </Text>
               <Row gap={2} style={{ alignItems: 'center' }}>
-                <Text style={[type.bodySm, { color: colors.primaryLight }]}>Telemetria & detalhes</Text>
+                <Text style={[type.bodySm, { color: colors.primaryLight, fontWeight: '600' }]}>Telemetria & detalhes</Text>
                 <Icon name="chevron-right" size={18} color={colors.primaryLight} />
               </Row>
             </Pressable>

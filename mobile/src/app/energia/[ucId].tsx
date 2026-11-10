@@ -53,16 +53,16 @@ export default function UcDetalhe() {
       ) : (
         <>
           <Row>
-            <Metric label="Consumo mês" value={fmtKwh(atual.consumo_kwh)} unit="kWh" icon="speed"
+            <Metric label="Consumo mês" value={fmtKwh(atual.consumo_kwh)} unit="kWh" icon="bolt" iconColor={colors.accentEnergy}
               foot={varConsumo === null ? fmtCiclo(atual.mes_referencia) : `${varConsumo > 0 ? '+' : ''}${fmtPct(varConsumo)} vs mês ant.`}
               footIcon={varConsumo !== null ? (varConsumo > 0 ? 'trending-up' : 'trending-down') : undefined}
               footColor={varConsumo !== null && varConsumo <= 0 ? colors.statusVerified : colors.inkSecondary} />
-            <Metric label="Fatura atual" value={fmtBRL(atual.valor_a_pagar)} icon="receipt-long" foot={`Vencimento: ${fmtData(atual.vencimento).slice(0, 5)}`} />
+            <Metric label="Fatura atual" value={fmtBRL(atual.valor_a_pagar)} icon="receipt-long" iconColor={colors.primary} foot={`Vencimento: ${fmtData(atual.vencimento).slice(0, 5)}`} footIcon="event" />
           </Row>
           <Row>
-            <Metric label="Economia gerada" value={fmtBRL(atual.economia_reais)} icon="savings" iconColor={colors.secondary}
-              foot={desconto === null ? undefined : `Desconto de ${fmtPct(desconto)}`} footColor={colors.statusVerified} />
-            <Metric label="Compensação" value={fmtKwh(atual.consumo_compensado)} unit="kWh" icon="solar-power" iconColor={colors.secondary}
+            <Metric label="Economia gerada" value={fmtBRL(atual.economia_reais)} icon="savings" iconColor={colors.statusVerified}
+              foot={desconto === null ? undefined : `Desconto de ${fmtPct(desconto)}`} footColor={colors.statusVerified} footIcon="verified" />
+            <Metric label="Compensação" value={fmtKwh(atual.consumo_compensado)} unit="kWh" icon="solar-power" iconColor={colors.accentSolar}
               foot={compensacao === null ? undefined : `${fmtPct(compensacao)} da demanda`} />
           </Row>
 
