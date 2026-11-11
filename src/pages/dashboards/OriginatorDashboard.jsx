@@ -68,7 +68,8 @@ export default function OriginatorDashboard() {
                 // E `commissions` é alimentada por `generate_monthly_commissions`,
                 // que lê `profiles.commission_split` — não é a fonte. Quem
                 // calcula e lança de verdade é o gatilho `handle_invoice_paid_ledger`,
-                // a cada fatura paga, usando `originators_v2.split_commission`.
+                // a cada fatura paga, pelo Plano do Originador efetivo
+                // (`fn_plano_originador_efetivo`; `split_commission` não é lido).
                 const { data: extratoData, error: extratoError } = await supabase
                     .from('ledger_entries')
                     .select('id, amount, description, created_at, reference_id, ledger_accounts!inner(code)')

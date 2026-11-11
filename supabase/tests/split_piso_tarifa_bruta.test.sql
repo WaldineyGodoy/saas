@@ -100,6 +100,46 @@ DECLARE
     v_esp_piso        numeric;
     v_esp_teto        numeric;
 BEGIN
+    -- FIXTURE Plano do Originador (20261110a/b): a regra de parceiro saiu do
+    -- plano de assinatura. Para os numeros deste arquivo nao mudarem, cada
+    -- plano de assinatura que o teste grava ganha um planos_originador com as
+    -- MESMAS chaves de parceiro (lider/ppe/ppp/ppf) que ele traz -- inclusive
+    -- nenhuma -- e passa a apontar para ele. Some no rollback.
+    EXECUTE $shim$
+      CREATE OR REPLACE FUNCTION public.sbx_plano_originador_do_plano() RETURNS trigger LANGUAGE plpgsql AS $b$
+      DECLARE c text[] := ARRAY['lider', 'ppe', 'ppp', 'ppf']; v_id uuid;
+      BEGIN
+        IF TG_OP = 'UPDATE' AND (NEW.start_config, NEW.recorrente_config, NEW.tipo_recompensa)
+           IS NOT DISTINCT FROM (OLD.start_config, OLD.recorrente_config, OLD.tipo_recompensa) THEN
+          RETURN NEW;
+        END IF;
+        INSERT INTO public.planos_originador (nome, tipo_recompensa, start_config, recorrente_config)
+        SELECT 'SANDBOX fixture ' || NEW.nome,
+               CASE NEW.tipo_recompensa WHEN 'hibrido' THEN 'ambos' ELSE NEW.tipo_recompensa END,
+               jsonb_build_object(
+                 'faturas_elegiveis', COALESCE((SELECT jsonb_agg(f::int) FROM jsonb_array_elements_text(
+                     CASE WHEN jsonb_typeof(NEW.start_config -> 'faturas_elegiveis') = 'array' THEN NEW.start_config -> 'faturas_elegiveis' ELSE '[]' END) f
+                   WHERE f ~ '^[1-9][0-9]*$'), '[]'),
+                 'regras', COALESCE((SELECT jsonb_object_agg(e.key, (
+                       SELECT COALESCE(jsonb_object_agg(k.key, k.value), '{}') FROM jsonb_each(e.value) k
+                        WHERE k.key = ANY (c) AND (k.value #>> '{}') ~ '^[0-9]+(\.[0-9]+)?$' AND (k.value #>> '{}')::numeric <= 100))
+                     FROM jsonb_each(CASE WHEN jsonb_typeof(NEW.start_config -> 'regras') = 'object' THEN NEW.start_config -> 'regras' ELSE '{}' END) e
+                    WHERE e.key ~ '^[1-9][0-9]*$' AND jsonb_typeof(e.value) = 'object'), '{}')),
+               jsonb_build_object('regras_multinivel', COALESCE((SELECT jsonb_object_agg(m.key, jsonb_build_object(
+                     'niveis', COALESCE((SELECT jsonb_object_agg(l.key, l.value) FROM jsonb_each(m.value -> 'niveis') l
+                                          WHERE l.key IN ('L1', 'L2', 'L3', 'L4') AND (l.value #>> '{}') ~ '^[0-9]+(\.[0-9]+)?$'
+                                            AND (l.value #>> '{}')::numeric <= 100), '{}'),
+                     'max_niveis', CASE WHEN (m.value ->> 'max_niveis') ~ '^[0-4]$' THEN (m.value ->> 'max_niveis')::int ELSE 0 END))
+                   FROM jsonb_each(CASE WHEN jsonb_typeof(NEW.recorrente_config -> 'regras_multinivel') = 'object' THEN NEW.recorrente_config -> 'regras_multinivel' ELSE '{}' END) m
+                  WHERE m.key = ANY (c) AND jsonb_typeof(m.value -> 'niveis') = 'object'), '{}'))
+        RETURNING id INTO v_id;
+        NEW.plano_originador_id := v_id;
+        RETURN NEW;
+      END $b$;
+      CREATE TRIGGER sbx_plano_originador_do_plano BEFORE INSERT OR UPDATE ON public.planos_assinatura_energia
+        FOR EACH ROW EXECUTE FUNCTION public.sbx_plano_originador_do_plano();
+    $shim$;
+
 
     -- Plano de Usina (20261006f): a usina deixou de apontar direto para o
     -- plano de assinatura; agora aponta para um plano de usina, que aponta

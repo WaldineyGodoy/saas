@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { fetchAddressByCep } from '../lib/api';
 import { maskCpfCnpj, maskPhone, validateDocument, validatePhone, cleanDigits } from '../lib/validators';
 import { buildReferralUrl, normalizarEndereco, normalizarPixKeyType, PIX_KEY_TYPES } from '../lib/originador';
+import { listarPlanosOriginador, planoOriginadorAusente, planoPadraoDe, resumoPlanoOriginador, ROTULO_CARGO } from '../lib/planoOriginador';
 import { 
     History, User, MapPin, Wallet, Link as LinkIcon, FileSignature,
     X, Save, Trash2, CheckCircle, AlertCircle, Copy, ExternalLink 
@@ -25,8 +26,10 @@ export default function OriginatorModal({ originator, onClose, onSave, onDelete 
         phone: '',
         pix_key: '',
         pix_key_type: 'cpf', // Default
-        split_start: 0,
-        split_recurrent: 0,
+        // Vazio = Plano Padrão. A remuneração não mora mais em
+        // `split_commission` (que o motor nunca leu): vem do Plano do
+        // Originador, e a exceção escolhida aqui vence o plano de cada UC.
+        plano_originador_id: '',
         cep: '',
         rua: '',
         numero: '',
@@ -49,12 +52,35 @@ export default function OriginatorModal({ originator, onClose, onSave, onDelete 
                 phone: originator.phone || '',
                 pix_key: originator.pix_key || '',
                 pix_key_type: normalizarPixKeyType(originator.pix_key_type),
-                split_start: originator.split_commission?.start || 0,
-                split_recurrent: originator.split_commission?.recurrent || 0,
+                plano_originador_id: originator.plano_originador_id || '',
                 ...endereco
             });
         }
     }, [originator]);
+
+    // Planos do Originador. Enquanto a migração não estiver no banco, a
+    // tabela não existe: o campo vira um aviso e o save não envia a coluna.
+    const [planos, setPlanos] = useState([]);
+    const [planosStatus, setPlanosStatus] = useState('carregando'); // carregando | ok | ausente | erro
+    useEffect(() => {
+        let cancelado = false;
+        listarPlanosOriginador(supabase)
+            .then(lista => { if (!cancelado) { setPlanos(lista); setPlanosStatus('ok'); } })
+            .catch(error => {
+                if (cancelado) return;
+                const ausente = planoOriginadorAusente(error);
+                if (!ausente) console.error('Erro ao carregar Planos do Originador:', error);
+                setPlanosStatus(ausente ? 'ausente' : 'erro');
+            });
+        return () => { cancelado = true; };
+    }, []);
+
+    const planoPadrao = planoPadraoDe(planos);
+    const planoSelecionado = planos.find(p => p.id === formData.plano_originador_id) || planoPadrao;
+    // Ativos, mais o atual mesmo que tenha sido inativado — senão o select
+    // mostraria outro plano e o save trocaria o originador sem ninguém pedir.
+    const planosNoSelect = planos.filter(p => p.status === 'ativo' || p.id === formData.plano_originador_id);
+    const cargo = (originator?.cargo || 'ppf').toLowerCase();
 
     const handleCepBlur = async () => {
         const rawCep = formData.cep.replace(/\D/g, '');
@@ -131,10 +157,6 @@ export default function OriginatorModal({ originator, onClose, onSave, onDelete 
             phone: formData.phone.replace(/\D/g, ''),
             pix_key: formData.pix_key,
             pix_key_type: formData.pix_key_type,
-            split_commission: {
-                start: Number(formData.split_start) || 0,
-                recurrent: Number(formData.split_recurrent) || 0
-            },
             address: {
                 cep: formData.cep,
                 rua: formData.rua,
@@ -146,10 +168,28 @@ export default function OriginatorModal({ originator, onClose, onSave, onDelete 
             }
         };
 
+        // `split_commission` deixou de ser gravado (a coluna fica no banco,
+        // sem uso). Sem plano escolhido vai o Padrão; sem a tabela no banco,
+        // a coluna não é enviada.
+        if (planosStatus === 'ok') {
+            const planoId = formData.plano_originador_id || planoPadrao?.id;
+            if (planoId) payload.plano_originador_id = planoId;
+        }
+
         try {
-            let result;
+            const gravar = (dados) => (originator?.id
+                ? supabase.from('originators_v2').update(dados).eq('id', originator.id).select().single()
+                : supabase.from('originators_v2').insert(dados).select().single());
+
+            let result = await gravar(payload);
+            // Tabela de planos criada, mas a coluna ainda não: grava o resto.
+            if (result.error && 'plano_originador_id' in payload && planoOriginadorAusente(result.error)) {
+                const semPlano = { ...payload };
+                delete semPlano.plano_originador_id;
+                result = await gravar(semPlano);
+            }
+
             if (originator?.id) {
-                result = await supabase.from('originators_v2').update(payload).eq('id', originator.id).select().single();
                 if (!result.error) {
                     await addHistory('originator', originator.id, 'originator_updated', {
                         name: formData.name,
@@ -157,7 +197,6 @@ export default function OriginatorModal({ originator, onClose, onSave, onDelete 
                     }, 'Dados do originador atualizados');
                 }
             } else {
-                result = await supabase.from('originators_v2').insert(payload).select().single();
                 if (!result.error && result.data) {
                     await addHistory('originator', result.data.id, 'originator_created', {
                         name: formData.name,
@@ -195,7 +234,7 @@ export default function OriginatorModal({ originator, onClose, onSave, onDelete 
                 alert(
                     `Este originador tem ${count} lançamento(s) de comissão no razão e não pode ser excluído.\n\n` +
                     'Excluir apagaria o vínculo de um valor já devido. Se ele não deve mais operar, ' +
-                    'zere as comissões (Start e Recorrente) na aba Financeiro.'
+                    'mantenha o cadastro e trate o desligamento com o administrador.'
                 );
                 return;
             }
@@ -443,7 +482,7 @@ export default function OriginatorModal({ originator, onClose, onSave, onDelete 
                                         </div>
                                         <div>
                                             <h4 style={{ margin: 0, fontSize: '1rem', color: '#1e293b' }}>Configurações de Pagamento</h4>
-                                            <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b' }}>Defina as regras de comissão e dados bancários</p>
+                                            <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b' }}>Defina o Plano do Originador e os dados bancários</p>
                                         </div>
                                     </div>
 
@@ -472,26 +511,40 @@ export default function OriginatorModal({ originator, onClose, onSave, onDelete 
 
                                     <div style={{ gridColumn: '1 / -1', height: '1px', background: '#f1f5f9', margin: '0.5rem 0' }}></div>
 
-                                    <div style={{ background: '#ecfdf5', padding: '1.25rem', borderRadius: '20px', border: '1px solid #d1fae5' }}>
-                                        <label style={{ ...labelStyle, color: '#065f46' }}>Comissão Start (%)</label>
-                                        <div style={{ fontSize: '0.75rem', color: '#047857', marginBottom: '0.75rem' }}>Pago na primeira fatura do assinante</div>
-                                        <input
-                                            type="number" step="0.01"
-                                            value={formData.split_start}
-                                            onChange={e => setFormData({ ...formData, split_start: e.target.value })}
-                                            style={{ ...inputStyle, border: '1px solid #a7f3d0' }}
-                                        />
-                                    </div>
-
-                                    <div style={{ background: '#f0f9ff', padding: '1.25rem', borderRadius: '20px', border: '1px solid #d0e8ff' }}>
-                                        <label style={{ ...labelStyle, color: '#075985' }}>Comissão Recorrente (%)</label>
-                                        <div style={{ fontSize: '0.75rem', color: '#0369a1', marginBottom: '0.75rem' }}>Pago mensalmente sobre faturas liquidadas</div>
-                                        <input
-                                            type="number" step="0.01"
-                                            value={formData.split_recurrent}
-                                            onChange={e => setFormData({ ...formData, split_recurrent: e.target.value })}
-                                            style={{ ...inputStyle, border: '1px solid #bae6fd' }}
-                                        />
+                                    <div style={{ gridColumn: '1 / -1', background: '#f0f9ff', padding: '1.25rem', borderRadius: '20px', border: '1px solid #d0e8ff' }}>
+                                        <label style={{ ...labelStyle, color: '#075985' }}>Plano do Originador</label>
+                                        {planosStatus === 'ok' && planos.length > 0 ? (
+                                            <>
+                                                <select
+                                                    value={formData.plano_originador_id || planoPadrao?.id || ''}
+                                                    onChange={e => setFormData({ ...formData, plano_originador_id: e.target.value })}
+                                                    style={{ ...inputStyle, border: '1px solid #bae6fd' }}
+                                                >
+                                                    {!planoPadrao && <option value="">Plano Padrão</option>}
+                                                    {planosNoSelect.map(p => (
+                                                        <option key={p.id} value={p.id}>
+                                                            {p.nome}{p.padrao ? ' (Padrão)' : ''}{p.status !== 'ativo' ? ' — inativo' : ''}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                                <div style={{ marginTop: '0.75rem', fontSize: '0.85rem', color: '#0c4a6e' }}>
+                                                    <strong>{ROTULO_CARGO[cargo] || cargo}:</strong> {resumoPlanoOriginador(planoSelecionado, cargo)}
+                                                </div>
+                                                <div style={{ marginTop: '0.35rem', fontSize: '0.78rem', color: '#0369a1' }}>
+                                                    {!planoSelecionado || planoSelecionado.padrao
+                                                        ? 'Padrão: a regra segue o plano de assinatura de cada UC e pode variar conforme o produto vendido. O resumo acima vale quando o plano de assinatura não indica outro.'
+                                                        : 'Exceção: vale em todas as UCs deste originador, no lugar do plano de cada assinatura.'}
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <div style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                                                {planosStatus === 'carregando'
+                                                    ? 'Carregando planos...'
+                                                    : planosStatus === 'erro'
+                                                        ? 'Não foi possível carregar os Planos do Originador. O plano atual deste originador não será alterado.'
+                                                        : 'Planos do Originador ainda não disponíveis neste ambiente. A remuneração segue o plano de assinatura de cada UC.'}
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>

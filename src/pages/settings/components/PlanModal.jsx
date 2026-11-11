@@ -20,6 +20,18 @@ import { supabase } from '../../../lib/supabase';
 import { useUI } from '../../../contexts/UIContext';
 import DistribuidorasDoPlano from './DistribuidorasDoPlano';
 import { ehRecusaDeNovaVersao, textoConfirmaNovaVersao, AVISO_VERSAO_ANTIGA } from '../../../lib/planoAssinaturaVersao';
+import {
+    CARGOS_ORIGINADOR,
+    ROTULO_CARGO,
+    NIVEIS,
+    listarPlanosOriginador,
+    planoPadraoDe,
+    resumoPlanoOriginador,
+    semCargosDeParceiro,
+    normalizarPlanoOriginador,
+    matrizPadraoOriginador,
+    planoOriginadorAusente
+} from '../../../lib/planoOriginador';
 
 // Formatadores numéricos padrão PT-BR
 const formatCurrencyUnit = (val, decimals = 4) => {
@@ -38,33 +50,37 @@ const formatPct = (val, decimals = 2) => {
     });
 };
 
-// Estrutura padrão de níveis por cargo (Marketing Multinível B2W)
+// Estrutura padrão de níveis dos papéis que o PLANO DE ASSINATURA remunera
+// (decisão 2 da spec 2026-11-10-plano-originador): só B2W e Assinante Conect.
+// Líder, PPE, PPP e PPF vêm do Plano do Originador (`plano_originador_id`).
 const DEFAULT_MULTILEVEL_RULES = {
     b2w: {
         max_niveis: 4, // Recebe em L1, L2, L3 e L4+
         niveis: { L1: '10', L2: '10', L3: '10', L4: '10' }
-    },
-    lider: {
-        max_niveis: 4,
-        niveis: { L1: '1', L2: '1', L3: '1', L4: '0' }
-    },
-    ppe: {
-        max_niveis: 4,
-        niveis: { L1: '4', L2: '2', L3: '0', L4: '0' }
-    },
-    ppp: {
-        max_niveis: 4,
-        niveis: { L1: '4', L2: '2', L3: '0', L4: '0' }
-    },
-    ppf: {
-        max_niveis: 4,
-        niveis: { L1: '2', L2: '0', L3: '0', L4: '0' }
     },
     assinante_conect: {
         max_niveis: 4,
         niveis: { L1: '0', L2: '2', L3: '0', L4: '0' }
     }
 };
+
+// Start do plano de assinatura: só B2W e Assinante Conect por fatura.
+const DEFAULT_START_RULES = {
+    1: { b2w: '0', assinante_conect: '0' },
+    2: { b2w: '0', assinante_conect: '0' },
+    3: { b2w: '0', assinante_conect: '0' }
+};
+
+// Tipo do plano de assinatura ('hibrido') → tipo do Plano do Originador ('ambos').
+const TIPO_ASSINATURA_PARA_ORIGINADOR = { start: 'start', recorrente: 'recorrente', hibrido: 'ambos' };
+
+const ROTULO_TIPO_ORIGINADOR = {
+    start: 'só Bônus Start',
+    recorrente: 'só recorrência',
+    ambos: 'Start + recorrência'
+};
+
+const NIVEIS_ZERADOS = () => Object.fromEntries(NIVEIS.map(lk => [lk, '0']));
 
 const LEVEL_KEYS = ['L1', 'L2', 'L3', 'L4'];
 const LEVEL_LABELS = {
@@ -109,11 +125,37 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
 
     // Configuração do Start (Faturas Iniciais)
     const [faturasElegiveisStart, setFaturasElegiveisStart] = useState([2]);
-    const [regrasStart, setRegrasStart] = useState({
-        1: { b2w: '0', lider: '50', ppe: '50', ppp: '40', ppf: '20', assinante_conect: '0' },
-        2: { b2w: '0', lider: '50', ppe: '50', ppp: '40', ppf: '20', assinante_conect: '0' },
-        3: { b2w: '0', lider: '0', ppe: '0', ppp: '0', ppf: '0', assinante_conect: '0' }
-    });
+    const [regrasStart, setRegrasStart] = useState(DEFAULT_START_RULES);
+
+    // Plano do Originador: rege Líder, PPE, PPP e PPF nas UCs deste plano.
+    // `planosOrigStatus`: 'carregando' | 'ok' | 'ausente' (migração ainda não
+    // aplicada) | 'erro'. Só 'ok' envia `plano_originador_id` ao banco.
+    const [planosOriginador, setPlanosOriginador] = useState([]);
+    const [planosOrigStatus, setPlanosOrigStatus] = useState('carregando');
+    const [planoOriginadorId, setPlanoOriginadorId] = useState('');
+
+    // Busca os Planos do Originador e escolhe o do plano em edição (ou o Padrão).
+    useEffect(() => {
+        if (!isOpen) return;
+        let cancelado = false;
+        setPlanosOrigStatus('carregando');
+        setPlanoOriginadorId(planToEdit?.plano_originador_id || '');
+        listarPlanosOriginador(supabase)
+            .then(planos => {
+                if (cancelado) return;
+                setPlanosOriginador(planos);
+                setPlanosOrigStatus('ok');
+                const doPlano = planos.find(p => p.id === planToEdit?.plano_originador_id);
+                setPlanoOriginadorId(doPlano?.id || planoPadraoDe(planos)?.id || '');
+            })
+            .catch(err => {
+                if (cancelado) return;
+                setPlanosOriginador([]);
+                setPlanosOrigStatus(planoOriginadorAusente(err) ? 'ausente' : 'erro');
+                if (!planoOriginadorAusente(err)) console.error('Erro ao carregar Planos do Originador:', err);
+            });
+        return () => { cancelado = true; };
+    }, [isOpen, planToEdit]);
 
     // Busca Concessionárias no Supabase
     useEffect(() => {
@@ -167,23 +209,22 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
             // A coluna é a fonte que o motor lê; o lastro é só o retrato da tela.
             setPisoFornecedorPct(String(planToEdit.piso_fornecedor_pct ?? lastro.piso_fornecedor_pct ?? '50'));
 
+            // Só B2W e Assinante Conect: os cargos de parceiro que ainda
+            // estiverem gravados no plano (antes da migração) não entram no
+            // estado editável -- vêm do Plano do Originador.
             if (recCfg.regras_multinivel) {
-                setRegrasMultinivel(recCfg.regras_multinivel);
+                const rm = recCfg.regras_multinivel;
+                setRegrasMultinivel({
+                    b2w: rm.b2w || DEFAULT_MULTILEVEL_RULES.b2w,
+                    assinante_conect: rm.assinante_conect || DEFAULT_MULTILEVEL_RULES.assinante_conect
+                });
             } else {
                 const rRec = recCfg.regras || {};
                 const b2wVal = String(rRec.b2w ?? rRec.associacao ?? '10');
-                const liderVal = String(rRec.lider ?? rRec.coordenador ?? '1');
-                const ppeVal = String(rRec.ppe ?? rRec.embaixador ?? '4');
-                const pppVal = String(rRec.ppp ?? rRec.embaixador ?? '4');
-                const ppfVal = String(rRec.ppf ?? '2');
                 const conectVal = String(rRec.assinante_conect ?? rRec.assinante ?? '2');
 
                 setRegrasMultinivel({
                     b2w: { max_niveis: 4, niveis: { L1: b2wVal, L2: b2wVal, L3: b2wVal, L4: b2wVal } },
-                    lider: { max_niveis: 4, niveis: { L1: liderVal, L2: liderVal, L3: liderVal, L4: '0' } },
-                    ppe: { max_niveis: 4, niveis: { L1: ppeVal, L2: String(Math.max(0, Number(ppeVal) / 2)), L3: '0', L4: '0' } },
-                    ppp: { max_niveis: 4, niveis: { L1: pppVal, L2: String(Math.max(0, Number(pppVal) / 2)), L3: '0', L4: '0' } },
-                    ppf: { max_niveis: 4, niveis: { L1: ppfVal, L2: '0', L3: '0', L4: '0' } },
                     assinante_conect: { max_niveis: 4, niveis: { L1: String(rRec.assinante_conect_l1 ?? '0'), L2: conectVal || '2', L3: '0', L4: '0' } }
                 });
             }
@@ -192,10 +233,6 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                 setFaturasElegiveisStart(planToEdit.start_config.faturas_elegiveis || [2]);
                 const mapStartRule = (ruleObj = {}) => ({
                     b2w: String(ruleObj.b2w ?? ruleObj.associacao ?? '0'),
-                    lider: String(ruleObj.lider ?? ruleObj.coordenador ?? '0'),
-                    ppe: String(ruleObj.ppe ?? ruleObj.embaixador ?? '0'),
-                    ppp: String(ruleObj.ppp ?? ruleObj.embaixador ?? '0'),
-                    ppf: String(ruleObj.ppf ?? '0'),
                     assinante_conect: String(ruleObj.assinante_conect ?? ruleObj.assinante ?? '0')
                 });
                 setRegrasStart({
@@ -203,6 +240,9 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                     2: mapStartRule(planToEdit.start_config.regras?.[2]),
                     3: mapStartRule(planToEdit.start_config.regras?.[3])
                 });
+            } else {
+                setFaturasElegiveisStart([2]);
+                setRegrasStart(DEFAULT_START_RULES);
             }
         } else {
             setNome('');
@@ -218,11 +258,7 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
             setPisoFornecedorPct('50');
             setRegrasMultinivel(DEFAULT_MULTILEVEL_RULES);
             setFaturasElegiveisStart([2]);
-            setRegrasStart({
-                1: { b2w: '0', lider: '50', ppe: '50', ppp: '40', ppf: '20', assinante_conect: '0' },
-                2: { b2w: '0', lider: '50', ppe: '50', ppp: '40', ppf: '20', assinante_conect: '0' },
-                3: { b2w: '0', lider: '0', ppe: '0', ppp: '0', ppf: '0', assinante_conect: '0' }
-            });
+            setRegrasStart(DEFAULT_START_RULES);
         }
     }, [planToEdit, isOpen]);
 
@@ -275,9 +311,6 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
         }
     };
 
-    // Todos os níveis L1 a L4+ são livres para edição; o corte é determinado exclusivamente pelo percentual zero (0%)
-    const isLevelAllowedForRole = () => true;
-
     // Alterar percentual fixo da B2W (aplica igualmente em todos os níveis de assinante)
     const handleFixedB2WPctChange = (val) => {
         setRegrasMultinivel(prev => ({
@@ -287,42 +320,6 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                 niveis: { L1: val, L2: val, L3: val, L4: val }
             }
         }));
-    };
-
-    // Alterar quantidade de níveis que uma função tem direito a receber
-    const handleRoleMaxLevelsChange = (roleKey, newMaxStr) => {
-        const newMax = parseInt(newMaxStr, 10);
-        setRegrasMultinivel(prev => {
-            const currentRole = prev[roleKey];
-            const updatedNiveis = { ...currentRole.niveis };
-
-            LEVEL_KEYS.forEach((lk, idx) => {
-                const lvNum = idx + 1;
-                if (roleKey === 'assinante_conect') {
-                    if (newMax === 0 || lvNum === 1) {
-                        updatedNiveis[lk] = '0';
-                    } else if (Number(updatedNiveis[lk]) === 0) {
-                        updatedNiveis[lk] = '2';
-                    }
-                } else {
-                    if (lvNum > newMax) {
-                        updatedNiveis[lk] = '0';
-                    } else if (Number(updatedNiveis[lk]) === 0) {
-                        // Sugere valor padrão se estava zerado
-                        const defVal = DEFAULT_MULTILEVEL_RULES[roleKey]?.niveis?.[lk] || '1';
-                        updatedNiveis[lk] = defVal === '0' ? '1' : defVal;
-                    }
-                }
-            });
-
-            return {
-                ...prev,
-                [roleKey]: {
-                    max_niveis: newMax,
-                    niveis: updatedNiveis
-                }
-            };
-        });
     };
 
     // Alterar percentual de um cargo em um nível específico (L1, L2, L3, L4)
@@ -338,6 +335,57 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
             }
         }));
     };
+
+    // Remuneração dos parceiros HERDADA (somente leitura) do Plano do Originador
+    // escolhido -- mesma regra do motor: recorrência só se o tipo dele for
+    // 'recorrente'/'ambos'; Start só se 'start'/'ambos' e nas faturas dele.
+    // Sem a tabela (migração não aplicada) ou sem plano escolhido, é uma
+    // ESTIMATIVA com o que ainda está gravado neste plano (ou a matriz padrão
+    // num plano novo), para o demonstrativo e a trava anti-déficit não
+    // ignorarem os parceiros.
+    const planoOriginadorSel = planosOriginador.find(p => p.id === planoOriginadorId) || null;
+    const heranca = useMemo(() => {
+        let base;
+        if (planoOriginadorSel) {
+            base = planoOriginadorSel;
+        } else if (planToEdit) {
+            base = {
+                tipo_recompensa: TIPO_ASSINATURA_PARA_ORIGINADOR[planToEdit.tipo_recompensa] || 'recorrente',
+                start_config: planToEdit.start_config,
+                recorrente_config: planToEdit.recorrente_config
+            };
+        } else {
+            base = { tipo_recompensa: 'recorrente', recorrente_config: { regras_multinivel: matrizPadraoOriginador() } };
+        }
+        const p = normalizarPlanoOriginador(base);
+        const usaStart = p.tipo_recompensa !== 'recorrente';
+        const usaRecorrencia = p.tipo_recompensa !== 'start';
+        return {
+            plano: planoOriginadorSel,
+            nome: planoOriginadorSel?.nome || '',
+            estimativa: !planoOriginadorSel,
+            tipo: p.tipo_recompensa,
+            matriz: Object.fromEntries(CARGOS_ORIGINADOR.map(c => [c, {
+                max_niveis: p.recorrente_config.regras_multinivel[c].max_niveis,
+                niveis: usaRecorrencia ? p.recorrente_config.regras_multinivel[c].niveis : NIVEIS_ZERADOS()
+            }])),
+            faturasStart: usaStart ? p.start_config.faturas_elegiveis : [],
+            startPct: (ord, cargo) => (usaStart ? Number(p.start_config.regras[String(ord)]?.[cargo]) || 0 : 0)
+        };
+    }, [planoOriginadorSel, planToEdit]);
+
+    // Matriz que o demonstrativo usa: B2W e Conect editáveis + parceiros herdados.
+    const matrizEfetiva = useMemo(() => ({
+        ...heranca.matriz,
+        b2w: regrasMultinivel.b2w,
+        assinante_conect: regrasMultinivel.assinante_conect
+    }), [heranca, regrasMultinivel]);
+
+    const rotuloHeranca = heranca.estimativa
+        ? (planosOrigStatus === 'carregando'
+            ? 'carregando o Plano do Originador…'
+            : 'estimativa: Plano do Originador indisponível')
+        : `herdado do Plano do Originador ${heranca.nome}`;
 
     // MOTOR DE CÁLCULO DINÂMICO MULTINÍVEL (Calcula L1, L2, L3 e L4+ simultaneamente)
     const calc = useMemo(() => {
@@ -369,7 +417,7 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
 
         LEVEL_KEYS.forEach(lk => {
             const getPct = (roleKey) => {
-                const roleCfg = regrasMultinivel[roleKey];
+                const roleCfg = matrizEfetiva[roleKey];
                 if (!roleCfg) return 0;
                 return Math.max(0, parseFloat(roleCfg.niveis?.[lk]) || 0);
             };
@@ -462,7 +510,7 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
             isDeficitario: anyLevelDeficit,
             worstDeficitLevel: worstDeficitLevel || activeLevelView
         };
-    }, [tarifaBruta, fioB, descontoAssinante, regrasMultinivel, pisoFornecedorPct, activeLevelView]);
+    }, [tarifaBruta, fioB, descontoAssinante, matrizEfetiva, pisoFornecedorPct, activeLevelView]);
 
     if (!isOpen) return null;
 
@@ -490,16 +538,28 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
         }));
     };
 
-    const startHasDeficit = faturasElegiveisStart.some(fatNum => {
+    // Start de uma fatura = B2W + Conect deste plano (se ele usa Start e a
+    // fatura é dele) + Líder + teto PPE/PPP/PPF herdados do Plano do
+    // Originador (se ele usa Start e a fatura é dele). As janelas podem ser
+    // diferentes: a trava olha a união das duas.
+    const planoUsaStart = tipoRecompensa === 'start' || tipoRecompensa === 'hibrido';
+    const somaStartDaFatura = (fatNum) => {
         const r = regrasStart[fatNum] || {};
-        const maxPP = Math.max(parseFloat(r.ppe) || 0, parseFloat(r.ppp) || 0, parseFloat(r.ppf) || 0);
-        const soma = (parseFloat(r.b2w) || 0) + (parseFloat(r.lider) || 0) + maxPP + (parseFloat(r.assinante_conect) || 0);
-        return soma > 100;
-    });
+        const doPlano = planoUsaStart && faturasElegiveisStart.includes(fatNum)
+            ? (parseFloat(r.b2w) || 0) + (parseFloat(r.assinante_conect) || 0)
+            : 0;
+        const pp = Math.max(heranca.startPct(fatNum, 'ppe'), heranca.startPct(fatNum, 'ppp'), heranca.startPct(fatNum, 'ppf'));
+        return doPlano + heranca.startPct(fatNum, 'lider') + pp;
+    };
+    const faturasStartAvaliadas = [...new Set([
+        ...(planoUsaStart ? faturasElegiveisStart : []),
+        ...heranca.faturasStart
+    ])].sort((a, b) => a - b);
+    const startHasDeficit = faturasStartAvaliadas.some(fatNum => somaStartDaFatura(fatNum) > 100);
 
     const bloqueadoPorDeficit = recompensasAtivo && (
         ((tipoRecompensa === 'recorrente' || tipoRecompensa === 'hibrido') && calc.isDeficitario) ||
-        ((tipoRecompensa === 'start' || tipoRecompensa === 'hibrido') && startHasDeficit)
+        startHasDeficit
     );
 
     const handleSave = async (e) => {
@@ -518,33 +578,19 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
         setLoading(true);
 
         const l1View = calc.byLevel.L1;
+        // Plano de assinatura grava só B2W e Assinante Conect (decisão 2):
+        // nada de lider/ppe/ppp/ppf nem das chaves legadas.
         const numRec = {
             b2w: l1View.pctB2W,
-            lider: l1View.pctLider,
-            ppe: l1View.pctPPE,
-            ppp: l1View.pctPPP,
-            ppf: l1View.pctPPF,
-            assinante_conect: l1View.pctAssinanteConect || calc.byLevel.L2.pctAssinanteConect,
-            associacao: l1View.pctB2W,
-            coordenador: l1View.pctLider,
-            embaixador: Math.max(l1View.pctPPE, l1View.pctPPP),
-            assinante: l1View.pctAssinanteConect || calc.byLevel.L2.pctAssinanteConect
+            assinante_conect: l1View.pctAssinanteConect || calc.byLevel.L2.pctAssinanteConect
         };
 
         const formatStartRulesPayload = (r = {}) => ({
             b2w: parseFloat(r.b2w) || 0,
-            lider: parseFloat(r.lider) || 0,
-            ppe: parseFloat(r.ppe) || 0,
-            ppp: parseFloat(r.ppp) || 0,
-            ppf: parseFloat(r.ppf) || 0,
-            assinante_conect: parseFloat(r.assinante_conect) || 0,
-            associacao: parseFloat(r.b2w) || 0,
-            coordenador: parseFloat(r.lider) || 0,
-            embaixador: Math.max(parseFloat(r.ppe) || 0, parseFloat(r.ppp) || 0),
-            assinante: parseFloat(r.assinante_conect) || 0
+            assinante_conect: parseFloat(r.assinante_conect) || 0
         });
 
-        const payload = {
+        const dados = {
             nome: nome.trim(),
             desconto_assinante: parseFloat(descontoAssinante) || 0,
             ativo,
@@ -583,19 +629,40 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                     }
                 },
                 regras: numRec,
-                regras_multinivel: regrasMultinivel
+                regras_multinivel: {
+                    b2w: regrasMultinivel.b2w,
+                    assinante_conect: regrasMultinivel.assinante_conect
+                }
             },
             updated_at: new Date().toISOString()
+        };
+
+        // Um único payload para os 3 caminhos (UPDATE, RPC de nova versão e
+        // INSERT): sem nenhuma chave de parceiro e com o Plano do Originador.
+        // Sem a tabela `planos_originador` (migração não aplicada), não envia
+        // `plano_originador_id` -- o gatilho do banco põe o Padrão no INSERT.
+        const payload = semCargosDeParceiro(dados);
+        if (planosOrigStatus === 'ok' && planoOriginadorId) {
+            payload.plano_originador_id = planoOriginadorId;
+        }
+        // Rede de segurança: se só a coluna ainda não existir, grava sem ela.
+        const semColunaAusente = async (gravar) => {
+            const res = await gravar(payload);
+            if (res.error && 'plano_originador_id' in payload && planoOriginadorAusente(res.error)) {
+                const { plano_originador_id: _ignorado, ...semId } = payload;
+                return gravar(semId);
+            }
+            return res;
         };
 
         let versaoCriada = false;
         try {
             let planoId = planToEdit?.id;
             if (planoId) {
-                const { error } = await supabase
+                const { error } = await semColunaAusente(dadosGravados => supabase
                     .from('planos_assinatura_energia')
-                    .update(payload)
-                    .eq('id', planoId);
+                    .update(dadosGravados)
+                    .eq('id', planoId));
 
                 if (error) {
                     // Plano com UC/eletroposto: o banco recusa mudar número e
@@ -606,6 +673,8 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                         return;
                     }
                     if (!ehRecusaDeNovaVersao(error) || !window.confirm(textoConfirmaNovaVersao(planToEdit.nome))) throw error;
+                    // jsonb_populate_record: chave ausente herda da origem e
+                    // chave desconhecida é ignorada -- o mesmo payload serve.
                     const { data: novoId, error: verErr } = await supabase
                         .rpc('fn_planos_assinatura_nova_versao', { p_origem: planoId, p_dados: payload });
                     if (verErr) throw verErr;
@@ -613,11 +682,11 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                     versaoCriada = true;
                 }
             } else {
-                const { data: novo, error } = await supabase
+                const { data: novo, error } = await semColunaAusente(dadosGravados => supabase
                     .from('planos_assinatura_energia')
-                    .insert([payload])
+                    .insert([dadosGravados])
                     .select('id')
-                    .single();
+                    .single());
 
                 if (error) throw error;
                 planoId = novo.id;
@@ -664,8 +733,10 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
 
     // Renderizador auxiliar da coluna central (Níveis de Direito + Inputs L1..L4)
     // O corte de repasse é determinado exclusivamente pelo percentual zero (0%) em cada nível
-    const renderMultilevelCenterControl = (roleKey) => {
-        const cfg = regrasMultinivel[roleKey] || { niveis: {} };
+    // Cargos de parceiro (Líder/PPE/PPP/PPF) entram com `somenteLeitura`: os
+    // valores vêm do Plano do Originador e não são editáveis aqui.
+    const renderMultilevelCenterControl = (roleKey, { somenteLeitura = false } = {}) => {
+        const cfg = (somenteLeitura ? matrizEfetiva[roleKey] : regrasMultinivel[roleKey]) || { niveis: {} };
         return (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', width: '100%' }}>
                 {/* Indicador visual de Recorrência Multinível */}
@@ -677,9 +748,12 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                     padding: '0.2rem 0.45rem',
                     borderRadius: '6px',
                     border: '1px solid #e2e8f0',
-                    whiteSpace: 'nowrap'
-                }}>
-                    Recorrência Multinível
+                    whiteSpace: 'nowrap',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.25rem'
+                }} title={somenteLeitura ? `Somente leitura: ${rotuloHeranca}` : undefined}>
+                    {somenteLeitura ? <><Lock size={10} /> Herdado</> : 'Recorrência Multinível'}
                 </span>
 
                 {/* Inputs para L1, L2, L3 e L4+ */}
@@ -703,7 +777,7 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                         : isZero
                                             ? '#f8fafc'
                                             : '#ffffff',
-                                    border: `1px solid ${
+                                    border: `1px ${somenteLeitura ? 'dashed' : 'solid'} ${
                                         isFocusedLevel
                                             ? '#3b82f6'
                                             : isZero
@@ -732,7 +806,9 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                         min="0"
                                         max="100"
                                         value={rawVal}
-                                        onChange={e => handleRoleLevelPctChange(roleKey, lk, e.target.value)}
+                                        readOnly={somenteLeitura}
+                                        tabIndex={somenteLeitura ? -1 : undefined}
+                                        onChange={e => { if (!somenteLeitura) handleRoleLevelPctChange(roleKey, lk, e.target.value); }}
                                         onClick={e => {
                                             e.stopPropagation();
                                             setActiveLevelView(lk);
@@ -747,7 +823,8 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                             color: isZero ? '#94a3b8' : '#0f172a',
                                             textAlign: 'center',
                                             outline: 'none',
-                                            padding: 0
+                                            padding: 0,
+                                            cursor: somenteLeitura ? 'default' : undefined
                                         }}
                                     />
                                     <span style={{ fontSize: '0.64rem', color: isZero ? '#cbd5e1' : '#64748b', fontWeight: 700 }}>%</span>
@@ -761,6 +838,15 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
     };
 
     const cv = calc.currentView;
+
+    const notaHeranca = (
+        <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', marginTop: '0.15rem', fontSize: '0.68rem', fontWeight: 600, color: '#64748b' }}>
+            <Lock size={10} /> {rotuloHeranca}
+        </span>
+    );
+
+    // Opções do select: planos ativos + o já escolhido, mesmo se inativo.
+    const opcoesPlanoOriginador = planosOriginador.filter(p => p.status === 'ativo' || p.id === planoOriginadorId);
 
     return (
         <div style={{
@@ -1068,9 +1154,77 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                 </div>
                             </div>
 
+                            {/* PLANO DO ORIGINADOR: rege Líder, PPE, PPP e PPF nas UCs deste plano */}
+                            <div style={{
+                                border: '1px solid #e2e8f0', background: '#f8fafc', borderRadius: '14px',
+                                padding: '0.9rem 1.1rem', marginBottom: '1.15rem'
+                            }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 1fr) 2fr', gap: '1rem', alignItems: 'start' }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                        <label htmlFor="plano-originador-select" style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#475569', marginBottom: '0.42rem' }}>
+                                            Plano do Originador
+                                        </label>
+                                        <select
+                                            id="plano-originador-select"
+                                            className="crm-input"
+                                            value={planoOriginadorId}
+                                            onChange={e => setPlanoOriginadorId(e.target.value)}
+                                            disabled={planosOrigStatus !== 'ok'}
+                                            style={{
+                                                width: '100%', height: '42px', padding: '0 0.85rem', borderRadius: '12px',
+                                                border: '1px solid #cbd5e1', fontSize: '0.86rem', color: '#1e293b',
+                                                background: planosOrigStatus === 'ok' ? '#ffffff' : '#f1f5f9',
+                                                boxSizing: 'border-box', fontWeight: 600,
+                                                cursor: planosOrigStatus === 'ok' ? 'pointer' : 'not-allowed'
+                                            }}
+                                        >
+                                            {planosOrigStatus === 'carregando' && <option value="">Carregando…</option>}
+                                            {planosOrigStatus !== 'ok' && planosOrigStatus !== 'carregando' && <option value="">Indisponível</option>}
+                                            {planosOrigStatus === 'ok' && !planoOriginadorId && <option value="">Selecione…</option>}
+                                            {opcoesPlanoOriginador.map(p => (
+                                                <option key={p.id} value={p.id}>
+                                                    {p.nome}{p.padrao ? ' (Padrão)' : ''}{p.status !== 'ativo' ? ' (inativo)' : ''}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div style={{ fontSize: '0.74rem', color: '#64748b', lineHeight: 1.45 }}>
+                                        Define a remuneração de Líder, PPE, PPP e PPF nas UCs deste plano; um originador com plano próprio (diferente do Padrão) no cadastro dele tem prioridade.
+                                        {planosOrigStatus === 'ausente' && (
+                                            <span style={{ display: 'block', marginTop: '0.35rem', color: '#92400e', fontWeight: 600 }}>
+                                                Os Planos do Originador ainda não existem neste banco: o plano é gravado sem esse vínculo e o banco aplica o Padrão quando a migração entrar.
+                                            </span>
+                                        )}
+                                        {planosOrigStatus === 'erro' && (
+                                            <span style={{ display: 'block', marginTop: '0.35rem', color: '#92400e', fontWeight: 600 }}>
+                                                Não foi possível carregar os Planos do Originador: o vínculo atual não será alterado ao salvar.
+                                            </span>
+                                        )}
+                                        {heranca.plano && (
+                                            <span style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '0.2rem 1rem', marginTop: '0.5rem', color: '#334155' }}>
+                                                {CARGOS_ORIGINADOR.map(c => (
+                                                    <span key={c}>
+                                                        <strong>{ROTULO_CARGO[c]}:</strong> {resumoPlanoOriginador(heranca.plano, c)}
+                                                    </span>
+                                                ))}
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
                             {recompensasAtivo ? (
                                 <>
-                                    {/* Modalidade (Recorrente | Start | Híbrido) */}
+                                    {/* Modalidade (Recorrente | Start | Híbrido) -- rege só B2W e Assinante Conect */}
+                                    <div style={{ marginBottom: '0.5rem' }}>
+                                        <span style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#475569' }}>
+                                            Tipo de recompensa (B2W e Assinante Conect)
+                                        </span>
+                                        <span style={{ display: 'block', fontSize: '0.72rem', color: '#64748b', marginTop: '0.15rem' }}>
+                                            Líder, PPE, PPP e PPF seguem o tipo do Plano do Originador
+                                            {heranca.plano ? ` (${heranca.nome}: ${ROTULO_TIPO_ORIGINADOR[heranca.tipo]})` : ''}.
+                                        </span>
+                                    </div>
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.85rem', marginBottom: '1.35rem' }}>
                                         {[
                                             { id: 'recorrente', title: 'Recorrente (Multinível L1 a L4+)', sub: 'Repasse contínuo enquanto a entidade estiver Ativa', color: '#15803d', border: '#22c55e', bg: '#f0fdf4' },
@@ -1334,9 +1488,10 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                             <div className="ledger-row">
                                                 <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '0.86rem' }}>
                                                     (-) Líder / Coordenador
+                                                    {notaHeranca}
                                                 </div>
                                                 <div>
-                                                    {renderMultilevelCenterControl('lider')}
+                                                    {renderMultilevelCenterControl('lider', { somenteLeitura: true })}
                                                 </div>
                                                 <div style={{ textAlign: 'right', color: cv.pctLider > 0 ? '#334155' : '#94a3b8', fontSize: '0.86rem', fontWeight: 700 }}>
                                                     {cv.pctLider > 0 ? `- R$ ${formatCurrencyUnit(cv.vLider, 6)}` : 'R$ 0,0000 (Corte)'}
@@ -1359,6 +1514,9 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.81rem', fontWeight: 800, color: '#1e293b' }}>
                                                         <Award size={15} color="#3b82f6" />
                                                         <span>(-) Categorias Parceiro Power (PPE / PPP / PPF)</span>
+                                                        <span style={{ fontWeight: 600, fontSize: '0.7rem', color: '#64748b', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                                                            <Lock size={11} /> {rotuloHeranca}
+                                                        </span>
                                                     </div>
                                                     <span style={{
                                                         fontSize: '0.71rem', fontWeight: 700, color: '#1d4ed8',
@@ -1382,7 +1540,7 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                                         <span>Parceiro Power Embaixador</span>
                                                     </div>
                                                     <div>
-                                                        {renderMultilevelCenterControl('ppe')}
+                                                        {renderMultilevelCenterControl('ppe', { somenteLeitura: true })}
                                                     </div>
                                                     <div style={{ textAlign: 'right', color: cv.pctPPE > 0 ? '#334155' : '#94a3b8', fontSize: '0.85rem', fontWeight: 600 }}>
                                                         {cv.pctPPE > 0 ? `- R$ ${formatCurrencyUnit(cv.vPPE, 5)}` : 'R$ 0,0000 (Corte)'}
@@ -1405,7 +1563,7 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                                         <span>Parceiro Power Premium</span>
                                                     </div>
                                                     <div>
-                                                        {renderMultilevelCenterControl('ppp')}
+                                                        {renderMultilevelCenterControl('ppp', { somenteLeitura: true })}
                                                     </div>
                                                     <div style={{ textAlign: 'right', color: cv.pctPPP > 0 ? '#334155' : '#94a3b8', fontSize: '0.85rem', fontWeight: 600 }}>
                                                         {cv.pctPPP > 0 ? `- R$ ${formatCurrencyUnit(cv.vPPP, 5)}` : 'R$ 0,0000 (Corte)'}
@@ -1428,7 +1586,7 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                                         <span>Parceiro Power Free</span>
                                                     </div>
                                                     <div>
-                                                        {renderMultilevelCenterControl('ppf')}
+                                                        {renderMultilevelCenterControl('ppf', { somenteLeitura: true })}
                                                     </div>
                                                     <div style={{ textAlign: 'right', color: cv.pctPPF > 0 ? '#334155' : '#94a3b8', fontSize: '0.85rem', fontWeight: 600 }}>
                                                         {cv.pctPPF > 0 ? `- R$ ${formatCurrencyUnit(cv.vPPF, 5)}` : 'R$ 0,0000 (Corte)'}
@@ -1611,8 +1769,8 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                         </div>
                                     )}
 
-                                    {/* PAINEL START */}
-                                    {(tipoRecompensa === 'start' || tipoRecompensa === 'hibrido') && (
+                                    {/* PAINEL START: B2W e Conect editáveis (janela deste plano); parceiros herdados do Plano do Originador */}
+                                    {(planoUsaStart || heranca.faturasStart.length > 0) && (
                                         <div style={{
                                             border: '1px solid #bfdbfe', background: '#eff6ff', borderRadius: '18px',
                                             padding: '1.25rem'
@@ -1629,44 +1787,64 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                                         Distribuição nas Faturas Iniciais (% sobre Base Líquida: R$ {formatCurrencyUnit(calc.baseLiquida, 4)}/kWh)
                                                     </span>
                                                 </div>
+                                                <span style={{ fontSize: '0.72rem', color: '#475569', fontWeight: 600 }}>
+                                                    Conta como fatura só a fatura paga com energia compensada.
+                                                </span>
                                             </div>
 
-                                            <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem' }}>
-                                                {[1, 2, 3].map(fatNum => {
-                                                    const isChecked = faturasElegiveisStart.includes(fatNum);
-                                                    return (
-                                                        <button
-                                                            key={fatNum}
-                                                            type="button"
-                                                            onClick={() => toggleFaturaStart(fatNum)}
-                                                            style={{
-                                                                flex: 1, padding: '0.6rem 0.85rem', borderRadius: '10px',
-                                                                border: isChecked ? '2px solid #2563eb' : '1px solid #cbd5e1',
-                                                                background: isChecked ? '#ffffff' : '#f8fafc',
-                                                                color: isChecked ? '#1d4ed8' : '#64748b',
-                                                                fontWeight: 700, fontSize: '0.84rem', cursor: 'pointer',
-                                                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.45rem'
-                                                            }}
-                                                        >
-                                                            <div style={{
-                                                                width: '16px', height: '16px', borderRadius: '4px',
-                                                                background: isChecked ? '#2563eb' : 'transparent',
-                                                                border: isChecked ? 'none' : '1.5px solid #94a3b8',
-                                                                display: 'flex', alignItems: 'center', justifyContent: 'center'
-                                                            }}>
-                                                                {isChecked && <Check size={12} color="white" />}
-                                                            </div>
-                                                            Fatura {fatNum} {fatNum === 2 && <span style={{ fontSize: '0.72rem', fontWeight: 500 }}>(Padrão)</span>}
-                                                        </button>
-                                                    );
-                                                })}
-                                            </div>
+                                            {planoUsaStart ? (
+                                                <>
+                                                    <span style={{ display: 'block', fontSize: '0.74rem', fontWeight: 700, color: '#1e3a8a', marginBottom: '0.4rem' }}>
+                                                        Faturas do Start de B2W e Assinante Conect
+                                                    </span>
+                                                    <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '0.6rem' }}>
+                                                        {[1, 2, 3].map(fatNum => {
+                                                            const isChecked = faturasElegiveisStart.includes(fatNum);
+                                                            return (
+                                                                <button
+                                                                    key={fatNum}
+                                                                    type="button"
+                                                                    onClick={() => toggleFaturaStart(fatNum)}
+                                                                    style={{
+                                                                        flex: 1, padding: '0.6rem 0.85rem', borderRadius: '10px',
+                                                                        border: isChecked ? '2px solid #2563eb' : '1px solid #cbd5e1',
+                                                                        background: isChecked ? '#ffffff' : '#f8fafc',
+                                                                        color: isChecked ? '#1d4ed8' : '#64748b',
+                                                                        fontWeight: 700, fontSize: '0.84rem', cursor: 'pointer',
+                                                                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.45rem'
+                                                                    }}
+                                                                >
+                                                                    <div style={{
+                                                                        width: '16px', height: '16px', borderRadius: '4px',
+                                                                        background: isChecked ? '#2563eb' : 'transparent',
+                                                                        border: isChecked ? 'none' : '1.5px solid #94a3b8',
+                                                                        display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                                                    }}>
+                                                                        {isChecked && <Check size={12} color="white" />}
+                                                                    </div>
+                                                                    Fatura {fatNum} {fatNum === 2 && <span style={{ fontSize: '0.72rem', fontWeight: 500 }}>(Padrão)</span>}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <span style={{ display: 'block', fontSize: '0.74rem', color: '#475569', marginBottom: '0.6rem' }}>
+                                                    Este plano não paga Start a B2W nem ao Assinante Conect (tipo de recompensa só recorrente).
+                                                </span>
+                                            )}
+                                            <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.72rem', color: '#475569', marginBottom: '1rem' }}>
+                                                <Lock size={11} />
+                                                Líder, PPE, PPP e PPF: {heranca.faturasStart.length
+                                                    ? `Start na${heranca.faturasStart.length > 1 ? 's faturas' : ' fatura'} ${heranca.faturasStart.join(', ')}`
+                                                    : 'sem Start'} ({rotuloHeranca}).
+                                            </span>
 
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-                                                {faturasElegiveisStart.map(fatNum => {
+                                                {faturasStartAvaliadas.map(fatNum => {
                                                     const r = regrasStart[fatNum] || {};
-                                                    const maxPP = Math.max(parseFloat(r.ppe) || 0, parseFloat(r.ppp) || 0, parseFloat(r.ppf) || 0);
-                                                    const somaPct = (parseFloat(r.b2w) || 0) + (parseFloat(r.lider) || 0) + maxPP + (parseFloat(r.assinante_conect) || 0);
+                                                    const faturaDoPlano = planoUsaStart && faturasElegiveisStart.includes(fatNum);
+                                                    const somaPct = somaStartDaFatura(fatNum);
                                                     const excedeu = somaPct > 100;
 
                                                     return (
@@ -1691,17 +1869,21 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '0.6rem' }}>
                                                                 {[
                                                                     { key: 'b2w', label: 'B2W (%)' },
-                                                                    { key: 'lider', label: 'Líder (%)' },
-                                                                    { key: 'ppe', label: 'PPE (%)' },
-                                                                    { key: 'ppp', label: 'PPP (%)' },
-                                                                    { key: 'ppf', label: 'PPF (%)' },
+                                                                    { key: 'lider', label: 'Líder (%)', herdado: true },
+                                                                    { key: 'ppe', label: 'PPE (%)', herdado: true },
+                                                                    { key: 'ppp', label: 'PPP (%)', herdado: true },
+                                                                    { key: 'ppf', label: 'PPF (%)', herdado: true },
                                                                     { key: 'assinante_conect', label: 'Assin. Conect (%)' }
                                                                 ].map(item => {
-                                                                    const pctVal = parseFloat(r[item.key]) || 0;
+                                                                    const editavel = !item.herdado && faturaDoPlano;
+                                                                    const pctVal = item.herdado
+                                                                        ? heranca.startPct(fatNum, item.key)
+                                                                        : (faturaDoPlano ? parseFloat(r[item.key]) || 0 : 0);
                                                                     const rsVal = Math.max(0, calc.baseLiquida) * (pctVal / 100);
                                                                     return (
                                                                         <div key={item.key}>
-                                                                            <label style={{ display: 'block', fontSize: '0.7rem', color: '#475569', fontWeight: 700, marginBottom: '0.25rem' }}>
+                                                                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.7rem', color: '#475569', fontWeight: 700, marginBottom: '0.25rem' }}>
+                                                                                {!editavel && <Lock size={10} />}
                                                                                 {item.label}
                                                                             </label>
                                                                             <input
@@ -1710,12 +1892,19 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                                                                 min="0"
                                                                                 max="100"
                                                                                 className="crm-input"
-                                                                                value={r[item.key] ?? ''}
-                                                                                onChange={e => handleStartPctChange(fatNum, item.key, e.target.value)}
+                                                                                value={editavel ? (r[item.key] ?? '') : String(pctVal)}
+                                                                                readOnly={!editavel}
+                                                                                tabIndex={editavel ? undefined : -1}
+                                                                                title={item.herdado ? `Somente leitura: ${rotuloHeranca}` : (editavel ? undefined : 'Fatura fora da janela de Start deste plano')}
+                                                                                onChange={e => { if (editavel) handleStartPctChange(fatNum, item.key, e.target.value); }}
                                                                                 style={{
                                                                                     width: '100%', padding: '0.45rem 0.5rem', borderRadius: '8px',
-                                                                                    border: '1px solid #cbd5e1', fontSize: '0.82rem', fontWeight: 700,
-                                                                                    boxSizing: 'border-box', textAlign: 'center'
+                                                                                    border: `1px ${editavel ? 'solid' : 'dashed'} #cbd5e1`,
+                                                                                    background: editavel ? '#ffffff' : '#f8fafc',
+                                                                                    color: editavel ? undefined : '#64748b',
+                                                                                    fontSize: '0.82rem', fontWeight: 700,
+                                                                                    boxSizing: 'border-box', textAlign: 'center',
+                                                                                    cursor: editavel ? undefined : 'default'
                                                                                 }}
                                                                             />
                                                                             <span style={{ display: 'block', fontSize: '0.68rem', color: '#64748b', textAlign: 'center', marginTop: '0.2rem', fontWeight: 600 }}>

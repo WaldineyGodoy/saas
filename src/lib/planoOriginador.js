@@ -217,3 +217,40 @@ export const semCargosDeParceiro = (planoAssinatura) => {
     }
     return p;
 };
+
+/**
+ * Erro do Supabase de tabela/coluna ainda inexistente (migração não aplicada):
+ * 42P01 (Postgres), PGRST205/PGRST200 (cache do PostgREST) ou a mensagem.
+ */
+export const tabelaPlanoOriginadorAusente = (err) => {
+    if (!err) return false;
+    if (['42P01', 'PGRST205', 'PGRST200'].includes(err.code)) return true;
+    const msg = String(err.message || '').toLowerCase();
+    return msg.includes('planos_originador') && (msg.includes('does not exist') || msg.includes('could not find'));
+};
+
+/** Erro do Supabase ao gravar/excluir um Plano do Originador, em português. */
+export const mensagemErroPlanoOriginador = (err) => {
+    if (!err) return 'Erro desconhecido.';
+    if (tabelaPlanoOriginadorAusente(err)) return 'A tabela de Planos do Originador ainda não foi criada no banco.';
+    if (err.code === '23503') return 'Este plano está em uso por originadores ou planos de assinatura e não pode ser excluído.';
+    if (err.code === '42501') return 'Só administradores podem alterar Planos do Originador.';
+    if (err.code === '23514') return 'Algum valor está fora do permitido pelo banco. Confira status, tipo de recompensa e percentuais.';
+    return err.message || 'Erro desconhecido.';
+};
+
+/**
+ * Como `tabelaPlanoOriginadorAusente`, mas cobre também a coluna
+ * `plano_originador_id` ainda inexistente em `originators_v2` (42703 no
+ * Postgres, PGRST204 no PostgREST ao gravar). As telas do originador mostram
+ * um aviso discreto no lugar do plano e deixam de enviar a coluna, em vez de
+ * quebrar. Acrescentado pelo cadastro do originador (Agente D).
+ */
+export const planoOriginadorAusente = (error) => {
+    if (!error) return false;
+    if (tabelaPlanoOriginadorAusente(error)) return true;
+    const msg = String(`${error.message || ''} ${error.details || ''}`).toLowerCase();
+    return ['42703', 'PGRST204'].includes(error.code)
+        ? msg.includes('plano_originador_id') || !msg.trim()
+        : msg.includes('plano_originador_id') && (msg.includes('does not exist') || msg.includes('could not find'));
+};

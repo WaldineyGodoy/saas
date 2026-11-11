@@ -1,4 +1,5 @@
 import { baixarPdfContrato, dataPorExtenso, gerarPdfBase64, moeda, numeroBr, paginarTexto, paraNumero, percentualExtenso, porExtenso, qualificaParte, rotuloDocumento } from './contratoBase';
+import { NIVEIS, normalizarPlanoOriginador } from './planoOriginador';
 
 /**
  * Contrato de Originação e Indicação de Negócios — o instrumento firmado
@@ -8,10 +9,14 @@ import { baixarPdfContrato, dataPorExtenso, gerarPdfBase64, moeda, numeroBr, pag
  * um contrato de comissão de venda comum:
  *
  *  - **A remuneração não vive aqui.** Os percentuais mudam por cargo, por
- *    plano e por negociação (`originators_v2.split_commission`,
- *    `planos_assinatura_energia.recorrente_config`, `planos_usina`). O
+ *    plano e por negociação (`planos_originador`, apontado pelo originador
+ *    em `originators_v2.plano_originador_id` ou pelo plano de assinatura em
+ *    `planos_assinatura_energia.plano_originador_id`; e `planos_usina`). O
  *    contrato fixa o MECANISMO — base de cálculo, fato gerador, níveis,
  *    cortes, piso — e manda os números para o Anexo I, gerado do cadastro.
+ *    Originador no Plano Padrão não tem número fixo: vale o plano ligado ao
+ *    plano de assinatura de cada UC, e o Anexo I diz isso sem inventar
+ *    percentual.
  *    Escrever "4%" no corpo criaria uma terceira fonte de verdade, e a
  *    primeira a divergir das outras duas. Ver a memória
  *    crm-comissao-duas-fontes.
@@ -94,22 +99,75 @@ const pct = (valor) => {
     return `${numeroBr(n)}% (${percentualExtenso(n)} por cento)`;
 };
 
+/** "1ª", "1ª e 2ª", "1ª, 2ª e 3ª". */
+const ordinaisFatura = (ords) => {
+    const o = ords.map(n => `${n}ª`);
+    return o.length > 1 ? `${o.slice(0, -1).join(', ')} e ${o.at(-1)}` : o[0];
+};
+
+/**
+ * As linhas de remuneração do Anexo I, a partir do Plano do Originador.
+ *
+ * Só descreve números quando o originador tem um plano de EXCEÇÃO (diferente
+ * do Padrão): esse vale em todas as UCs dele. No Padrão, a regra é a do plano
+ * ligado a cada plano de assinatura e muda conforme o produto vendido — o
+ * Anexo remete à tabela em vez de prometer um percentual.
+ */
+const linhasRemuneracao = (plano, cargoChave) => {
+    if (!plano || plano.padrao) {
+        return [
+            `Plano do Originador: ${plano?.nome ? `${plano.nome}. ` : ''}A remuneração segue o Plano do Originador vinculado a cada plano de assinatura, conforme a Tabela de Recompensas vigente, e pode variar conforme o plano contratado pelo indicado.`,
+            'Bônus Start e Recorrência: faturas elegíveis, percentuais e níveis do Plano do Originador aplicável a cada unidade consumidora, para o cargo do ORIGINADOR, nos termos das Cláusulas 7 e 8.'
+        ];
+    }
+
+    const p = normalizarPlanoOriginador(plano);
+    const linhas = [
+        `Plano do Originador: ${p.nome}, aplicável a todas as unidades consumidoras originadas pelo ORIGINADOR, em lugar do plano vinculado ao plano de assinatura.`
+    ];
+
+    // Ordinal = posição entre as faturas pagas COM energia compensada da UC.
+    const comStart = p.start_config.faturas_elegiveis
+        .map(f => ({ f, v: Number(p.start_config.regras[String(f)]?.[cargoChave]) || 0 }))
+        .filter(x => x.v > 0);
+    if (p.tipo_recompensa !== 'recorrente' && comStart.length) {
+        const fats = comStart.map(x => x.f);
+        const iguais = comStart.every(x => x.v === comStart[0].v);
+        const detalhe = iguais
+            ? `${pct(comStart[0].v)} da Base de Cálculo Líquida ${fats.length > 1 ? 'das' : 'da'} ${ordinaisFatura(fats)} ${fats.length > 1 ? 'faturas pagas' : 'fatura paga'} com energia compensada da unidade consumidora`
+            : comStart.map(x => `${pct(x.v)} na ${x.f}ª fatura paga com energia compensada`).join('; ') + ' da unidade consumidora, sobre a Base de Cálculo Líquida';
+        linhas.push(`Bônus Start: ${detalhe}, nos termos da Cláusula 7.`);
+    } else {
+        linhas.push('Bônus Start: não previsto no plano para o cargo do ORIGINADOR.');
+    }
+
+    const rec = p.recorrente_config.regras_multinivel[cargoChave];
+    const niveis = rec ? NIVEIS.slice(0, rec.max_niveis).map((lk, i) => ({ n: i + 1, v: Number(rec.niveis[lk]) || 0 })) : [];
+    if (p.tipo_recompensa !== 'start' && niveis.some(x => x.v > 0)) {
+        const porNivel = niveis.map(x => `${x.n}º nível, ${pct(x.v)}`).join('; ');
+        linhas.push(`Recorrência: ${porNivel}, da Base de Cálculo Líquida, nos termos da Cláusula 8${p.tipo_recompensa === 'ambos' ? ', nas faturas em que não incidir o Bônus Start' : ''}.`);
+    } else {
+        linhas.push('Recorrência: não prevista no plano para o cargo do ORIGINADOR.');
+    }
+
+    return linhas;
+};
+
 /**
  * Anexo I — o quadro que carrega os números.
  *
- * Sai do cadastro do originador, e não do texto, porque é o cadastro que o
- * motor do split lê na hora de pagar.
+ * Sai do cadastro do originador (Plano do Originador), e não do texto,
+ * porque é o plano que o motor do split lê na hora de pagar.
  */
-const anexoCondicoes = (originador, lider, modalidades) => {
-    const split = originador?.split_commission || {};
-    const cargo = CARGOS[(originador?.cargo || 'ppf').toLowerCase()] || CARGOS.ppf;
+const anexoCondicoes = (originador, lider, modalidades, planoOriginador) => {
+    const cargoChave = (originador?.cargo || 'ppf').toLowerCase();
+    const cargo = CARGOS[cargoChave] || CARGOS.ppf;
 
     const linhas = [
         `Cargo na data de assinatura: ${cargo}.`,
         `Líder responsável: ${lider?.name ? `${lider.name}, ${rotuloDocumento(lider.cpf_cnpj)} ${lider.cpf_cnpj || '____'}` : 'não há Líder vinculado nesta data'}.`,
         `Modalidades contratadas: ${modalidades.map(m => m.rotulo).join('; ')}.`,
-        `Bônus Start: ${pct(split.start)} da Base de Cálculo Líquida, nos termos da Cláusula 7.`,
-        `Recorrência: ${pct(split.recurrent)} da Base de Cálculo Líquida, nos termos da Cláusula 8, observados os níveis e cortes da Tabela de Recompensas vigente.`,
+        ...linhasRemuneracao(planoOriginador, CARGOS[cargoChave] ? cargoChave : 'ppf'),
         `Chave PIX para crédito: ${originador?.pix_key || '_______________'}${originador?.pix_key_type ? ` (tipo ${originador.pix_key_type})` : ''}.`,
         `Licença anual: ${originador?.licenca_valor ? `R$ ${moeda(paraNumero(originador.licenca_valor))}, com vencimento em ${dataBr(originador.licenca_vencimento)}` : 'não aplicável ao cargo nesta data'}.`,
         'Os percentuais deste Anexo são os registrados no sistema de gestão na data de emissão e podem ser revistos na forma da Cláusula 16.'
@@ -140,11 +198,13 @@ const clausulasPorModalidade = (modalidades) => {
 /**
  * Monta o texto do contrato do originador.
  *
- * @param originador registro de `originators_v2` com endereço e split
- * @param lider      registro do Líder vinculado, se houver
- * @param opts       modalidades marcadas e prazos; o que faltar usa DEFAULTS_ORIGINADOR
+ * @param originador      registro de `originators_v2` com endereço e cargo
+ * @param lider           registro do Líder vinculado, se houver
+ * @param opts            modalidades marcadas e prazos; o que faltar usa DEFAULTS_ORIGINADOR
+ * @param planoOriginador linha de `planos_originador` do originador (ou o
+ *                        Padrão); null quando a tabela ainda não existe
  */
-export const montarContratoOriginador = (originador, lider = null, opts = {}) => {
+export const montarContratoOriginador = (originador, lider = null, opts = {}, planoOriginador = null) => {
     const p = { ...DEFAULTS_ORIGINADOR, ...Object.fromEntries(Object.entries(opts).filter(([, v]) => v !== undefined && v !== null && v !== '')) };
 
     const modalidades = MODALIDADES_ORIGINACAO.filter(m => p[m.chave]);
@@ -286,7 +346,7 @@ CLÁUSULA 18 – DO FORO
 
 ANEXO I — QUADRO DE CONDIÇÕES DO ORIGINADOR
 
-${anexoCondicoes(originador, lider, frentes)}
+${anexoCondicoes(originador, lider, frentes, planoOriginador)}
 
 ${cidadeUf}, ${dataPorExtenso()}.
 

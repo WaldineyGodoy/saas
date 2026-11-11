@@ -433,29 +433,18 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
                     try {
                         const { data: originator } = await supabase
                             .from('originators_v2')
-                            .select('phone, split_commission, name')
+                            .select('phone, name')
                             .eq('id', originatorId)
                             .maybeSingle();
 
                         if (originator && originator.phone) {
-                            const kwh = Number(dataToSave.consumo_kwh) || 0;
-                            const tarifa = Number(dataToSave.tarifa_concessionaria) || 0.85;
-                            let discountRate = Number(dataToSave.desconto_assinante) || 15;
-                            if (discountRate < 1 && discountRate > 0) discountRate = discountRate * 100;
-
-                            const totalSemDesconto = kwh * tarifa;
-                            const economia = totalSemDesconto * (discountRate / 100);
-                            const baseCalculo = totalSemDesconto - economia;
-                            const split = originator.split_commission || {};
-                            const comissaoPercent = Number(split.start ?? split.recurrent) || 0;
-                            const comissaoValor = baseCalculo * (comissaoPercent / 100);
-
-                            const formattedValue = comissaoValor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                            // Sem valor na mensagem: o percentual vinha de
+                            // `split_commission`, que o motor não lê. A regra
+                            // que paga é a do Plano do Originador e, no Padrão,
+                            // depende do plano de assinatura da UC — que o lead
+                            // ainda não tem. Prometer um número aqui era errar.
                             const leadName = dataToSave.name || 'O Lead';
-
-                            const msg = comissaoPercent > 0
-                                ? `${leadName} aceitou o convite e está próximo de concluir o cadastro. Em breve você recebe seu cashback de ${formattedValue}.`
-                                : `${leadName} aceitou o convite e está próximo de concluir o cadastro.`;
+                            const msg = `${leadName} aceitou o convite e está próximo de concluir o cadastro. Sua recompensa segue o seu Plano do Originador e é creditada a partir das faturas pagas.`;
 
                             await sendWhatsapp(originator.phone, msg);
                         }
