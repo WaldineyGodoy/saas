@@ -69,14 +69,31 @@ BEGIN
     END;
     IF NOT v_pegou THEN RAISE EXCEPTION 'FALHA V2: piso de plano com UC devia ser recusado'; END IF;
 
+    -- 20261110a (Plano do Originador): o que trava na matriz do plano de
+    -- assinatura e o que AINDA mora nele -- b2w e assinante_conect. Os cargos
+    -- de parceiro (lider/ppe/ppp/ppf) sairam para planos_originador; mexer
+    -- neles no plano de assinatura nao muda pagamento e a trava os ignora.
     v_pegou := false;
     BEGIN
         UPDATE public.planos_assinatura_energia
-           SET recorrente_config = jsonb_set(recorrente_config, '{regras_multinivel,ppe,niveis,L1}', '"6"')
+           SET recorrente_config = jsonb_set(recorrente_config, '{regras_multinivel,b2w,niveis,L1}', '"11"')
          WHERE id = v_plano;
     EXCEPTION WHEN check_violation THEN v_pegou := true;
     END;
-    IF NOT v_pegou THEN RAISE EXCEPTION 'FALHA V2: matriz de plano com UC devia ser recusada'; END IF;
+    IF NOT v_pegou THEN RAISE EXCEPTION 'FALHA V2: matriz (b2w) de plano com UC devia ser recusada'; END IF;
+
+    BEGIN
+        UPDATE public.planos_assinatura_energia
+           SET recorrente_config = jsonb_set(recorrente_config, '{regras_multinivel,ppe}',
+                                             '{"niveis":{"L1":"6","L2":"2","L3":"0","L4":"0"},"max_niveis":2}')
+         WHERE id = v_plano;
+    EXCEPTION WHEN check_violation THEN
+        RAISE EXCEPTION 'FALHA V2: cargo de parceiro no plano de assinatura nao deveria travar mais (saiu para o Plano do Originador)';
+    END;
+    -- desfaz, para os casos seguintes compararem com c_matriz intacta
+    UPDATE public.planos_assinatura_energia
+       SET recorrente_config = jsonb_set(recorrente_config, '{regras_multinivel,ppe}', c_matriz -> 'ppe')
+     WHERE id = v_plano;
 
     v_pegou := false;
     BEGIN
@@ -174,12 +191,14 @@ BEGIN
         UPDATE public.planos_assinatura_energia
            SET start_config = '{"faturas_elegiveis": [2], "regras": {
               "1": {"b2w": 0, "lider": 50, "ppe": 50, "ppp": 40, "ppf": 20, "assinante_conect": 0, "embaixador": 50},
-              "2": {"b2w": 60, "lider": 20, "ppe": 21, "ppp": 0, "ppf": 0, "assinante_conect": 0, "embaixador": 21},
+              "2": {"b2w": 61, "lider": 20, "ppe": 20, "ppp": 0, "ppf": 0, "assinante_conect": 0, "embaixador": 20},
               "3": {"b2w": 0, "lider": 0, "ppe": 0, "ppp": 0, "ppf": 0, "assinante_conect": 0}}}'::jsonb
          WHERE id = v_p8;
     EXCEPTION WHEN check_violation THEN v_pegou := true;
     END;
-    IF NOT v_pegou THEN RAISE EXCEPTION 'FALHA V8: mudar um dos 6 valores do Start (ppe 20 -> 21) devia ser recusado'; END IF;
+    -- 20261110a: no Start do plano de assinatura so b2w e assinante_conect
+    -- contam para a trava; os cargos de parceiro sairam para o Plano do Originador.
+    IF NOT v_pegou THEN RAISE EXCEPTION 'FALHA V8: mudar um valor do Start que fica no plano (b2w 60 -> 61) devia ser recusado'; END IF;
 
     v_pegou := false;
     BEGIN
@@ -329,11 +348,12 @@ BEGIN
     v_pegou := false;
     BEGIN
         UPDATE public.planos_assinatura_energia
-           SET start_config = jsonb_set(start_config, '{regras,3,ppf}', 'null'::jsonb)
+           SET start_config = jsonb_set(start_config, '{regras,3,assinante_conect}', 'null'::jsonb)
          WHERE id = v_p8;
     EXCEPTION WHEN check_violation THEN v_pegou := true;
     END;
-    IF NOT v_pegou THEN RAISE EXCEPTION 'FALHA V18: ppf 0 -> null devia ser recusado'; END IF;
+    -- 20261110a: era ppf; cargo de parceiro nao trava mais o plano de assinatura.
+    IF NOT v_pegou THEN RAISE EXCEPTION 'FALHA V18: assinante_conect 0 -> null devia ser recusado'; END IF;
 
     -- V19 -- o shape numerico da tela passa: mesmos numeros (texto com espacos, ".5",
     --        20.0), chaves legadas extras e novo nome. (O V8 acima cobre o mesmo
