@@ -43,10 +43,10 @@ export default function Comecar() {
     <Screen>
       <Hero kicker="Bem-vindo à B2W" title="O que você quer fazer?" subtitle="Escolha por onde começar. Depois você pode explorar as outras opções pelo início." />
       {opcoes.map((o) => {
-        const cor = colors[o.tone];
+        const cor = colors.iconBoxBg ? colors.iconPrimary : colors[o.tone];
         return (
           <Card key={o.objetivo} onPress={() => escolher(o)} style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
-            <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: `${cor}1A`, borderWidth: 1, borderColor: `${cor}2E`, alignItems: 'center', justifyContent: 'center' }}>
+            <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: colors.iconBoxBg ?? `${cor}1A`, borderWidth: 1, borderColor: colors.iconBoxBorder ?? `${cor}2E`, alignItems: 'center', justifyContent: 'center' }}>
               <Icon name={o.icon} color={cor} size={24} />
             </View>
             <View style={{ flex: 1, gap: 2 }}>

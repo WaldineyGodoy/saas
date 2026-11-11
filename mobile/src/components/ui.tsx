@@ -6,7 +6,9 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { toneColor, type Tone } from '../lib/status';
-import { colors, esquemaAtual, fonts, radius, space, type, type Esquema } from '../theme/tokens';
+import {
+  alternarEsquema, colors, definirEsquema, ESQUEMAS, esquemaAtual, fonts, radius, space, type, type Esquema,
+} from '../theme/tokens';
 
 export type IconName = ComponentProps<typeof MaterialIcons>['name'];
 
@@ -38,16 +40,88 @@ export function Screen({
 }
 
 const LOGO_HORIZONTAL = require('../../assets/logo-horizontal.png');
+const LOGO_HORIZONTAL_LIGHT = require('../../assets/logo-horizontal-light.png');
 
-/** Cabecalho fixo das telas (logo, "Online", sino, avatar), como no Stitch. */
+const ICONE_TEMA: Record<Esquema, IconName> = {
+  blue: 'nights-stay',
+  light: 'wb-sunny',
+  dark: 'dark-mode',
+};
+
+const ROTULO_TEMA: Record<Esquema, string> = {
+  blue: 'Blue',
+  light: 'Light',
+  dark: 'Dark',
+};
+
+/** Seletor de visualização (Blue / Light / Dark) para uso nas telas de Mais e Login. */
+export function SeletorTema() {
+  return (
+    <View style={{ flexDirection: 'row', gap: 8 }}>
+      {ESQUEMAS.map((item) => {
+        const ativo = esquemaAtual === item.id;
+        return (
+          <Pressable
+            key={item.id}
+            accessibilityRole="button"
+            accessibilityLabel={`Tema ${item.rotulo}`}
+            onPress={() => definirEsquema(item.id)}
+            style={{
+              flex: 1,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+              paddingVertical: 10,
+              paddingHorizontal: 10,
+              borderRadius: radius.xl,
+              backgroundColor: ativo ? colors.primary : colors.surfaceLowest,
+              borderWidth: 1,
+              borderColor: ativo ? colors.primary : colors.borderSubtle,
+            }}
+          >
+            <MaterialIcons
+              name={ICONE_TEMA[item.id]}
+              size={16}
+              color={ativo ? colors.onPrimary : colors.iconPrimary}
+            />
+            <Text
+              style={[
+                type.bodySm,
+                {
+                  fontFamily: fonts.bodySemi,
+                  color: ativo ? colors.onPrimary : colors.onSurface,
+                },
+              ]}
+            >
+              {item.rotulo}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+/** Cabecalho fixo das telas (logo, seletor de tema, "Online", avatar), como no Stitch. */
 export function TopBar({ initials, onAvatar }: { initials?: string; onAvatar?: () => void }) {
   const insets = useSafeAreaInsets();
+  const logo = esquemaAtual === 'light' ? LOGO_HORIZONTAL_LIGHT : LOGO_HORIZONTAL;
   return (
     <View style={[s.topbar, { paddingTop: insets.top }]}>
       <View style={s.topbarRow}>
-        {/* Logo oficial (Stitch: B2W_E_V1_FUNDOESCURO) */}
-        <Image source={LOGO_HORIZONTAL} style={{ width: 104, height: 30 }} resizeMode="contain" accessibilityLabel="B2W Energia" />
+        {/* Logo oficial (adaptada para fundo claro ou escuro) */}
+        <Image source={logo} style={{ width: 104, height: 30 }} resizeMode="contain" accessibilityLabel="B2W Energia" />
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Alternar visualização (atual: ${ROTULO_TEMA[esquemaAtual]})`}
+            onPress={alternarEsquema}
+            style={s.themePill}
+          >
+            <MaterialIcons name={ICONE_TEMA[esquemaAtual]} size={13} color={colors.headerInk} />
+            <Text style={s.themePillTxt}>{ROTULO_TEMA[esquemaAtual]}</Text>
+          </Pressable>
           <View style={s.online}>
             <View style={s.onlineDot} />
             <Text style={s.onlineTxt}>Online</Text>
@@ -100,12 +174,14 @@ export function Metric({
   embedded?: boolean;
 }) {
   const tamanhoValor = value.length > 12 ? 16 : value.length >= 10 ? 18 : 21;
+  const corIcone = esquemaAtual === 'blue' ? iconColor : colors.iconPrimary;
+  const bgIcone = colors.iconBoxBg ?? `${iconColor}1A`;
   return (
     <View style={[embedded ? s.metricEmbedded : s.card, { flex: 1, padding: 12, gap: 6 }]}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
         <Text style={[type.labelSm, { color: colors.onSurfaceVariant, textTransform: 'uppercase', flex: 1 }]} numberOfLines={1}>{label}</Text>
-        <View style={{ width: 26, height: 26, borderRadius: 7, backgroundColor: `${iconColor}1A`, alignItems: 'center', justifyContent: 'center' }}>
-          <Icon name={icon} size={15} color={iconColor} />
+        <View style={{ width: 26, height: 26, borderRadius: 7, backgroundColor: bgIcone, alignItems: 'center', justifyContent: 'center' }}>
+          <Icon name={icon} size={15} color={corIcone} />
         </View>
       </View>
       <Text
@@ -220,18 +296,18 @@ export function Chip({ label, active, onPress }: { label: string; active?: boole
 export function SearchInput({ value, onChangeText, placeholder }: { value: string; onChangeText: (t: string) => void; placeholder: string }) {
   return (
     <View style={s.search}>
-      <Icon name="search" size={20} color={colors.onSurfaceVariant} />
+      <Icon name="search" size={20} color={colors.searchIcon} />
       <TextInput
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor={`${colors.onSurfaceVariant}B3`}
+        placeholderTextColor={colors.placeholder}
         style={[type.body, { flex: 1, color: colors.onSurface, paddingVertical: 0 }]}
         autoCorrect={false}
       />
       {value ? (
         <Pressable onPress={() => onChangeText('')} hitSlop={10} accessibilityLabel="Limpar busca">
-          <Icon name="close" size={18} color={colors.onSurfaceVariant} />
+          <Icon name="close" size={18} color={colors.searchIcon} />
         </Pressable>
       ) : null}
     </View>
@@ -248,10 +324,13 @@ export function ListItem({
   right?: ReactNode;
   onPress?: () => void;
 }) {
+  const corIcone = esquemaAtual === 'blue' ? iconColor : colors.iconPrimary;
+  const bgIcone = colors.iconBoxBg ?? `${iconColor}1A`;
+  const bordaIcone = colors.iconBoxBorder ?? `${iconColor}2E`;
   return (
     <Card onPress={onPress} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 13 }}>
-      <View style={[s.iconBox, { backgroundColor: `${iconColor}1A`, borderWidth: 1, borderColor: `${iconColor}2E` }]}>
-        <Icon name={icon} size={22} color={iconColor} />
+      <View style={[s.iconBox, { backgroundColor: bgIcone, borderWidth: 1, borderColor: bordaIcone }]}>
+        <Icon name={icon} size={22} color={corIcone} />
       </View>
       <View style={{ flex: 1, gap: 2 }}>
         <Text style={[type.headlineSm, { color: colors.onSurface, fontSize: 15 }]} numberOfLines={1}>{title}</Text>
@@ -311,6 +390,8 @@ export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () =>
 const criarFolha = () => StyleSheet.create({
   topbar: { backgroundColor: colors.header, borderBottomWidth: 1, borderBottomColor: colors.headerBorder },
   topbarRow: { height: 56, paddingHorizontal: space.gutterMobile, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  themePill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 5, borderRadius: radius.full, backgroundColor: colors.headerChip, borderWidth: 1, borderColor: colors.headerBorder },
+  themePillTxt: { fontFamily: fonts.monoMedium, fontSize: 10, color: colors.headerInk, letterSpacing: 0.4 },
   online: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 9, paddingVertical: 4, borderRadius: radius.full, backgroundColor: `${colors.headerAccent}1C`, borderWidth: 1, borderColor: `${colors.headerAccent}38` },
   onlineDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.headerAccent },
   onlineTxt: { fontFamily: fonts.mono, fontSize: 9, color: colors.headerAccent, textTransform: 'uppercase', letterSpacing: 0.6 },

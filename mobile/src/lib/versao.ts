@@ -10,4 +10,4 @@
  * Vale o maior nível que a versão tiver (layout + correção = X). Subir um
  * nível zera os da direita: 1.6.1 -> 2.0.0 (X), 1.7.0 (Y) ou 1.6.2 (Z).
  */
-export const NOVIDADES_DA_VERSAO = 'Tela de entrada nova: vídeo da B2W ao fundo (usina, eletroposto e casa), formulário em vidro e bloco centralizado no computador.';
+export const NOVIDADES_DA_VERSAO = 'V7.1: 3 variações de visualização (Blue, Light e Dark) com esfera central em degradê azul royal e logo oficial adaptativa.';

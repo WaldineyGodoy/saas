@@ -34,7 +34,7 @@ export default function Invest() {
         return (
           <Card key={u.id} onPress={abrir} style={{ gap: 12 }}>
             <Row style={{ alignItems: 'center', gap: 12 }}>
-              <View style={{ width: 42, height: 42, borderRadius: 12, backgroundColor: `${colors.accentSolar}1A`, borderWidth: 1, borderColor: `${colors.accentSolar}2E`, alignItems: 'center', justifyContent: 'center' }}>
+              <View style={{ width: 42, height: 42, borderRadius: 12, backgroundColor: colors.iconBoxBg ?? `${colors.accentSolar}1A`, borderWidth: 1, borderColor: colors.iconBoxBorder ?? `${colors.accentSolar}2E`, alignItems: 'center', justifyContent: 'center' }}>
                 <Icon name="solar-power" color={colors.accentSolar} size={22} />
               </View>
               <View style={{ flex: 1, gap: 2 }}>
