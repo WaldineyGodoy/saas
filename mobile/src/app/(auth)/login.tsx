@@ -5,11 +5,14 @@ import { Image, KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'r
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Campo } from '../../components/Campo';
-import { Button, Card } from '../../components/ui';
+import { Button, Card, SeletorTema } from '../../components/ui';
 import { useAuth } from '../../contexts/AuthContext';
 import { envOk } from '../../lib/env';
 import { PRIVACIDADE_URL } from '../../lib/links';
 import { colors, esquemaAtual, radius, space, type } from '../../theme/tokens';
+
+const LOGO_VERTICAL = require('../../../assets/logo-vertical.png');
+const LOGO_VERTICAL_LIGHT = require('../../../assets/logo-vertical-light.png');
 
 export default function Login() {
   const { signIn } = useAuth();
@@ -32,10 +35,11 @@ export default function Login() {
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.background }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <StatusBar style={esquemaAtual === 'light' ? 'dark' : 'light'} />
       <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: space.lg, paddingTop: insets.top + space.lg, gap: space.lg }} keyboardShouldPersistTaps="handled">
+        <SeletorTema />
         <View style={{ alignItems: 'center', gap: 10 }}>
-          {/* Logo oficial (Stitch: B2W_E_V2_FUNDOESCURO) sobre o azul-marinho da marca */}
+          {/* Logo oficial da B2W Energia */}
           <View style={{ backgroundColor: colors.header, borderRadius: radius.xl, padding: 18 }}>
-            <Image source={require('../../../assets/logo-vertical.png')} style={{ width: 132, height: 125 }} resizeMode="contain" accessibilityLabel="B2W Energia" />
+            <Image source={esquemaAtual === 'light' ? LOGO_VERTICAL_LIGHT : LOGO_VERTICAL} style={{ width: 132, height: 125 }} resizeMode="contain" accessibilityLabel="B2W Energia" />
           </View>
           <Text style={[type.body, { color: colors.inkSecondary, textAlign: 'center' }]}>
             Sua energia, suas usinas e sua rede de indicações em um só lugar.

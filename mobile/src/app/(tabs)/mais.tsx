@@ -3,7 +3,7 @@ import Constants from 'expo-constants';
 import * as WebBrowser from 'expo-web-browser';
 import { useState } from 'react';
 import { Linking, Text, View } from 'react-native';
-import { Button, Card, ListItem, Row, Screen, SectionLabel } from '../../components/ui';
+import { Button, Card, ListItem, Row, Screen, SectionLabel, SeletorTema } from '../../components/ui';
 import { useAuth } from '../../contexts/AuthContext';
 import { usePerfil } from '../../lib/api';
 import { avisar, confirmar } from '../../lib/dialogo';
@@ -56,6 +56,8 @@ export default function Mais() {
           </View>
         </Row>
       </Card>
+      <SectionLabel title="Visualização (Tema)" />
+      <SeletorTema />
       <SectionLabel title="Conecte & ganhe" />
       <ListItem icon="diversity-3" iconColor={colors.primary} title="Home Connect" subtitle="Indique assinantes e ganhe cashback" onPress={() => router.push('/connect/home')} />
       <ListItem icon="electric-car" iconColor={colors.accentConnect} title="Drive Connect" subtitle="Sua rede de recargas" onPress={() => router.push('/connect/drive')} />
