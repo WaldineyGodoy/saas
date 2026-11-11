@@ -3,7 +3,7 @@ import * as Haptics from 'expo-haptics';
 import { useState } from 'react';
 import { Linking, Share, Text, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
-import { colors, type } from '../theme/tokens';
+import { colors, fonts, type } from '../theme/tokens';
 import { Button, Card, Row } from './ui';
 
 export function LinkIndicacao({ link, texto, bonus, titulo = 'Seu link de indicação' }: { link: string; texto: string; bonus?: string; titulo?: string }) {
@@ -22,7 +22,7 @@ export function LinkIndicacao({ link, texto, bonus, titulo = 'Seu link de indica
         {bonus ? <Text style={[type.labelSm, { color: colors.secondary }]}>{bonus}</Text> : null}
       </Row>
       <View style={{ backgroundColor: colors.surface, borderRadius: 8, padding: 10, borderWidth: 1, borderColor: colors.borderSubtle }}>
-        <Text style={[type.bodySm, { color: colors.inkPrimary, fontFamily: 'JetBrainsMono_500Medium' }]} selectable numberOfLines={2}>{link}</Text>
+        <Text style={[type.bodySm, { color: colors.inkPrimary, fontFamily: fonts.monoMedium }]} selectable numberOfLines={2}>{link}</Text>
       </View>
       <Row>
         <Button label={copiado ? 'Copiado!' : 'Copiar'} icon="content-copy" variant="secondary" onPress={copiar} style={{ flex: 1 }} />

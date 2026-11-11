@@ -2,7 +2,7 @@
   "expo": {
     "name": "B2W Energia",
     "slug": "b2w-energia",
-    "version": "7.1.0",
+    "version": "7.2.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",

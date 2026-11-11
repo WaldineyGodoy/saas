@@ -234,28 +234,97 @@ export const colors: Paleta = new Proxy({} as Paleta, {
   get: (_alvo, chave: string) => paletaAtual[chave as keyof Paleta],
 });
 
-export const fonts = {
-  display: 'Manrope_800ExtraBold',
-  headline: 'Manrope_700Bold',
+// Sistema tipográfico V7.2:
+//   - Principal: Inter (excelente proporção de caixa-baixa e legibilidade em ecrãs pequenos)
+//   - Fallback nativo iOS: SF Pro Display (títulos/display) e SF Pro Text (corpo/labels/métricas)
+//   - Fallback nativo Android: Roboto
+export type PlataformaTipografica = 'ios' | 'android' | 'web';
+
+type MapaFontes = {
+  display: string;
+  headline: string;
+  body: string;
+  bodyMedium: string;
+  bodySemi: string;
+  mono: string;
+  monoMedium: string;
+};
+
+const FONTES_INTER_NATIVO: MapaFontes = {
+  display: 'Inter_800ExtraBold',
+  headline: 'Inter_700Bold',
   body: 'Inter_400Regular',
   bodyMedium: 'Inter_500Medium',
   bodySemi: 'Inter_600SemiBold',
-  mono: 'JetBrainsMono_600SemiBold',
-  monoMedium: 'JetBrainsMono_500Medium',
-} as const;
+  mono: 'Inter_600SemiBold',
+  monoMedium: 'Inter_500Medium',
+};
+
+const FONTES_FALLBACK_IOS: MapaFontes = {
+  display: 'SF Pro Display',
+  headline: 'SF Pro Display',
+  body: 'SF Pro Text',
+  bodyMedium: 'SF Pro Text',
+  bodySemi: 'SF Pro Text',
+  mono: 'SF Pro Text',
+  monoMedium: 'SF Pro Text',
+};
+
+const FONTES_FALLBACK_ANDROID: MapaFontes = {
+  display: 'Roboto',
+  headline: 'Roboto',
+  body: 'Roboto',
+  bodyMedium: 'Roboto',
+  bodySemi: 'Roboto',
+  mono: 'Roboto',
+  monoMedium: 'Roboto',
+};
+
+const STACK_WEB_DISPLAY = "'Inter', 'SF Pro Display', 'SF Pro Text', 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif";
+const STACK_WEB_TEXT = "'Inter', 'SF Pro Text', 'SF Pro Display', 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif";
+
+const FONTES_WEB: MapaFontes = {
+  display: STACK_WEB_DISPLAY,
+  headline: STACK_WEB_DISPLAY,
+  body: STACK_WEB_TEXT,
+  bodyMedium: STACK_WEB_TEXT,
+  bodySemi: STACK_WEB_TEXT,
+  mono: STACK_WEB_TEXT,
+  monoMedium: STACK_WEB_TEXT,
+};
+
+let fontesAtuais: MapaFontes = FONTES_INTER_NATIVO;
+
+export function resolverFontes(plataforma: PlataformaTipografica, interCarregada = true): MapaFontes {
+  if (plataforma === 'web') return FONTES_WEB;
+  if (interCarregada) return FONTES_INTER_NATIVO;
+  return plataforma === 'ios' ? FONTES_FALLBACK_IOS : FONTES_FALLBACK_ANDROID;
+}
+
+export function configurarTipografia(plataforma: PlataformaTipografica, interCarregada = true) {
+  fontesAtuais = resolverFontes(plataforma, interCarregada);
+}
+
+export const fonts: MapaFontes = new Proxy({} as MapaFontes, {
+  get: (_alvo, chave: string) => fontesAtuais[chave as keyof MapaFontes],
+});
 
 export const space = { xs: 4, sm: 8, md: 16, lg: 24, xl: 32, gutter: 16, gutterMobile: 12 } as const;
 export const radius = { sm: 2, base: 4, md: 6, lg: 8, xl: 12, full: 9999 } as const;
 
-export const type = {
-  displayHero: { fontFamily: fonts.display, fontSize: 32, lineHeight: 36, letterSpacing: -0.6 },
-  headlineLg: { fontFamily: fonts.headline, fontSize: 24, lineHeight: 30, letterSpacing: -0.4 },
-  headlineMd: { fontFamily: fonts.headline, fontSize: 20, lineHeight: 25, letterSpacing: -0.3 },
-  headlineSm: { fontFamily: fonts.headline, fontSize: 16, lineHeight: 22, letterSpacing: -0.1 },
-  metric: { fontFamily: fonts.mono, fontSize: 21, lineHeight: 26, fontVariant: ['tabular-nums'] as ('tabular-nums')[] },
-  metricLg: { fontFamily: fonts.mono, fontSize: 28, lineHeight: 32, fontVariant: ['tabular-nums'] as ('tabular-nums')[] },
-  body: { fontFamily: fonts.body, fontSize: 14, lineHeight: 21 },
-  bodySm: { fontFamily: fonts.body, fontSize: 12, lineHeight: 17 },
-  labelMono: { fontFamily: fonts.mono, fontSize: 11, lineHeight: 14, letterSpacing: 1.1 },
-  labelSm: { fontFamily: fonts.monoMedium, fontSize: 10, lineHeight: 13, letterSpacing: 0.7 },
-} as const;
+const construirTipografia = () => ({
+  displayHero: { fontFamily: fonts.display, fontWeight: '800' as const, fontSize: 32, lineHeight: 36, letterSpacing: -0.6 },
+  headlineLg: { fontFamily: fonts.headline, fontWeight: '700' as const, fontSize: 24, lineHeight: 30, letterSpacing: -0.4 },
+  headlineMd: { fontFamily: fonts.headline, fontWeight: '700' as const, fontSize: 20, lineHeight: 25, letterSpacing: -0.3 },
+  headlineSm: { fontFamily: fonts.headline, fontWeight: '600' as const, fontSize: 16, lineHeight: 22, letterSpacing: -0.15 },
+  metric: { fontFamily: fonts.mono, fontWeight: '600' as const, fontSize: 21, lineHeight: 26, fontVariant: ['tabular-nums'] as ('tabular-nums')[] },
+  metricLg: { fontFamily: fonts.mono, fontWeight: '700' as const, fontSize: 28, lineHeight: 32, fontVariant: ['tabular-nums'] as ('tabular-nums')[] },
+  body: { fontFamily: fonts.body, fontWeight: '400' as const, fontSize: 14, lineHeight: 21 },
+  bodySm: { fontFamily: fonts.body, fontWeight: '400' as const, fontSize: 12, lineHeight: 17 },
+  labelMono: { fontFamily: fonts.mono, fontWeight: '600' as const, fontSize: 11, lineHeight: 14, letterSpacing: 0.8 },
+  labelSm: { fontFamily: fonts.monoMedium, fontWeight: '500' as const, fontSize: 10, lineHeight: 13, letterSpacing: 0.5 },
+});
+
+export const type: ReturnType<typeof construirTipografia> = new Proxy({} as ReturnType<typeof construirTipografia>, {
+  get: (_alvo, chave: string) => construirTipografia()[chave as keyof ReturnType<typeof construirTipografia>],
+});
