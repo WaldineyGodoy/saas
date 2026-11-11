@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useUI } from '../contexts/UIContext';
 import { fetchAddressByCep, fetchOfferData, sendWhatsapp, sendLeadMensagem } from '../lib/api';
 import { MODELOS_LEAD, montarMensagemLead, montarLinkIndicacao } from '../../supabase/functions/_shared/mensagem-lead.ts';
-import { maskPhone, validatePhone } from '../lib/validators';
+import { maskPhoneDdi, normalizePhoneDdi, validatePhoneDdi } from '../lib/validators';
 import { Clock, User, Home, Zap, CreditCard, History, X, MessageSquare, FileText, Calendar, MessageCircle, Users } from 'lucide-react';
 import HistoryTimeline, { CollapsibleSection } from './HistoryTimeline';
 import TagInput from './TagInput';
@@ -291,8 +291,8 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        if (formData.phone && !validatePhone(formData.phone)) {
-            showAlert('Telefone inválido!', 'warning');
+        if (formData.phone && !validatePhoneDdi(formData.phone)) {
+            showAlert('Telefone inválido! Use DDI + DDD + número (55 84 99999-9999) ou só DDD + número.', 'warning');
             return;
         }
 
@@ -300,9 +300,9 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
 
         try {
             const dataToSave = { ...formData };
-            // Evolution API so aceita digitos.
+            // Evolution API so aceita digitos, e o lead vive com o DDI.
             if (dataToSave.phone) {
-                dataToSave.phone = dataToSave.phone.replace(/\D/g, '');
+                dataToSave.phone = normalizePhoneDdi(dataToSave.phone);
             }
             dataToSave.tarifa_concessionaria = dataToSave.tarifa_concessionaria ? Number(dataToSave.tarifa_concessionaria) : null;
             dataToSave.consumo_kwh = dataToSave.consumo_kwh ? Number(dataToSave.consumo_kwh) : null;
@@ -401,7 +401,7 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
         try {
             const dataToSave = { ...formData };
             if (dataToSave.phone) {
-                dataToSave.phone = dataToSave.phone.replace(/\D/g, '');
+                dataToSave.phone = normalizePhoneDdi(dataToSave.phone);
             }
             dataToSave.tarifa_concessionaria = dataToSave.tarifa_concessionaria ? Number(dataToSave.tarifa_concessionaria) : null;
             dataToSave.consumo_kwh = dataToSave.consumo_kwh ? Number(dataToSave.consumo_kwh) : null;
@@ -512,10 +512,7 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
                 fileName = manualFile.name;
             }
 
-            let phoneToQuery = targetPhone.replace(/\D/g, '');
-            if (phoneToQuery.length >= 10 && phoneToQuery.length <= 11 && !phoneToQuery.startsWith('55')) {
-                phoneToQuery = `55${phoneToQuery}`;
-            }
+            const phoneToQuery = normalizePhoneDdi(targetPhone);
 
             const response = await sendWhatsapp(
                 phoneToQuery,
@@ -605,7 +602,7 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
                         </h3>
                         {formData.phone && (
                             <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 500 }}>
-                                • {maskPhone(formData.phone)}
+                                • {maskPhoneDdi(formData.phone)}
                             </span>
                         )}
                         <span style={{
@@ -851,7 +848,7 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
                                     <div>
                                         <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b', fontWeight: 600 }}>Telefone</label>
                                         <input
-                                            placeholder="55 xx xxxxx xxxx"
+                                            placeholder="55 84 99999-9999"
                                             value={formData.phone || ''}
                                             onChange={e => setFormData({ ...formData, phone: e.target.value })}
                                             style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
