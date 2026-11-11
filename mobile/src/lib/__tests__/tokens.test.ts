@@ -8,7 +8,7 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
 }));
 
 const tokens = await import('../../theme/tokens');
-const { alternarEsquema, aplicarEsquema, colors, ESQUEMAS } = tokens;
+const { alternarEsquema, aplicarEsquema, colors, configurarTipografia, ESQUEMAS, fonts, resolverFontes } = tokens;
 
 describe('tokens (3 variações de visualização)', () => {
   it('lista as 3 variações: Blue, Light e Dark', () => {
@@ -63,5 +63,34 @@ describe('tokens (3 variações de visualização)', () => {
     expect(tokens.esquemaAtual).toBe('dark');
     alternarEsquema();
     expect(tokens.esquemaAtual).toBe('blue');
+  });
+
+  it('configura a tipografia V7.2 com Inter e fallbacks nativos SF Pro (iOS) e Roboto (Android)', () => {
+    configurarTipografia('ios', true);
+    expect(fonts.display).toBe('Inter_800ExtraBold');
+    expect(fonts.headline).toBe('Inter_700Bold');
+    expect(fonts.body).toBe('Inter_400Regular');
+    expect(fonts.bodyMedium).toBe('Inter_500Medium');
+    expect(fonts.bodySemi).toBe('Inter_600SemiBold');
+
+    // Fallback nativo iOS quando Inter não carrega
+    configurarTipografia('ios', false);
+    expect(fonts.display).toBe('SF Pro Display');
+    expect(fonts.headline).toBe('SF Pro Display');
+    expect(fonts.body).toBe('SF Pro Text');
+    expect(fonts.mono).toBe('SF Pro Text');
+
+    // Fallback nativo Android quando Inter não carrega
+    configurarTipografia('android', false);
+    expect(fonts.display).toBe('Roboto');
+    expect(fonts.headline).toBe('Roboto');
+    expect(fonts.body).toBe('Roboto');
+
+    // Web stack com Inter + SF Pro + Roboto
+    const web = resolverFontes('web', true);
+    expect(web.display).toContain('Inter');
+    expect(web.display).toContain('SF Pro Display');
+    expect(web.body).toContain('SF Pro Text');
+    expect(web.body).toContain('Roboto');
   });
 });

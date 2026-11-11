@@ -10,4 +10,4 @@
  * Vale o maior nível que a versão tiver (layout + correção = X). Subir um
  * nível zera os da direita: 1.6.1 -> 2.0.0 (X), 1.7.0 (Y) ou 1.6.2 (Z).
  */
-export const NOVIDADES_DA_VERSAO = 'V7.1: 3 variações de visualização (Blue, Light e Dark) com esfera central em degradê azul royal e logo oficial adaptativa.';
+export const NOVIDADES_DA_VERSAO = 'V7.2: Tipografia unificada em Inter com fallback nativo SF Pro Text / SF Pro Display (iOS) e Roboto (Android), além das 3 variações visuais (Blue, Light e Dark).';
