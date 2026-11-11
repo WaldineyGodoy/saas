@@ -135,6 +135,32 @@ export const validatePhone = (phone) => {
     return clean.length === 11;
 };
 
+// Telefone no padrão DDI + DDD + número (55 84 99999-9999), que é como o lead
+// é gravado: o portão da página das usinas (`usina-acesso`) procura o lead pelo
+// número exato com o DDI. DDD + número (10 ou 11 dígitos) é do Brasil e ganha
+// o 55, a mesma regra do `normalizePhone` daquela função.
+export const normalizePhoneDdi = (phone) => {
+    const clean = cleanDigits(phone);
+    return clean.length === 10 || clean.length === 11 ? `55${clean}` : clean;
+};
+
+// Brasil: 55 + DDD + 8 (fixo) ou 9 (celular) dígitos. Outro país: até 15
+// dígitos (E.164) — já há investidor do México, +52 1.
+export const validatePhoneDdi = (phone) => {
+    const clean = normalizePhoneDdi(phone);
+    if (clean.startsWith('55')) return clean.length === 12 || clean.length === 13;
+    return clean.length >= 12 && clean.length <= 15;
+};
+
+// +55 (84) 99999-9999. Outro país sai como +dígitos; inválido, como digitado.
+export const maskPhoneDdi = (phone) => {
+    const clean = normalizePhoneDdi(phone);
+    if (!validatePhoneDdi(clean)) return phone || '';
+    if (!clean.startsWith('55')) return `+${clean}`;
+    const meio = clean.length === 13 ? 5 : 4;
+    return `+55 (${clean.slice(2, 4)}) ${clean.slice(4, 4 + meio)}-${clean.slice(4 + meio)}`;
+};
+
 // Combined Validator
 export const validateDocument = (val) => {
     const clean = cleanDigits(val);
