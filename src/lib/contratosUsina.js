@@ -40,7 +40,7 @@ export const DEFAULTS_USINA = {
     retencaoRescisao: 10,
     garantiaInstalacaoMeses: 12,
     // Remuneração da Associação, repetida aqui só para declaração
-    percentualRecorrente: 10,
+    percentualRecorrente: 6,
     taxaAdmin: 10,
     taxaRecuperacao: 8,
     // O&M

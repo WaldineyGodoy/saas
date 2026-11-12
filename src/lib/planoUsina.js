@@ -46,7 +46,7 @@ export const CAMPOS_TRAVADOS = [
 export const PLANO_USINA_VAZIO = {
     nome: '',
     descricao: '',
-    percentual_recorrente: 10,
+    percentual_recorrente: 6,
     taxa_admin_reais: 10,
     taxa_recuperacao_pct: 8,
     retencao_rescisao_pct: 10,
