@@ -918,6 +918,10 @@ export default function PlansServicesSettings() {
                             <div style={{ fontSize: '0.8rem', color: '#64748b', lineHeight: 1.45 }}>
                                 Bônus Start e recorrência de Líder, PPE, PPP e PPF. Vale o plano do cadastro do originador, se for diferente do Padrão.
                                 Senão, vale o plano ligado ao plano de assinatura da UC.
+                                <span style={{ display: 'block', marginTop: '0.25rem' }}>
+                                    Start = X × o consumo médio da UC (mediana do histórico fixada no cadastro), pago sobre os kWh compensados de cada fatura, no máximo 1 × o consumo médio por fatura, até esse total.
+                                    Os percentuais incidem sobre kWh compensado × tarifa da concessionária, sem descontos.
+                                </span>
                             </div>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>

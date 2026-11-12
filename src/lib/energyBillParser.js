@@ -1,3 +1,11 @@
+import { medianaKwh as medianaDosKwh } from './historicoConsumo.js';
+
+// Consumo médio do histórico. O dono fixou a MEDIANA (spec 2026-11-10,
+// revisão de 12/11): um mês fora da curva não arrasta a franquia nem o teto
+// do Start. mediaKwh (média aritmética) fica porque leads.conta_lida, o
+// pedido de nova UC (SQL) e telas antigas ainda leem esse campo.
+const medianaArredondada = (historico) => Math.round(medianaDosKwh(historico) || 0);
+
 // Helper para converter valores numéricos
 const parseValue = (raw) => {
     if (!raw) return 0;
@@ -120,6 +128,7 @@ export const completarLeitura = (lido, ucsDoCadastro = null) => {
         // O prompt de parse-invoice-image pede dataLeitura como a leitura atual.
         leituraAtual: lido.leituraAtual || lido.dataLeitura || '',
         mediaKwh: comConsumo.length ? Math.round(comConsumo.reduce((s, h) => s + h.kwh, 0) / comConsumo.length) : 0,
+        medianaKwh: medianaArredondada(historico),
         isUcMatch: alvos.length > 0 ? ucConfere(ids, alvos) : true,
     };
 };
@@ -128,7 +137,7 @@ export const completarLeitura = (lido, ucsDoCadastro = null) => {
 // o que é da fatura do mês: linha digitável, PIX, carimbo, conferência de UC.
 const CAMPOS_PEDIDO = [
     'numeroUc', 'numeroUcNovo', 'codigoCliente', 'codigoInstalacao', 'titular', 'documentoTipo', 'documento',
-    'endereco', 'classificacao', 'tipoFornecimento', 'ligacao', 'mediaKwh', 'historico', 'mesReferencia',
+    'endereco', 'classificacao', 'tipoFornecimento', 'ligacao', 'mediaKwh', 'medianaKwh', 'historico', 'mesReferencia',
     'consumoKwh', 'valorTotal', 'concessionaria', 'leituraAtual',
 ];
 export const contaParaPedido = (leitura) => ({
@@ -174,7 +183,8 @@ export const contaParaUc = (conta, { assinante = null, concessionarias = [] } = 
         titular_conta: conta?.titular,
         tipo_ligacao: LIGACOES.includes(conta?.ligacao) ? conta.ligacao : undefined,
         concessionaria: concessionarias.includes(conta?.concessionaria) ? conta.concessionaria : undefined,
-        franquia: conta?.mediaKwh ? String(conta.mediaKwh) : undefined,
+        // Mediana do histórico; conta lida antes dela existir só tem a média.
+        franquia: (conta?.medianaKwh || conta?.mediaKwh) ? String(conta.medianaKwh || conta.mediaKwh) : undefined,
         dia_leitura: diaLeitura,
         cep: end.cep, rua, numero,
         complemento: end.complemento, bairro: end.bairro, cidade: end.cidade, uf: end.uf,
@@ -419,6 +429,7 @@ export const parseEnergyBillText = (fullText, ucsDoCadastro = null) => {
         ligacao: ligacaoDoFornecimento(tipoFornecimento),
         historico,
         mediaKwh: comConsumo.length ? Math.round(comConsumo.reduce((s, h) => s + h.kwh, 0) / comConsumo.length) : 0,
+        medianaKwh: medianaArredondada(historico),
         mesReferencia: extractedMesRef,
         vencimento: extractedDueDate,
         dataLeitura: extractedReadDate,

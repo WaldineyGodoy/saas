@@ -24,9 +24,9 @@ import { listarPlanosOriginador, planoOriginadorAusente, planoPadraoDe, resumoPl
  * `contract_terms.minutas`, mesmo envio pela Autentique com entrega do
  * link por WhatsApp e e-mail feita por nós.
  *
- * O que muda é de onde vêm os números: o Start e a Recorrência saem do
- * Plano do Originador escolhido no cadastro (aba Indicação), e não de
- * campos deste painel. Duplicá-los aqui criaria uma terceira fonte de
+ * O que muda é de onde vêm os números: o Start (X × o consumo médio da
+ * UC, em kWh compensados) e a Recorrência saem do Plano do Originador
+ * escolhido no cadastro (aba Indicação), e não de campos deste painel. Duplicá-los aqui criaria uma terceira fonte de
  * verdade sobre comissão — e a primeira a divergir das outras duas. Ver
  * a memória crm-comissao-duas-fontes.
  */
@@ -517,6 +517,7 @@ export default function ContratoOriginacao({ originadorId, registrarHistorico })
                         : !planoOriginador || planoOriginador.padrao
                             ? `${planoOriginador?.nome || 'Plano Padrão'}: a regra segue o plano de assinatura de cada UC, e o Anexo remete à tabela vigente sem fixar percentual.`
                             : `${planoOriginador.nome} (exceção, vale em todas as UCs): ${resumoPlanoOriginador(planoOriginador, cargoChave)}.`}
+                    {' '}O contrato descreve o Start como X × o consumo médio da UC (mediana do histórico da conta de energia, fixada no cadastro), pago sobre os kWh compensados de cada fatura limitados ao consumo médio, até esse total, e os percentuais sobre kWh compensado × tarifa da concessionária, sem descontos.
                     {' '}Para mudar, troque o Plano do Originador no cadastro — o contrato não edita a remuneração, porque é o plano que o motor do split lê na hora de pagar.
                 </div>
             </div>

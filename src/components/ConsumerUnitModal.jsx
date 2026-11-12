@@ -22,6 +22,8 @@ import InvoiceFormModal from './InvoiceFormModal';
 import ManualInvoiceUploadModal from './ManualInvoiceUploadModal';
 import PreencherUcPelaConta from './PreencherUcPelaConta';
 import { contaParaUc } from '../lib/energyBillParser';
+import { gravarHistoricoConsumo } from '../lib/historicoConsumo';
+import HistoricoConsumo from './HistoricoConsumo';
 import { sendWhatsapp } from '../lib/api';
 import { useBranding } from '../contexts/BrandingContext';
 import ContratoTransferencia from './ContratoTransferencia';
@@ -51,6 +53,9 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
     const [loading, setLoading] = useState(false);
     // Arquivo da conta lida no "Preencher pela conta": fica anexado ao assinante ao salvar a UC nova.
     const [contaArquivo, setContaArquivo] = useState(null);
+    // Histórico mês a mês lido da mesma conta: vira o perfil de consumo da UC
+    // (fn_gravar_historico_consumo) depois de salvar.
+    const [contaHistorico, setContaHistorico] = useState(null);
     const [searchingCep, setSearchingCep] = useState(false);
     const [showHistory, setShowHistory] = useState(false);
     const [showCredentialsModal, setShowCredentialsModal] = useState(false);
@@ -875,7 +880,8 @@ Qualquer dúvida, é só responder esta mensagem.`;
     // UC nova: a conta lida preenche o formulário; a equipe confere e salva.
     const aplicarContaNaUc = async (conta, arquivo = null) => {
         setContaArquivo(arquivo);
-        const assinante = subscribers.find(s => s.id === formData.subscriber_id) || null;
+        setContaHistorico(Array.isArray(conta?.historico) && conta.historico.length ? conta.historico : null);
+        const assinante =subscribers.find(s => s.id === formData.subscriber_id) || null;
         const campos = contaParaUc(conta, { assinante, concessionarias: concessionariaOptions.map(o => o.value) });
         if (campos.cep) campos.cep = maskCEP(campos.cep);
         if (campos.numero_uc) campos.numero_uc = soDigitosUc(campos.numero_uc);
@@ -1154,6 +1160,20 @@ Qualquer dúvida, é só responder esta mensagem.`;
                     // O RPC mudou a UC (status, usina_destino_id): devolve a linha atual.
                     const { data: atual } = await supabase.from('consumer_units').select('*').eq('id', result.data.id).maybeSingle();
                     if (atual) result.data = atual;
+                }
+            }
+
+            // Histórico de consumo da conta lida -> perfil de 12 meses da UC,
+            // mediana e base do Start (congelada no banco). A UC já está salva:
+            // falha aqui só avisa. Banco sem a RPC ainda (migração do Plano do
+            // Originador pendente) fica só no console.
+            if (!consumerUnit?.id && contaHistorico?.length) {
+                const gravado = await gravarHistoricoConsumo(supabase, result.data.id, contaHistorico, 'cadastro');
+                if (!gravado.ok) {
+                    console.warn('UC salva sem histórico de consumo:', gravado.error);
+                    if (!gravado.semBanco) {
+                        showAlert(`UC salva, mas o histórico de consumo da conta não foi gravado: ${gravado.error?.message || 'erro desconhecido'}. Importe pela aba Faturas e Contas de Energia.`, 'warning');
+                    }
                 }
             }
 
@@ -2671,6 +2691,113 @@ Qualquer dúvida, é só responder esta mensagem.`;
                                         </select>
                                     </div>
 
+                                    {/* Desligamento na concessionaria. Veio da aba Faturas e Contas de Energia
+                                        (12/11/2026, dono). Continua so para o papel interno, como la. */}
+                                    {ehPapelInterno(profile?.role) && (
+                                    <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '1.25rem' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}>
+                                            <Power size={18} color="#dc2626" />
+                                            <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#0f172a' }}>Desligamento na concessionária</h4>
+                                        </div>
+                                        <p style={{ margin: '0 0 1rem', fontSize: '0.8rem', color: '#64748b', lineHeight: 1.5 }}>
+                                            O assinante pode pedir o desligamento direto na concessionária, sem avisar. Registrando a data aqui,
+                                            a auditoria passa a <strong>barrar</strong> conta cujo período comece nessa data ou depois — é consumo
+                                            que não é dele. Conta que atravessa a data vira aviso, para rateio proporcional.
+                                        </p>
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '1rem' }}>
+                                            <div>
+                                                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#475569', marginBottom: '0.4rem' }}>Data do desligamento</label>
+                                                <input
+                                                    type="date"
+                                                    value={formData.data_desligamento || ''}
+                                                    onChange={e => setFormData({ ...formData, data_desligamento: e.target.value })}
+                                                    style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem', outline: 'none' }}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#475569', marginBottom: '0.4rem' }}>Como foi descoberto</label>
+                                                <select
+                                                    value={formData.desligamento_origem || ''}
+                                                    onChange={e => setFormData({ ...formData, desligamento_origem: e.target.value })}
+                                                    style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem', outline: 'none', background: '#fff' }}
+                                                >
+                                                    <option value="">—</option>
+                                                    <option value="portal">Visto no portal da concessionária</option>
+                                                    <option value="leitura_curta">Inferido pelo ciclo de encerramento</option>
+                                                    <option value="concessionaria">Informado pela concessionária</option>
+                                                    <option value="manual">Informado pelo assinante</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#475569', marginBottom: '0.4rem' }}>Acompanhar contas até</label>
+                                                <input
+                                                    type="date"
+                                                    value={formData.acompanhar_conta_ate || ''}
+                                                    onChange={e => setFormData({ ...formData, acompanhar_conta_ate: e.target.value })}
+                                                    style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem', outline: 'none' }}
+                                                />
+                                            </div>
+                                        </div>
+                                        {/* Troca de titularidade: de onde esta UC veio.
+                                            Na TT a concessionaria emite numero novo e o registro e
+                                            editado no lugar, apagando do cadastro a identidade
+                                            anterior. Mas a conta final do periodo pre-troca sai no
+                                            portal sob o numero e o titular ANTIGOS, e e devida. */}
+                                        <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px dashed #e2e8f0' }}>
+                                            <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569', marginBottom: '0.6rem' }}>
+                                                Troca de titularidade (origem desta UC)
+                                            </div>
+                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
+                                                <div>
+                                                    <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#475569', marginBottom: '0.4rem' }}>Número da UC anterior</label>
+                                                    <input
+                                                        type="text"
+                                                        value={formData.numero_uc_anterior || ''}
+                                                        onChange={e => setFormData({ ...formData, numero_uc_anterior: e.target.value })}
+                                                        placeholder="Ex.: 7030765324"
+                                                        style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem', outline: 'none' }}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#475569', marginBottom: '0.4rem' }}>Titular anterior</label>
+                                                    <select
+                                                        value={formData.titular_anterior_id || ''}
+                                                        onChange={e => setFormData({ ...formData, titular_anterior_id: e.target.value })}
+                                                        style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem', outline: 'none', background: '#fff' }}
+                                                    >
+                                                        <option value="">—</option>
+                                                        {subscribers.map(sub => <option key={sub.id} value={sub.id}>{sub.name}</option>)}
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#475569', marginBottom: '0.4rem' }}>Data da troca</label>
+                                                    <input
+                                                        type="date"
+                                                        value={formData.data_troca_titularidade || ''}
+                                                        onChange={e => setFormData({ ...formData, data_troca_titularidade: e.target.value })}
+                                                        style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem', outline: 'none' }}
+                                                    />
+                                                </div>
+                                            </div>
+                                            {formData.numero_uc_anterior && (
+                                                <p style={{ margin: '0.7rem 0 0', fontSize: '0.78rem', color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '8px', padding: '0.6rem 0.8rem', lineHeight: 1.5 }}>
+                                                    A conta final do período anterior sai no portal sob a UC {formData.numero_uc_anterior}, acessível pela credencial do titular anterior. Para o robô buscá-la, cadastre essa UC antiga como registro próprio, com status Desconectado e prazo em "Acompanhar contas até".
+                                                </p>
+                                            )}
+                                        </div>
+
+                                        {formData.data_desligamento && (
+                                            <p style={{ margin: '0.85rem 0 0', fontSize: '0.78rem', color: '#0369a1', background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '8px', padding: '0.6rem 0.8rem', lineHeight: 1.5 }}>
+                                                {!formData.acompanhar_conta_ate
+                                                    ? 'Sem data de acompanhamento o robô não busca mais conta desta UC. Ao salvar, o sistema sugere 90 dias (cerca de três ciclos) a partir do desligamento ou da descoberta.'
+                                                    : acompanhamentoVigente(formData.acompanhar_conta_ate)
+                                                        ? 'O robô continua buscando conta desta UC até ' + formatarData(formData.acompanhar_conta_ate) + '. Depois disso ela sai da fila sozinha.'
+                                                        : 'O acompanhamento venceu em ' + formatarData(formData.acompanhar_conta_ate) + ' — o robô não busca mais conta desta UC. Estenda a data para voltar a acompanhar.'}
+                                            </p>
+                                        )}
+                                    </div>
+                                    )}
+
                                 </div>
                             )}
 
@@ -2983,111 +3110,18 @@ Qualquer dúvida, é só responder esta mensagem.`;
                                             )}
                                         </div>
 
-                                        {/* Desligamento na concessionaria -- rodape da secao */}
-                                        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '1.25rem', marginTop: '1.25rem' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}>
-                                                <Power size={18} color="#dc2626" />
-                                                <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#0f172a' }}>Desligamento na concessionária</h4>
-                                            </div>
-                                            <p style={{ margin: '0 0 1rem', fontSize: '0.8rem', color: '#64748b', lineHeight: 1.5 }}>
-                                                O assinante pode pedir o desligamento direto na concessionária, sem avisar. Registrando a data aqui,
-                                                a auditoria passa a <strong>barrar</strong> conta cujo período comece nessa data ou depois — é consumo
-                                                que não é dele. Conta que atravessa a data vira aviso, para rateio proporcional.
-                                            </p>
-                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '1rem' }}>
-                                                <div>
-                                                    <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#475569', marginBottom: '0.4rem' }}>Data do desligamento</label>
-                                                    <input
-                                                        type="date"
-                                                        value={formData.data_desligamento || ''}
-                                                        onChange={e => setFormData({ ...formData, data_desligamento: e.target.value })}
-                                                        style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem', outline: 'none' }}
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#475569', marginBottom: '0.4rem' }}>Como foi descoberto</label>
-                                                    <select
-                                                        value={formData.desligamento_origem || ''}
-                                                        onChange={e => setFormData({ ...formData, desligamento_origem: e.target.value })}
-                                                        style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem', outline: 'none', background: '#fff' }}
-                                                    >
-                                                        <option value="">—</option>
-                                                        <option value="portal">Visto no portal da concessionária</option>
-                                                        <option value="leitura_curta">Inferido pelo ciclo de encerramento</option>
-                                                        <option value="concessionaria">Informado pela concessionária</option>
-                                                        <option value="manual">Informado pelo assinante</option>
-                                                    </select>
-                                                </div>
-                                                <div>
-                                                    <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#475569', marginBottom: '0.4rem' }}>Acompanhar contas até</label>
-                                                    <input
-                                                        type="date"
-                                                        value={formData.acompanhar_conta_ate || ''}
-                                                        onChange={e => setFormData({ ...formData, acompanhar_conta_ate: e.target.value })}
-                                                        style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem', outline: 'none' }}
-                                                    />
-                                                </div>
-                                            </div>
-                                            {/* Troca de titularidade: de onde esta UC veio.
-                                                Na TT a concessionaria emite numero novo e o registro e
-                                                editado no lugar, apagando do cadastro a identidade
-                                                anterior. Mas a conta final do periodo pre-troca sai no
-                                                portal sob o numero e o titular ANTIGOS, e e devida. */}
-                                            <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px dashed #e2e8f0' }}>
-                                                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569', marginBottom: '0.6rem' }}>
-                                                    Troca de titularidade (origem desta UC)
-                                                </div>
-                                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
-                                                    <div>
-                                                        <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#475569', marginBottom: '0.4rem' }}>Número da UC anterior</label>
-                                                        <input
-                                                            type="text"
-                                                            value={formData.numero_uc_anterior || ''}
-                                                            onChange={e => setFormData({ ...formData, numero_uc_anterior: e.target.value })}
-                                                            placeholder="Ex.: 7030765324"
-                                                            style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem', outline: 'none' }}
-                                                        />
-                                                    </div>
-                                                    <div>
-                                                        <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#475569', marginBottom: '0.4rem' }}>Titular anterior</label>
-                                                        <select
-                                                            value={formData.titular_anterior_id || ''}
-                                                            onChange={e => setFormData({ ...formData, titular_anterior_id: e.target.value })}
-                                                            style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem', outline: 'none', background: '#fff' }}
-                                                        >
-                                                            <option value="">—</option>
-                                                            {subscribers.map(sub => <option key={sub.id} value={sub.id}>{sub.name}</option>)}
-                                                        </select>
-                                                    </div>
-                                                    <div>
-                                                        <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#475569', marginBottom: '0.4rem' }}>Data da troca</label>
-                                                        <input
-                                                            type="date"
-                                                            value={formData.data_troca_titularidade || ''}
-                                                            onChange={e => setFormData({ ...formData, data_troca_titularidade: e.target.value })}
-                                                            style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem', outline: 'none' }}
-                                                        />
-                                                    </div>
-                                                </div>
-                                                {formData.numero_uc_anterior && (
-                                                    <p style={{ margin: '0.7rem 0 0', fontSize: '0.78rem', color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '8px', padding: '0.6rem 0.8rem', lineHeight: 1.5 }}>
-                                                        A conta final do período anterior sai no portal sob a UC {formData.numero_uc_anterior}, acessível pela credencial do titular anterior. Para o robô buscá-la, cadastre essa UC antiga como registro próprio, com status Desconectado e prazo em "Acompanhar contas até".
-                                                    </p>
-                                                )}
-                                            </div>
-
-                                            {formData.data_desligamento && (
-                                                <p style={{ margin: '0.85rem 0 0', fontSize: '0.78rem', color: '#0369a1', background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '8px', padding: '0.6rem 0.8rem', lineHeight: 1.5 }}>
-                                                    {!formData.acompanhar_conta_ate
-                                                        ? 'Sem data de acompanhamento o robô não busca mais conta desta UC. Ao salvar, o sistema sugere 90 dias (cerca de três ciclos) a partir do desligamento ou da descoberta.'
-                                                        : acompanhamentoVigente(formData.acompanhar_conta_ate)
-                                                            ? 'O robô continua buscando conta desta UC até ' + formatarData(formData.acompanhar_conta_ate) + '. Depois disso ela sai da fila sozinha.'
-                                                            : 'O acompanhamento venceu em ' + formatarData(formData.acompanhar_conta_ate) + ' — o robô não busca mais conta desta UC. Estenda a data para voltar a acompanhar.'}
-                                                </p>
-                                            )}
-                                        </div>
-
                                     </div>
+
+                                    {/* Perfil de consumo de 12 meses (Plano do Originador, 12/11/2026):
+                                        mediana e base do Start vêm do banco. */}
+                                    {consumerUnit?.id && (
+                                        <HistoricoConsumo
+                                            ucId={consumerUnit.id}
+                                            numerosUc={[consumerUnit.numero_uc, consumerUnit.numero_uc_anterior]}
+                                            podeImportar
+                                            recarregarEm={invoices.length}
+                                        />
+                                    )}
                                 </div>
 
                             )}

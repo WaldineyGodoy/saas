@@ -21,14 +21,41 @@ export const ROTULO_CARGO = {
     ppf: 'PPF — Free'
 };
 
-// Revisão do dono em 12/11/2026: o Start passou a ter níveis (L1..L3), vale
-// para as N primeiras faturas com compensação, e o Híbrido é SEQUENCIAL --
-// Start nas N primeiras, recorrência só depois, nunca as duas na mesma fatura.
+// Revisão do dono em 12/11/2026 (2ª): o Start deixou de contar FATURAS e passou
+// a contar ENERGIA. O plano diz o multiplicador X; o teto do Start de cada UC é
+// X × o consumo médio dela (mediana do histórico de consumo lido na conta de
+// energia no cadastro, fixada ali -- `consumer_units.start_base_kwh`). O
+// parceiro recebe sobre os kWh compensados de cada fatura até completar o
+// teto. Decisão do dono (12/11): cada fatura paga Start sobre no MÁXIMO
+// 1 × o consumo médio (teto por fatura); o total para em X × o consumo médio.
+// Ex.: médio 1.000, 2×, faturas 600 / 1.200 / 800 → Start sobre 600 / 1.000 / 400.
+// O Start tem níveis (L1..L3). O Híbrido é SEQUENCIAL: a fatura que completa o
+// Start paga só Start; a recorrência começa na fatura seguinte.
 export const TIPOS_RECOMPENSA = [
-    { valor: 'start', rotulo: 'Start', ajuda: 'Paga só nas N primeiras faturas com energia compensada.' },
-    { valor: 'recorrente', rotulo: 'Recorrência', ajuda: 'Paga em toda fatura com energia compensada, enquanto o parceiro estiver ativo.' },
-    { valor: 'ambos', rotulo: 'Híbrido', ajuda: 'Start nas N primeiras faturas; depois, recorrência. Nunca os dois na mesma fatura.' }
+    {
+        valor: 'start',
+        rotulo: 'Start',
+        ajuda: 'Paga, em cada fatura, sobre os kWh compensados limitados a 1 × o consumo médio da UC, até somar X × o consumo médio. Depois disso, não paga mais.'
+    },
+    {
+        valor: 'recorrente',
+        rotulo: 'Recorrência',
+        ajuda: 'Paga sobre os kWh compensados de toda fatura paga, enquanto o parceiro estiver ativo.'
+    },
+    {
+        valor: 'ambos',
+        rotulo: 'Híbrido',
+        ajuda: 'Start (por fatura, até 1 × o consumo médio) até somar X × o consumo médio da UC; a recorrência começa na fatura seguinte à que completa o Start. Nunca os dois na mesma fatura.'
+    }
 ];
+
+/** Como o percentual vira dinheiro (texto único para telas e ajudas). */
+export const TEXTO_BASE_PERCENTUAL =
+    'O percentual incide sobre os kWh compensados × a tarifa da concessionária impressa na conta, sem descontos (nem o desconto do assinante, nem o Fio B).';
+
+/** Como o teto do Start é medido (texto único para telas e ajudas). */
+export const TEXTO_TETO_START =
+    'Em cada fatura, o Start paga sobre os kWh compensados limitados a 1 × o consumo médio da UC, até a soma chegar a X × o consumo médio. Consumo médio = mediana do histórico de consumo da conta de energia, fixada no cadastro do assinante (não muda depois). O que passar do teto da fatura ou do total não paga Start.';
 
 /** Níveis guardados no banco (L4 fica sempre 0 no Plano do Originador). */
 export const NIVEIS = ['L1', 'L2', 'L3', 'L4'];
@@ -64,8 +91,8 @@ export const PLANO_ORIGINADOR_VAZIO = {
     status: 'ativo',
     padrao: false,
     tipo_recompensa: 'start',
-    // Start: N primeiras faturas com compensação ([1..N]) + matriz cargo x nível.
-    start_config: { faturas_elegiveis: [1], regras_multinivel: matrizZeradaOriginador() },
+    // Start: X × o consumo médio da UC, em kWh compensados + matriz cargo x nível.
+    start_config: { multiplicador: 1, regras_multinivel: matrizZeradaOriginador() },
     recorrente_config: { regras_multinivel: matrizPadraoOriginador() }
 };
 
@@ -86,46 +113,105 @@ const normalizarMatriz = (salva, padraoDoCargo) => {
     return matriz;
 };
 
-/** Quantas faturas com compensação pagam o Start (N). */
-export const quantidadeFaturasStart = (plano) => {
-    const fats = plano?.start_config?.faturas_elegiveis || [];
-    return fats.filter(n => Number.isInteger(Number(n)) && Number(n) >= 1).length;
+/** "2", "1,5" ou "1.5" → número; vazio ou não numérico → NaN. Aceita decimal. */
+export const lerMultiplicador = (texto) => {
+    const s = String(texto ?? '').trim().replace(/\s/g, '').replace(',', '.');
+    if (!s || !/^\d*\.?\d+$/.test(s)) return NaN;
+    return Number(s);
 };
 
-/** N → [1, 2, ..., N]: "as N primeiras faturas com energia compensada". */
-export const faturasDoStart = (n) => {
-    const q = Math.max(0, Math.trunc(Number(n) || 0));
-    return Array.from({ length: q }, (_, i) => i + 1);
+/** Multiplicador válido: número finito maior que zero. */
+export const multiplicadorValido = (x) => Number.isFinite(Number(x)) && Number(x) > 0;
+
+/**
+ * O multiplicador X do Start ("Start de X × o consumo médio").
+ *
+ * Lê os DOIS formatos, porque o banco de produção ainda guarda o antigo:
+ *  - novo: `start_config.multiplicador`;
+ *  - antigo: `start_config.faturas_elegiveis` (N faturas) → X = N (1 fatura → 1×),
+ *    a mesma conversão da migração.
+ * Devolve 0 quando nenhum dos dois traz um valor válido.
+ */
+export const multiplicadorStart = (plano) => {
+    const sc = plano?.start_config || {};
+    const x = num(sc.multiplicador);
+    if (multiplicadorValido(x)) return Math.round(x * 10000) / 10000;
+    if (Array.isArray(sc.faturas_elegiveis)) {
+        const n = new Set(sc.faturas_elegiveis.map(Number).filter(f => Number.isInteger(f) && f >= 1)).size;
+        if (n > 0) return n;
+    }
+    return 0;
+};
+
+/** 2 → "2×"; 1.5 → "1,5×". */
+export const formatarMultiplicador = (x) =>
+    `${Number(x || 0).toLocaleString('pt-BR', { maximumFractionDigits: 4 })}×`;
+
+/**
+ * Espelho da regra do motor para a tela: em cada fatura o Start incide sobre
+ * min(kWh compensado, 1 × consumo médio, saldo até X × consumo médio).
+ * Valor = kWh do Start × tarifa cheia × %.
+ *
+ * simularStart({ consumoMedioKwh: 1000, multiplicador: 2, compensados: [600, 1200, 800] })
+ *   → faturas com kwhStart 600 / 1000 / 400; totalKwh 2000.
+ */
+export const simularStart = ({ consumoMedioKwh, multiplicador, compensados = [], tarifa = 0, pct = 0 }) => {
+    const medio = Math.max(0, Number(consumoMedioKwh) || 0);
+    const tetoKwh = medio * Math.max(0, Number(multiplicador) || 0);
+    const fator = Math.max(0, Number(tarifa) || 0) * (Math.max(0, Number(pct) || 0) / 100);
+    let acumulado = 0;
+    const faturas = compensados.map((c) => {
+        const compensado = Math.max(0, Number(c) || 0);
+        const kwhStart = Math.max(0, Math.min(compensado, medio, tetoKwh - acumulado));
+        acumulado += kwhStart;
+        return { compensado, kwhStart, acumulado, valor: kwhStart * fator, encerrou: kwhStart > 0 && acumulado >= tetoKwh };
+    });
+    return { tetoKwh, tetoFaturaKwh: medio, faturas, totalKwh: acumulado, totalValor: acumulado * fator };
+};
+
+/**
+ * Converte o Start antigo (`regras` por fatura, só L1) para a matriz por nível:
+ * o % da MENOR fatura elegível vira o L1 de cada cargo (`max_niveis` 1).
+ */
+const matrizDoStartAntigo = (sc) => {
+    const regras = sc.regras;
+    const ordinais = Object.keys(regras).map(Number).filter(Number.isFinite);
+    const elegiveis = (Array.isArray(sc.faturas_elegiveis) ? sc.faturas_elegiveis : [])
+        .map(Number).filter(f => ordinais.includes(f));
+    const menor = (elegiveis.length ? elegiveis : ordinais).sort((a, b) => a - b)[0];
+    const doOrdinal = menor !== undefined ? regras[String(menor)] || {} : {};
+    return Object.fromEntries(CARGOS_ORIGINADOR.map(c => {
+        const n = num(doOrdinal[c]);
+        return [c, { niveis: { L1: String(Number.isFinite(n) ? n : 0), L2: '0', L3: '0', L4: '0' }, max_niveis: 1 }];
+    }));
 };
 
 /**
  * Deixa o plano no formato exato que o banco aceita.
- * Start: { faturas_elegiveis: [1..N], regras_multinivel: matriz }. O formato
- * antigo (regras por fatura, só nível 1) é convertido: o % da primeira fatura
- * elegível vira o L1 de cada cargo.
+ * Start: { multiplicador: X, regras_multinivel: matriz }. Lê também o formato
+ * antigo de produção ({ faturas_elegiveis, regras } por fatura): X = nº de
+ * faturas elegíveis e o % da menor fatura vira o L1. Nunca devolve
+ * `faturas_elegiveis` nem `regras` -- só o formato novo é gravado.
  */
 export const normalizarPlanoOriginador = (plano) => {
     const p = plano || {};
     const sc = p.start_config || {};
 
     let matrizStart = sc.regras_multinivel;
-    if (!matrizStart && sc.regras && typeof sc.regras === 'object') {
-        const primeira = Object.keys(sc.regras).map(Number).filter(Number.isFinite).sort((a, b) => a - b)[0];
-        const doOrdinal = primeira ? sc.regras[String(primeira)] || {} : {};
-        matrizStart = Object.fromEntries(CARGOS_ORIGINADOR.map(c => {
-            const n = num(doOrdinal[c]);
-            return [c, { niveis: { L1: String(Number.isFinite(n) ? n : 0), L2: '0', L3: '0', L4: '0' }, max_niveis: 1 }];
-        }));
-    }
+    if (!matrizStart && sc.regras && typeof sc.regras === 'object') matrizStart = matrizDoStartAntigo(sc);
+
+    const tipo = TIPOS_RECOMPENSA.some(t => t.valor === p.tipo_recompensa) ? p.tipo_recompensa : 'start';
+    const x = multiplicadorStart(p);
 
     return {
         ...p,
         nome: String(p.nome ?? '').trim(),
         descricao: String(p.descricao ?? '').trim() || null,
         status: p.status === 'inativo' ? 'inativo' : 'ativo',
-        tipo_recompensa: TIPOS_RECOMPENSA.some(t => t.valor === p.tipo_recompensa) ? p.tipo_recompensa : 'start',
+        tipo_recompensa: tipo,
         start_config: {
-            faturas_elegiveis: faturasDoStart(quantidadeFaturasStart(p)),
+            // Plano só de recorrência não usa X; grava 1 para o jsonb ficar válido.
+            multiplicador: x > 0 ? x : (tipo === 'recorrente' ? 1 : 0),
             regras_multinivel: normalizarMatriz(matrizStart, () => 0)
         },
         recorrente_config: {
@@ -142,8 +228,8 @@ export const validarPlanoOriginador = (dados) => {
     if (p.padrao && p.status !== 'ativo') erros.push('O Plano Padrão não pode ficar inativo.');
 
     const usaStart = p.tipo_recompensa !== 'recorrente';
-    if (usaStart && p.start_config.faturas_elegiveis.length === 0) {
-        erros.push('Informe em quantas faturas com energia compensada o Start é pago (1 ou mais).');
+    if (usaStart && !multiplicadorValido(p.start_config.multiplicador)) {
+        erros.push('Start: informe quantas vezes o consumo médio ele paga (número maior que zero; aceita decimal, ex.: 1,5).');
     }
     const confere = (matriz, rotulo) => {
         for (const c of CARGOS_ORIGINADOR) {
@@ -169,14 +255,6 @@ export const payloadPlanoOriginador = (dados) => {
         start_config: p.start_config,
         recorrente_config: p.recorrente_config
     };
-};
-
-/** "2" ou "1, 2" → [1, 2]; vazio → []; qualquer coisa que não seja inteiro ≥ 1 → null. */
-export const lerFaturasElegiveis = (texto) => {
-    const partes = String(texto ?? '').split(/[,;\s]+/).filter(Boolean);
-    const nums = partes.map(Number);
-    if (nums.some(n => !Number.isInteger(n) || n < 1)) return null;
-    return [...new Set(nums)].sort((a, b) => a - b);
 };
 
 export const listarPlanosOriginador = async (supabase) => {
@@ -220,16 +298,15 @@ export const niveisDoCargo = (matriz, cargo) => {
 
 /**
  * Resumo de uma linha para selects e listas, ex.:
- * "Start nas 2 primeiras faturas (L1 50% · L2 10%) · depois recorrência (L1 4%)".
+ * "Start de 2× o consumo médio (L1 50% · L2 10% · L3 5%) · depois recorrência (L1 4% · L2 2% · L3 1%)".
  */
 export const resumoPlanoOriginador = (plano, cargo) => {
     if (!plano) return '—';
     const p = normalizarPlanoOriginador(plano);
-    const n = p.start_config.faturas_elegiveis.length;
+    const x = p.start_config.multiplicador;
     const partes = [];
-    if (p.tipo_recompensa !== 'recorrente' && n) {
-        const qtd = n === 1 ? 'na 1ª fatura' : `nas ${n} primeiras faturas`;
-        partes.push(`Start ${qtd}${cargo ? ` (${niveisDoCargo(p.start_config.regras_multinivel, cargo)})` : ''}`);
+    if (p.tipo_recompensa !== 'recorrente' && multiplicadorValido(x)) {
+        partes.push(`Start de ${formatarMultiplicador(x)} o consumo médio${cargo ? ` (${niveisDoCargo(p.start_config.regras_multinivel, cargo)})` : ''}`);
     }
     if (p.tipo_recompensa !== 'start') {
         const prefixo = p.tipo_recompensa === 'ambos' ? 'depois recorrência' : 'Recorrência';

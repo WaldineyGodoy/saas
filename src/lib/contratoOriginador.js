@@ -1,5 +1,5 @@
 import { baixarPdfContrato, dataPorExtenso, gerarPdfBase64, moeda, numeroBr, paginarTexto, paraNumero, percentualExtenso, porExtenso, qualificaParte, rotuloDocumento } from './contratoBase';
-import { NIVEIS_TELA, normalizarPlanoOriginador } from './planoOriginador';
+import { NIVEIS_TELA, multiplicadorValido, normalizarPlanoOriginador } from './planoOriginador';
 
 /**
  * Contrato de Originação e Indicação de Negócios — o instrumento firmado
@@ -12,8 +12,10 @@ import { NIVEIS_TELA, normalizarPlanoOriginador } from './planoOriginador';
  *    plano e por negociação (`planos_originador`, apontado pelo originador
  *    em `originators_v2.plano_originador_id` ou pelo plano de assinatura em
  *    `planos_assinatura_energia.plano_originador_id`; e `planos_usina`). O
- *    contrato fixa o MECANISMO — base de cálculo, fato gerador, níveis,
- *    cortes, piso — e manda os números para o Anexo I, gerado do cadastro.
+ *    contrato fixa o MECANISMO — base de cálculo (kWh compensado × tarifa
+ *    cheia da distribuidora), limite do Start (X × consumo médio), fato
+ *    gerador, níveis, cortes, piso — e manda os números para o Anexo I,
+ *    gerado do cadastro.
  *    Originador no Plano Padrão não tem número fixo: vale o plano ligado ao
  *    plano de assinatura de cada UC, e o Anexo I diz isso sem inventar
  *    percentual.
@@ -99,6 +101,18 @@ const pct = (valor) => {
     return `${numeroBr(n)}% (${percentualExtenso(n)} por cento)`;
 };
 
+/** Concordância com "vez(es)": 1 → "uma", 2 → "duas". */
+const feminino = (t) => t.replace(/\bum\b/g, 'uma').replace(/\bdois\b/g, 'duas');
+
+/** 2 → "2 (duas) vezes"; 1 → "1 (uma) vez"; 1,5 → "1,5 (uma vírgula cinco) vez". */
+const vezesContrato = (x) => {
+    const v = Number(x);
+    const br = v.toLocaleString('pt-BR', { maximumFractionDigits: 4 });
+    return `${br} (${feminino(percentualExtenso(v))}) ${v < 2 ? 'vez' : 'vezes'}`;
+};
+
+const BASE_ANEXO = 'sobre os kWh compensados multiplicados pela tarifa da distribuidora impressa na fatura do período, sem descontos';
+
 /**
  * "1º nível (L1), 50% (...); 2º nível (L2), 10% (...)" para um cargo, só nos
  * níveis liberados (`max_niveis`). Vazio quando nenhum nível paga.
@@ -122,7 +136,7 @@ const linhasRemuneracao = (plano, cargoChave) => {
     if (!plano || plano.padrao) {
         return [
             `Plano do Originador: ${plano?.nome ? `${plano.nome}. ` : ''}A remuneração segue o Plano do Originador vinculado a cada plano de assinatura, conforme a Tabela de Recompensas vigente, e pode variar conforme o plano contratado pelo indicado.`,
-            'Bônus Start e Recorrência: faturas elegíveis, percentuais e níveis do Plano do Originador aplicável a cada unidade consumidora, para o cargo do ORIGINADOR, nos termos das Cláusulas 7 e 8.'
+            'Bônus Start e Recorrência: multiplicador do Limite do Start, percentuais e níveis do Plano do Originador aplicável a cada unidade consumidora, para o cargo do ORIGINADOR, nos termos das Cláusulas 7 e 8.'
         ];
     }
 
@@ -131,25 +145,24 @@ const linhasRemuneracao = (plano, cargoChave) => {
         `Plano do Originador: ${p.nome}, aplicável a todas as unidades consumidoras originadas pelo ORIGINADOR, em lugar do plano vinculado ao plano de assinatura.`
     ];
 
-    // Start (revisão de 12/11/2026): uma matriz por nível, igual para as N
-    // primeiras faturas pagas COM energia compensada de cada UC. Híbrido é
-    // sequencial: a recorrência só começa depois do fim do Start.
-    const n = p.start_config.faturas_elegiveis.length;
-    const usaStart = p.tipo_recompensa !== 'recorrente' && n > 0;
-    const janela = n === 1
-        ? 'na 1ª fatura paga com energia compensada de cada unidade consumidora'
-        : `nas ${n} (${porExtenso(n).replace(/\bum\b/g, 'uma').replace(/\bdois\b/g, 'duas')}) primeiras faturas pagas com energia compensada de cada unidade consumidora`;
+    // Start (2ª revisão de 12/11/2026): conta ENERGIA, não faturas. Limite =
+    // X × consumo médio da UC (mediana do histórico da conta de energia,
+    // fixada no cadastro), pago sobre os kWh compensados de cada fatura
+    // limitados a 1 × o consumo médio, até esse total, com uma matriz por nível. Híbrido é sequencial: a recorrência começa na
+    // fatura seguinte à que completa o Start.
+    const x = p.start_config.multiplicador;
+    const usaStart = p.tipo_recompensa !== 'recorrente' && multiplicadorValido(x);
     const start = usaStart ? niveisContrato(p.start_config.regras_multinivel, cargoChave) : '';
     linhas.push(start
-        ? `Bônus Start: ${janela}: ${start}, da Base de Cálculo Líquida, nos termos da Cláusula 7.`
+        ? `Bônus Start: Limite do Start de ${vezesContrato(x)} o consumo médio de cada unidade consumidora, assim entendida a mediana do histórico de consumo informado na conta de energia apresentada no cadastro, pago, em cada fatura, sobre a energia compensada limitada a 1 (uma) vez o consumo médio, até que a soma atinja esse total: ${start}, ${BASE_ANEXO}, nos termos da Cláusula 7.`
         : 'Bônus Start: não previsto no plano para o cargo do ORIGINADOR.');
 
     const rec = p.tipo_recompensa !== 'start' ? niveisContrato(p.recorrente_config.regras_multinivel, cargoChave) : '';
-    const sequencia = p.tipo_recompensa === 'ambos' && n > 0
-        ? `, a partir da ${n + 1}ª fatura paga com energia compensada de cada unidade consumidora, isto é, somente após o término do Bônus Start, não se acumulando com ele no mesmo período`
+    const sequencia = p.tipo_recompensa === 'ambos' && usaStart
+        ? ', a partir da fatura seguinte à que completar o Limite do Start de cada unidade consumidora, não se acumulando com o Bônus Start na mesma fatura'
         : '';
     linhas.push(rec
-        ? `Recorrência: ${rec}, da Base de Cálculo Líquida, nos termos da Cláusula 8${sequencia}.`
+        ? `Recorrência: ${rec}, ${BASE_ANEXO}, nos termos da Cláusula 8${sequencia}.`
         : 'Recorrência: não prevista no plano para o cargo do ORIGINADOR.');
 
     return linhas;
@@ -183,15 +196,15 @@ const clausulasPorModalidade = (modalidades) => {
     const blocos = [];
 
     if (modalidades.some(m => m.chave === 'assinantes')) {
-        blocos.push(`9.${blocos.length + 1}. Originação de Assinantes de energia. A Base de Cálculo Líquida é apurada, em cada fatura, pela energia efetivamente compensada na unidade consumidora, multiplicada pela tarifa da distribuidora deduzida da parcela não compensável da TUSD Fio B, e deduzido o desconto concedido ao assinante. Tarifa e Fio B são os impressos na fatura da distribuidora do período; na sua falta, os do cadastro da concessionária. Havendo energia compensada, a recompensa é devida ainda que a fatura do assinante resulte zerada ou negativa por outros débitos. A matriz de níveis, os cortes por nível e a participação do Assinante Conect são os da Tabela de Recompensas do plano a que a unidade consumidora estiver vinculada.`);
+        blocos.push(`9.${blocos.length + 1}. Originação de Assinantes de energia. A Base de Cálculo é apurada, em cada fatura, pela energia efetivamente compensada na unidade consumidora, em kWh, multiplicada pela tarifa da distribuidora, sem dedução do desconto concedido ao assinante nem da parcela não compensável da TUSD Fio B. A tarifa é a impressa na fatura da distribuidora do período; na sua falta, a do cadastro da concessionária. Havendo energia compensada, a recompensa é devida ainda que a fatura do assinante resulte zerada ou negativa por outros débitos. A matriz de níveis, os cortes por nível e a participação do Assinante Conect são os da Tabela de Recompensas do plano a que a unidade consumidora estiver vinculada.`);
     }
 
     if (modalidades.some(m => m.chave === 'eletropostos')) {
-        blocos.push(`9.${blocos.length + 1}. Originação de Eletropostos. O lastro é o plano de energia por assinatura vinculado ao eletroposto, já deduzido o Fio B, sobre o qual não há nova dedução a esse título. A Base de Cálculo Líquida é o lastro deduzido do desconto concedido ao eletroposto. Aplicam-se, no mais, as mesmas regras de níveis, cortes e condição de pagamento previstas neste Contrato.`);
+        blocos.push(`9.${blocos.length + 1}. Originação de Eletropostos. O lastro é o plano de energia por assinatura vinculado ao eletroposto, já deduzido o Fio B, sobre o qual não há nova dedução a esse título. Nesta frente, a Base de Cálculo é o lastro deduzido do desconto concedido ao eletroposto. Aplicam-se, no mais, as mesmas regras de níveis, cortes e condição de pagamento previstas neste Contrato.`);
     }
 
     if (modalidades.some(m => m.chave === 'usinas')) {
-        blocos.push(`9.${blocos.length + 1}. Originação de Usinas. Considera-se originada pelo ORIGINADOR a usina cujo investidor tenha sido por ele apresentado e assim registrado no sistema de gestão antes da assinatura do contrato de compra e venda. A recompensa observa o Plano de Usina vinculado à central geradora, que define a participação do originador da usina e a do respectivo Líder, e é apurada sobre a mesma Base de Cálculo Líquida das faturas dos consumidores atendidos pela usina. A originação da usina dá-se perante B2W PROJETOS & SOLUÇÕES SOLARES LTDA, CNPJ 34.999.115/0002-34, sociedade do mesmo grupo econômico, e a ASSOCIAÇÃO responde pela apuração e pelo pagamento da recompensa na forma deste Contrato.`);
+        blocos.push(`9.${blocos.length + 1}. Originação de Usinas. Considera-se originada pelo ORIGINADOR a usina cujo investidor tenha sido por ele apresentado e assim registrado no sistema de gestão antes da assinatura do contrato de compra e venda. A recompensa observa o Plano de Usina vinculado à central geradora, que define a participação do originador da usina e a do respectivo Líder, e é apurada sobre a mesma Base de Cálculo das faturas dos consumidores atendidos pela usina. A originação da usina dá-se perante B2W PROJETOS & SOLUÇÕES SOLARES LTDA, CNPJ 34.999.115/0002-34, sociedade do mesmo grupo econômico, e a ASSOCIAÇÃO responde pela apuração e pelo pagamento da recompensa na forma deste Contrato.`);
     }
 
     return blocos.join('\n');
@@ -276,15 +289,15 @@ CLÁUSULA 6 – DOS CARGOS E DA REDE
 CAPÍTULO III — DA REMUNERAÇÃO
 
 CLÁUSULA 7 – DO BÔNUS START
-7.1. O Bônus Start é a recompensa de aquisição, devida sobre a Base de Cálculo Líquida das primeiras faturas elegíveis do indicado, no percentual do Anexo I e nos limites da Tabela de Recompensas do plano aplicável.
-7.2. O Bônus Start é devido apenas no primeiro nível e não se cumula com a recorrência na mesma fatura, quando o plano assim dispuser.
+7.1. O Bônus Start é a recompensa de aquisição, devida sobre a Base de Cálculo das faturas pagas do indicado até atingir o Limite do Start, nos percentuais e níveis do Anexo I e nos limites da Tabela de Recompensas do plano aplicável.
+7.2. O Limite do Start de cada unidade consumidora é o multiplicador previsto no plano aplicável ("X vezes") aplicado ao consumo médio da unidade, assim entendida a mediana do histórico de consumo informado na conta de energia apresentada no cadastro, fixada na data do cadastro e não alterada por variações posteriores do consumo. Em cada fatura paga, o Bônus Start incide sobre os kWh compensados, limitados ao consumo médio da unidade, até que a soma dos kWh remunerados a esse título atinja o Limite do Start; a energia que exceder o consumo médio na fatura, ou o saldo remanescente do Limite do Start, não gera Bônus Start. O valor devido é o número de kWh remunerados multiplicado pela tarifa da distribuidora impressa na fatura do período, sem descontos, e pelo percentual do nível aplicável. Quando o plano combinar Bônus Start e Recorrência, a Recorrência é devida somente a partir da fatura seguinte à que completar o Limite do Start, sem cumulação das duas recompensas na mesma fatura.
 
 CLÁUSULA 8 – DA RECORRÊNCIA
-8.1. A Recorrência é a recompensa devida mês a mês sobre a Base de Cálculo Líquida das faturas dos indicados, no percentual do Anexo I, observados os níveis e os cortes da Tabela de Recompensas do plano aplicável.
+8.1. A Recorrência é a recompensa devida mês a mês sobre a Base de Cálculo das faturas dos indicados, isto é, sobre os kWh compensados multiplicados pela tarifa da distribuidora, sem descontos, no percentual do Anexo I, observados os níveis e os cortes da Tabela de Recompensas do plano aplicável.
 8.2. Os níveis são contados em relação ao próprio ORIGINADOR, e não à profundidade da rede. Em cada fatura, cada cargo remunera no máximo um beneficiário.
 8.3. A parcela que deixar de ser paga por corte de nível, por cadastro inativo, por licença vencida ou por qualquer outra supressão prevista na Tabela de Recompensas é absorvida pela ASSOCIAÇÃO, e não se transfere ao ORIGINADOR, ao Líder nem a terceiro.
-8.4. Trava de margem. As recompensas deste Contrato, somadas às demais do mesmo negócio, não podem reduzir o resultado líquido do proprietário da usina abaixo do piso definido no plano. Atingido o piso, as parcelas são cortadas na ordem prevista na Tabela de Recompensas, até o restabelecimento do piso.
-8.5. Base negativa. Resultando negativa a Base de Cálculo Líquida de determinada fatura, não há recompensa a pagar e também não há valor a devolver pelo ORIGINADOR.
+8.4. Trava de margem. As recompensas deste Contrato, somadas às demais do mesmo negócio, não podem reduzir o resultado líquido do proprietário da usina abaixo do piso definido no plano. Atingido o piso, as parcelas são cortadas na ordem prevista na Tabela de Recompensas, até o restabelecimento do piso. A fatura em que houver Bônus Start, de qualquer beneficiário, fica excluída desta trava, e nela as recompensas podem alcançar a totalidade da parcela do proprietário da usina, sem corte em razão do piso.
+8.5. Fatura sem compensação. Não havendo energia compensada em determinada fatura, não há recompensa a pagar sobre ela e também não há valor a devolver pelo ORIGINADOR.
 
 CLÁUSULA 9 – DAS REGRAS POR FRENTE DE ORIGINAÇÃO
 ${clausulasPorModalidade(frentes)}

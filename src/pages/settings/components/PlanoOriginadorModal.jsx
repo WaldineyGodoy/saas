@@ -12,34 +12,57 @@ import {
     normalizarPlanoOriginador,
     validarPlanoOriginador,
     payloadPlanoOriginador,
-    faturasDoStart,
-    quantidadeFaturasStart,
+    multiplicadorStart,
+    lerMultiplicador,
+    multiplicadorValido,
+    formatarMultiplicador,
+    simularStart,
+    TEXTO_BASE_PERCENTUAL,
+    TEXTO_TETO_START,
     mensagemErroPlanoOriginador
 } from '../../../lib/planoOriginador';
+
+const kwhBr = (v) => Number(v || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 });
+const reais = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const decimalBr = (v) => Number(v || 0).toLocaleString('pt-BR', { maximumFractionDigits: 4 });
+// Lê "1.000", "1000" ou "1,02" para o exemplo (não é gravado).
+const lerNumeroExemplo = (t) => {
+    const s = String(t ?? '').trim();
+    const n = Number(s.includes(',') ? s.replace(/\./g, '').replace(',', '.') : s.replace(/\.(?=\d{3}(\D|$))/g, ''));
+    return Number.isFinite(n) ? n : 0;
+};
 
 /**
  * Cria ou edita um Plano do Originador
  * (spec docs/superpowers/specs/2026-11-10-plano-originador-design.md,
  * revisão de 12/11/2026).
  *
- * Remunera só Líder, PPE, PPP e PPF. Start = N primeiras faturas com energia
- * compensada, com uma matriz cargo x nível (igual para as N). Recorrência =
- * matriz cargo x nível. Híbrido = Start nas N primeiras, recorrência depois.
+ * Remunera só Líder, PPE, PPP e PPF. Start = X × o consumo médio da UC, em
+ * kWh compensados (2ª revisão de 12/11/2026), no máximo 1 × o consumo médio
+ * por fatura, com uma matriz cargo x nível.
+ * Recorrência = matriz cargo x nível. Híbrido = Start até completar o teto;
+ * recorrência a partir da fatura seguinte. Percentuais sobre kWh compensado ×
+ * tarifa cheia da concessionária.
  * O formato gravado sai de payloadPlanoOriginador (nunca grava `padrao`); o
  * banco guarda o Padrão contra inativação e exclusão.
  */
 export default function PlanoOriginadorModal({ isOpen, plano, onClose, onSave, showAlert }) {
     const [dados, setDados] = useState(() => normalizarPlanoOriginador(PLANO_ORIGINADOR_VAZIO));
-    const [nTexto, setNTexto] = useState('1');
+    const [xTexto, setXTexto] = useState('1');
+    // Exemplo vivo (só na tela, não é gravado).
+    const [exConsumo, setExConsumo] = useState('1.000');
+    const [exTarifa, setExTarifa] = useState('1,02');
+    const [exFaturas, setExFaturas] = useState(['600', '1.200', '800']);
     const [erros, setErros] = useState([]);
     const [salvando, setSalvando] = useState(false);
 
     useEffect(() => {
         if (!isOpen) return;
-        // normalizarPlanoOriginador converte o Start antigo (por fatura) para a matriz por nível.
+        // normalizarPlanoOriginador lê o Start antigo (N faturas, % por fatura)
+        // e o novo (multiplicador + matriz por nível); a tela só grava o novo.
         const base = normalizarPlanoOriginador({ ...PLANO_ORIGINADOR_VAZIO, ...(plano || {}) });
         setDados(base);
-        setNTexto(String(quantidadeFaturasStart(base) || 1));
+        setXTexto(decimalBr(multiplicadorStart(base) || 1));
         setErros([]);
     }, [isOpen, plano]);
 
@@ -49,8 +72,8 @@ export default function PlanoOriginadorModal({ isOpen, plano, onClose, onSave, s
     const ehPadrao = !!plano?.padrao;
     const usaStart = dados.tipo_recompensa !== 'recorrente';
     const usaRecorrencia = dados.tipo_recompensa !== 'start';
-    const nNumero = Number(nTexto);
-    const nValido = Number.isInteger(nNumero) && nNumero >= 1;
+    const xNumero = lerMultiplicador(xTexto);
+    const xValido = multiplicadorValido(xNumero);
 
     const definir = (chave, valor) => setDados(prev => ({ ...prev, [chave]: valor }));
 
@@ -82,16 +105,16 @@ export default function PlanoOriginadorModal({ isOpen, plano, onClose, onSave, s
     });
 
     const salvar = async () => {
-        if (usaStart && !nValido) {
-            setErros(['Start: informe em quantas faturas com energia compensada ele é pago (número inteiro a partir de 1).']);
+        if (usaStart && !xValido) {
+            setErros(['Start: informe quantas vezes o consumo médio ele paga (número maior que zero; aceita decimal, ex.: 1,5).']);
             return;
         }
         const completo = {
             ...dados,
             padrao: ehPadrao,
             start_config: {
-                ...dados.start_config,
-                faturas_elegiveis: usaStart ? faturasDoStart(nNumero) : dados.start_config.faturas_elegiveis
+                regras_multinivel: dados.start_config.regras_multinivel,
+                multiplicador: usaStart ? xNumero : dados.start_config.multiplicador
             }
         };
         const lista = validarPlanoOriginador(completo);
@@ -181,6 +204,81 @@ export default function PlanoOriginadorModal({ isOpen, plano, onClose, onSave, s
         </div>
     );
 
+    // Exemplo vivo: 3 faturas, teto por fatura = 1 × o consumo médio, total =
+    // X × o consumo médio; valor por cargo no L1 = kWh do Start × tarifa × %.
+    const consumoEx = lerNumeroExemplo(exConsumo);
+    const tarifaEx = lerNumeroExemplo(exTarifa);
+    const cargosEx = CARGOS_ORIGINADOR.filter(c => {
+        const linha = dados.start_config.regras_multinivel[c];
+        return linha.max_niveis >= 1 && Number(linha.niveis.L1) > 0;
+    });
+    const cargosMostrados = cargosEx.length ? cargosEx : ['lider'];
+    const pctL1 = (c) => Number(dados.start_config.regras_multinivel[c].niveis.L1) || 0;
+    const sim = simularStart({
+        consumoMedioKwh: consumoEx,
+        multiplicador: xValido ? xNumero : 0,
+        compensados: exFaturas.map(lerNumeroExemplo)
+    });
+    const exemplo = (
+        <div style={{ background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: '10px', padding: '0.75rem 1rem', fontSize: '0.8rem', color: '#334155', lineHeight: 1.5 }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.5rem', marginBottom: '0.4rem' }}>
+                <strong>Exemplo:</strong>
+                <span>consumo médio</span>
+                <input value={exConsumo} onChange={e => setExConsumo(e.target.value)} inputMode="decimal" style={{ ...pct(false), width: '90px', minWidth: 0 }} />
+                <span>kWh, tarifa R$</span>
+                <input value={exTarifa} onChange={e => setExTarifa(e.target.value)} inputMode="decimal" style={{ ...pct(false), width: '80px', minWidth: 0 }} />
+                <span>/kWh</span>
+            </div>
+            {!xValido ? (
+                <span>Informe X para ver o exemplo.</span>
+            ) : (
+                <>
+                    <div style={{ marginBottom: '0.35rem' }}>
+                        Teto por fatura: <strong>{kwhBr(sim.tetoFaturaKwh)} kWh</strong> (1 × o consumo médio) · total do Start: <strong>{kwhBr(sim.tetoKwh)} kWh</strong> ({formatarMultiplicador(xNumero)} o consumo médio).
+                    </div>
+                    <div style={{ overflowX: 'auto' }}>
+                        <table style={{ borderCollapse: 'collapse', fontSize: '0.78rem' }}>
+                            <thead>
+                                <tr style={{ color: '#475569', textAlign: 'left' }}>
+                                    <th style={{ padding: '0.2rem 0.6rem 0.2rem 0' }}>Fatura</th>
+                                    <th style={{ padding: '0.2rem 0.6rem' }}>kWh compensados</th>
+                                    <th style={{ padding: '0.2rem 0.6rem' }}>Start sobre</th>
+                                    <th style={{ padding: '0.2rem 0.6rem' }}>Acumulado</th>
+                                    {cargosMostrados.map(c => (
+                                        <th key={c} style={{ padding: '0.2rem 0.6rem' }}>{ROTULO_CARGO[c]} L1 {decimalBr(pctL1(c))}%</th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {sim.faturas.map((f, i) => (
+                                    <tr key={i}>
+                                        <td style={{ padding: '0.2rem 0.6rem 0.2rem 0', fontWeight: 700 }}>F{i + 1}</td>
+                                        <td style={{ padding: '0.2rem 0.6rem' }}>
+                                            <input
+                                                value={exFaturas[i]}
+                                                onChange={e => setExFaturas(prev => prev.map((v, j) => (j === i ? e.target.value : v)))}
+                                                inputMode="decimal"
+                                                style={{ ...pct(false), width: '80px', minWidth: 0 }}
+                                            />
+                                        </td>
+                                        <td style={{ padding: '0.2rem 0.6rem', fontWeight: 700 }}>{kwhBr(f.kwhStart)} kWh</td>
+                                        <td style={{ padding: '0.2rem 0.6rem' }}>{kwhBr(f.acumulado)} kWh{f.encerrou ? ' (encerrado)' : ''}</td>
+                                        {cargosMostrados.map(c => (
+                                            <td key={c} style={{ padding: '0.2rem 0.6rem' }}>{reais(f.kwhStart * tarifaEx * (pctL1(c) / 100))}</td>
+                                        ))}
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div style={{ marginTop: '0.35rem', color: '#64748b' }}>
+                        Em cada fatura: menor entre o compensado, o consumo médio e o saldo até o total. Valor = kWh do Start × tarifa × %.
+                    </div>
+                </>
+            )}
+        </div>
+    );
+
     return (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
             <div style={{ background: 'white', borderRadius: '16px', width: '100%', maxWidth: '820px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 40px rgba(0,0,0,0.15)' }}>
@@ -257,24 +355,28 @@ export default function PlanoOriginadorModal({ isOpen, plano, onClose, onSave, s
 
                     {usaStart && (
                         <div style={secao}>
-                            <h4 style={tituloSecao}>Start — N primeiras faturas com energia compensada</h4>
+                            <h4 style={tituloSecao}>Start — X × o consumo médio, em kWh compensados</h4>
                             <div>
-                                <label style={rotulo}>Quantidade de faturas com energia compensada (N)</label>
-                                <input
-                                    type="number" min="1" step="1"
-                                    value={nTexto}
-                                    onChange={e => setNTexto(e.target.value)}
-                                    style={{ ...campo(false), maxWidth: '160px', borderColor: nValido ? '#cbd5e1' : '#f87171' }}
-                                />
-                                {!nValido && (
-                                    <p style={{ ...ajuda, color: '#b91c1c' }}>Use um número inteiro a partir de 1.</p>
+                                <label style={rotulo}>Start: X × o consumo médio</label>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    <input
+                                        inputMode="decimal"
+                                        value={xTexto}
+                                        onChange={e => setXTexto(e.target.value)}
+                                        style={{ ...campo(false), maxWidth: '120px', textAlign: 'right', borderColor: xValido ? '#cbd5e1' : '#f87171' }}
+                                    />
+                                    <span style={{ fontSize: '0.86rem', color: '#334155', fontWeight: 600 }}>× o consumo médio da UC</span>
+                                </div>
+                                {!xValido && (
+                                    <p style={{ ...ajuda, color: '#b91c1c' }}>Use um número maior que zero (aceita decimal, ex.: 1,5).</p>
                                 )}
+                                <p style={ajuda}>{TEXTO_TETO_START}</p>
                             </div>
                             {grade('start_config')}
                             <p style={{ ...ajuda, margin: 0 }}>
-                                Vale para as N primeiras faturas com energia compensada de cada UC. L1 = venda direta; L2 e L3 = UCs indicadas na cadeia.
-                                Percentual sobre a base de cálculo líquida da fatura.
+                                L1 = venda direta; L2 e L3 = UCs indicadas na cadeia. Todos os níveis usam o mesmo teto. {TEXTO_BASE_PERCENTUAL}
                             </p>
+                            {exemplo}
                         </div>
                     )}
 
@@ -283,7 +385,7 @@ export default function PlanoOriginadorModal({ isOpen, plano, onClose, onSave, s
                             <h4 style={tituloSecao}>Recorrência</h4>
                             {grade('recorrente_config')}
                             <p style={{ ...ajuda, margin: 0 }}>
-                                Percentual sobre a base de cálculo líquida, em toda fatura paga com energia compensada, enquanto o parceiro estiver ativo.
+                                Paga sobre os kWh compensados de toda fatura paga, enquanto o parceiro estiver ativo. {TEXTO_BASE_PERCENTUAL}
                                 Até 3 níveis por cargo; nível acima do escolhido fica 0.
                             </p>
                         </div>
@@ -292,7 +394,10 @@ export default function PlanoOriginadorModal({ isOpen, plano, onClose, onSave, s
                     {dados.tipo_recompensa === 'ambos' && (
                         <div style={{ display: 'flex', gap: '0.5rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '0.75rem 1rem', fontSize: '0.82rem', color: '#334155', lineHeight: 1.45 }}>
                             <Info size={16} style={{ flexShrink: 0, marginTop: '2px' }} />
-                            <span>No Híbrido o Start vale nas N primeiras faturas; a recorrência começa na fatura seguinte. Nunca os dois na mesma fatura.</span>
+                            <span>
+                                No Híbrido o Start paga, em cada fatura, até 1 × o consumo médio, até somar {xValido ? formatarMultiplicador(xNumero) : 'X ×'} o consumo médio da UC. A fatura que completa esse total paga só Start;
+                                a recorrência começa na fatura seguinte. Nunca os dois na mesma fatura.
+                            </span>
                         </div>
                     )}
                 </div>

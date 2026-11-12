@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { calcularCapacidade, ocupacaoDaGeracao } from '../../lib/capacidade';
+import { calcularCapacidade, ocupacaoDaGeracao, resumoCapacidadeMensal } from '../../lib/capacidade';
+import OcupacaoMensalUsina from '../../components/OcupacaoMensalUsina';
+import { useGeracaoMensal } from '../../hooks/useGeracaoMensal';
 import { useBranding } from '../../contexts/BrandingContext';
 import PowerPlantModal from '../../components/PowerPlantModal';
 import KanbanConstrucaoUsinas from '../../components/KanbanConstrucaoUsinas';
@@ -61,6 +63,7 @@ function KanbanCard({ plant, onClick, onClosingsClick, isOverlay }) {
     } = useSortable({ id: plant.id, disabled: !!isOverlay });
 
     const statusConfig = KANBAN_STATUSES.find(s => s.status === plant.status) || KANBAN_STATUSES[0];
+    const geracaoMensal = useGeracaoMensal(plant.id);
 
     const style = {
         transform: CSS.Transform.toString(transform),
@@ -148,6 +151,7 @@ function KanbanCard({ plant, onClick, onClosingsClick, isOverlay }) {
                                         ? <span style={{ color: '#991b1b', fontWeight: 700 }} title="Franquias acima da geração estimada (overbook)">Excedente: {kwh(-livre)}</span>
                                         : <span style={{ color: '#166534', fontWeight: 600 }} >Disponível: {kwh(livre)}</span>}
                                 </div>
+                                <OcupacaoMensalUsina resumo={resumoCapacidadeMensal(plant, plant.consumer_units, geracaoMensal)} compacto />
                             </>
                         );
                     })()}

@@ -32,7 +32,10 @@ import {
     normalizarPlanoOriginador,
     niveisDoCargo,
     matrizPadraoOriginador,
-    planoOriginadorAusente
+    planoOriginadorAusente,
+    multiplicadorValido,
+    formatarMultiplicador,
+    TEXTO_TETO_START
 } from '../../../lib/planoOriginador';
 
 // Formatadores numéricos padrão PT-BR
@@ -340,7 +343,9 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
 
     // Remuneração dos parceiros HERDADA (somente leitura) do Plano do Originador
     // escolhido -- mesma regra do motor: recorrência só se o tipo dele for
-    // 'recorrente'/'ambos'; Start só se 'start'/'ambos' e nas faturas dele.
+    // 'recorrente'/'ambos'; Start só se 'start'/'ambos'. O Start dos parceiros
+    // conta ENERGIA (X × o consumo médio da UC, em kWh compensados), não
+    // faturas: não tem ordinal e pode cair em qualquer das primeiras faturas.
     // Sem a tabela (migração não aplicada) ou sem plano escolhido, é uma
     // ESTIMATIVA com o que ainda está gravado neste plano (ou a matriz padrão
     // num plano novo), para o demonstrativo e a trava anti-déficit não
@@ -371,11 +376,15 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                 max_niveis: p.recorrente_config.regras_multinivel[c].max_niveis,
                 niveis: usaRecorrencia ? p.recorrente_config.regras_multinivel[c].niveis : NIVEIS_ZERADOS()
             }])),
-            // Start (revisão de 12/11/2026): N primeiras faturas com energia
-            // compensada ([1..N]) e UMA matriz cargo x nível, igual para as N.
-            faturasStart: usaStart ? p.start_config.faturas_elegiveis : [],
-            startPct: (ord, cargo, nivel = 'L1') => {
-                if (!usaStart || !p.start_config.faturas_elegiveis.includes(Number(ord))) return 0;
+            // Start (2ª revisão de 12/11/2026): X × o consumo médio da UC, em
+            // kWh compensados, com UMA matriz cargo x nível.
+            // "Sem Start" também quando nenhum cargo/nível paga Start.
+            usaStart: usaStart && multiplicadorValido(p.start_config.multiplicador) &&
+                CARGOS_ORIGINADOR.some(c => NIVEIS_TELA.slice(0, p.start_config.regras_multinivel[c].max_niveis)
+                    .some(lk => Number(p.start_config.regras_multinivel[c].niveis[lk]) > 0)),
+            multiplicador: p.start_config.multiplicador,
+            startPct: (cargo, nivel = 'L1') => {
+                if (!usaStart || !multiplicadorValido(p.start_config.multiplicador)) return 0;
                 const linha = p.start_config.regras_multinivel[cargo];
                 const i = NIVEIS.indexOf(nivel);
                 if (!linha || i < 0 || i + 1 > linha.max_niveis) return 0;
@@ -411,10 +420,14 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
         const vDescAssinante = tBruta * (pctDescAssinante / 100);
         const pctRealDescAssinante = pctDescAssinante;
 
-        // 4º Item: (=) Base de Cálculo Líquida
+        // 4º Item: (=) Base de Cálculo Líquida -- o que fica com o fornecedor
+        // antes dos repasses. Os PERCENTUAIS (B2W, parceiros, Conect) não
+        // incidem mais sobre ela: incidem sobre a tarifa cheia da
+        // concessionária, sem descontos (2ª revisão de 12/11/2026). Os repasses
+        // saem desta base, e o resto é do fornecedor.
         const baseLiquida = tBruta - vFioB - vDescAssinante;
         const pctRealBaseLiquida = tBruta > 0 ? (baseLiquida / tBruta) * 100 : 0;
-        const basePositiva = Math.max(0, baseLiquida);
+        const baseIncidencia = tBruta;
 
         // Piso Contratual do Fornecedor (% sobre Tarifa Bruta)
         const pctPisoFornecedor = Math.max(0, parseFloat(pisoFornecedorPct) || 0);
@@ -440,12 +453,12 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
             const pctPPF = getPct('ppf');
             const pctAssinanteConect = getPct('assinante_conect');
 
-            const vB2W = basePositiva * (pctB2W / 100);
-            const vLider = basePositiva * (pctLider / 100);
-            const vPPE = basePositiva * (pctPPE / 100);
-            const vPPP = basePositiva * (pctPPP / 100);
-            const vPPF = basePositiva * (pctPPF / 100);
-            const vAssinanteConect = basePositiva * (pctAssinanteConect / 100);
+            const vB2W = baseIncidencia * (pctB2W / 100);
+            const vLider = baseIncidencia * (pctLider / 100);
+            const vPPE = baseIncidencia * (pctPPE / 100);
+            const vPPP = baseIncidencia * (pctPPP / 100);
+            const vPPF = baseIncidencia * (pctPPF / 100);
+            const vAssinanteConect = baseIncidencia * (pctAssinanteConect / 100);
 
             const pctRealB2W = tBruta > 0 ? (vB2W / tBruta) * 100 : 0;
             const pctRealLider = tBruta > 0 ? (vLider / tBruta) * 100 : 0;
@@ -456,7 +469,7 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
 
             // Teto da categoria Parceiro Power neste nível
             const pctParceiroPowerTeto = Math.max(pctPPE, pctPPP, pctPPF);
-            const vParceiroPowerTeto = basePositiva * (pctParceiroPowerTeto / 100);
+            const vParceiroPowerTeto = baseIncidencia * (pctParceiroPowerTeto / 100);
             const pctRealParceiroPowerTeto = tBruta > 0 ? (vParceiroPowerTeto / tBruta) * 100 : 0;
 
             let tetoLabel = 'PPE';
@@ -549,28 +562,32 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
         }));
     };
 
-    // Start de uma fatura = B2W + Conect deste plano (se ele usa Start e a
-    // fatura é dele) + Líder + teto PPE/PPP/PPF herdados do Plano do
-    // Originador (se ele usa Start e a fatura é dele). As janelas podem ser
-    // diferentes: a trava olha a união das duas.
+    // Start de uma fatura = B2W + Conect deste plano (por ORDINAL de fatura,
+    // como sempre) + Start dos parceiros (por ENERGIA: X × consumo médio, sem
+    // ordinal -- pode cair em qualquer das primeiras faturas, inclusive nas da
+    // B2W). Todos os percentuais incidem sobre a tarifa cheia; a soma não pode
+    // passar da Base Líquida do fornecedor (em % da tarifa), porque fatura com
+    // Start é isenta do piso mas não pode tirar mais do que o fornecedor tem.
     const planoUsaStart = tipoRecompensa === 'start' || tipoRecompensa === 'hibrido';
-    // O Start dos parceiros tem níveis (L1..L3): a soma de cada nível conta
-    // B2W + Conect deste plano + Líder + teto PPE/PPP/PPF daquele nível, e a
-    // fatura vale pelo pior nível.
-    const somaStartDaFaturaNoNivel = (fatNum, nivel) => {
+    const limiteStartPct = Math.max(0, calc.pctRealBaseLiquida);
+    // Start dos parceiros num nível: Líder + teto PPE/PPP/PPF daquele nível.
+    const startParceirosNoNivel = (nivel) =>
+        heranca.startPct('lider', nivel) +
+        Math.max(heranca.startPct('ppe', nivel), heranca.startPct('ppp', nivel), heranca.startPct('ppf', nivel));
+    const startParceirosPiorNivel = Math.max(...NIVEIS_TELA.map(startParceirosNoNivel));
+    const startB2wConectDaFatura = (fatNum) => {
         const r = regrasStart[fatNum] || {};
-        const doPlano = planoUsaStart && faturasElegiveisStart.includes(fatNum)
+        return planoUsaStart && faturasElegiveisStart.includes(fatNum)
             ? (parseFloat(r.b2w) || 0) + (parseFloat(r.assinante_conect) || 0)
             : 0;
-        const pp = Math.max(heranca.startPct(fatNum, 'ppe', nivel), heranca.startPct(fatNum, 'ppp', nivel), heranca.startPct(fatNum, 'ppf', nivel));
-        return doPlano + heranca.startPct(fatNum, 'lider', nivel) + pp;
     };
+    // Pior caso da fatura: o Start dos parceiros ainda tem saldo nela.
+    const somaStartDaFaturaNoNivel = (fatNum, nivel) => startB2wConectDaFatura(fatNum) + startParceirosNoNivel(nivel);
     const somaStartDaFatura = (fatNum) => Math.max(...NIVEIS_TELA.map(lk => somaStartDaFaturaNoNivel(fatNum, lk)));
-    const faturasStartAvaliadas = [...new Set([
-        ...(planoUsaStart ? faturasElegiveisStart : []),
-        ...heranca.faturasStart
-    ])].sort((a, b) => a - b);
-    const startHasDeficit = faturasStartAvaliadas.some(fatNum => somaStartDaFatura(fatNum) > 100);
+    const faturasStartAvaliadas = planoUsaStart ? [...faturasElegiveisStart].sort((a, b) => a - b) : [];
+    const startHasDeficit =
+        faturasStartAvaliadas.some(fatNum => somaStartDaFatura(fatNum) > limiteStartPct + 0.000001) ||
+        startParceirosPiorNivel > limiteStartPct + 0.000001;
 
     const bloqueadoPorDeficit = recompensasAtivo && (
         ((tipoRecompensa === 'recorrente' || tipoRecompensa === 'hibrido') && calc.isDeficitario) ||
@@ -586,7 +603,9 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
         }
 
         if (bloqueadoPorDeficit) {
-            showAlert(`Operação bloqueada: O plano apresenta resultado deficitário no ${calc.worstDeficitLevel}. Ajuste os percentuais para que todos os níveis tenham Superávit.`, 'error');
+            showAlert(startHasDeficit && !calc.isDeficitario
+                ? `Operação bloqueada: o Start passa de ${formatPct(limiteStartPct)}% da tarifa (Base Líquida do fornecedor). Reduza os percentuais do Start.`
+                : `Operação bloqueada: O plano apresenta resultado deficitário no ${calc.worstDeficitLevel}. Ajuste os percentuais para que todos os níveis tenham Superávit.`, 'error');
             return;
         }
 
@@ -804,7 +823,7 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                     cursor: 'pointer',
                                     transition: 'all 0.15s'
                                 }}
-                                title={isZero ? `Corte no ${lk === 'L4' ? 'L4+' : lk} (0% = sem repasse)` : `Repasse no ${lk === 'L4' ? 'L4+' : lk}: ${rawVal}% sobre Base Líquida`}
+                                title={isZero ? `Corte no ${lk === 'L4' ? 'L4+' : lk} (0% = sem repasse)` : `Repasse no ${lk === 'L4' ? 'L4+' : lk}: ${rawVal}% sobre a tarifa cheia`}
                             >
                                 <span style={{
                                     fontSize: '0.62rem',
@@ -1362,7 +1381,7 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                                 letterSpacing: '0.03em'
                                             }}>
                                                 <div>Item / Destinação</div>
-                                                <div style={{ textAlign: 'center' }}>Direito de Níveis & Alíquotas (% s/ Base)</div>
+                                                <div style={{ textAlign: 'center' }}>Direito de Níveis & Alíquotas (% s/ Tarifa Cheia)</div>
                                                 <div style={{ textAlign: 'right' }}>Valor {activeLevelView === 'L4' ? 'L4+' : activeLevelView} (R$/kWh)</div>
                                                 <div style={{ textAlign: 'right' }}>% Real s/ Tarifa</div>
                                             </div>
@@ -1453,7 +1472,7 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                                     (=) Base de Cálculo Líquida
                                                 </div>
                                                 <div style={{ textAlign: 'center', color: '#0369a1', fontWeight: 700, fontSize: '0.8rem' }}>
-                                                    Base sobre a qual incidem os níveis L1 a L4+
+                                                    Parte do fornecedor antes dos repasses; os níveis L1 a L4+ incidem sobre a tarifa cheia
                                                 </div>
                                                 <div style={{ textAlign: 'right', fontWeight: 800, color: '#0f172a', fontSize: '0.92rem' }}>
                                                     R$ {formatCurrencyUnit(calc.baseLiquida, 4)}
@@ -1465,13 +1484,16 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
 
                                             {/* 5º ITEM: (-) B2W (GESTÃO / PLATAFORMA) — FIXA EM TODOS OS NÍVEIS */}
                                             <div className="ledger-row">
-                                                <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '0.86rem', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                                                <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '0.86rem', display: 'flex', alignItems: 'center', gap: '0.25rem 0.45rem', flexWrap: 'wrap' }}>
                                                     <span>(-) B2W (Gestão / Plataforma)</span>
                                                     <span style={{
                                                         fontSize: '0.66rem', background: '#f1f5f9', color: '#475569',
                                                         padding: '0.12rem 0.45rem', borderRadius: '6px', fontWeight: 700
                                                     }}>
                                                         Recorrência Fixa
+                                                    </span>
+                                                    <span style={{ display: 'block', width: '100%', fontSize: '0.68rem', fontWeight: 600, color: '#64748b' }}>
+                                                        Havendo Plano da Usina, vale o % de gestão dele; este % vale para usinas sem plano.
                                                     </span>
                                                 </div>
                                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}>
@@ -1489,7 +1511,7 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                                             fontSize: '0.85rem', fontWeight: 800, textAlign: 'center', color: '#1d4ed8'
                                                         }}
                                                     />
-                                                    <span style={{ fontSize: '0.78rem', color: '#475569', fontWeight: 600 }}>% s/ Base Líquida</span>
+                                                    <span style={{ fontSize: '0.78rem', color: '#475569', fontWeight: 600 }}>% s/ Tarifa Cheia</span>
                                                 </div>
                                                 <div style={{ textAlign: 'right', color: '#334155', fontSize: '0.86rem', fontWeight: 700 }}>
                                                     - R$ {formatCurrencyUnit(cv.vB2W, 5)}
@@ -1538,7 +1560,7 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                                         background: '#eff6ff', padding: '0.15rem 0.55rem', borderRadius: '6px',
                                                         border: '1px solid #bfdbfe'
                                                     }}>
-                                                        Teto no {activeLevelView === 'L4' ? 'L4+' : activeLevelView}: {cv.tetoLabel} ({formatPct(cv.pctParceiroPowerTeto)}% s/ Base = - R$ {formatCurrencyUnit(cv.vParceiroPowerTeto, 5)})
+                                                        Teto no {activeLevelView === 'L4' ? 'L4+' : activeLevelView}: {cv.tetoLabel} ({formatPct(cv.pctParceiroPowerTeto)}% s/ Tarifa = - R$ {formatCurrencyUnit(cv.vParceiroPowerTeto, 5)})
                                                     </span>
                                                 </div>
 
@@ -1639,7 +1661,7 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                                     (=) Líquido Efetivo do Fornecedor ({activeLevelView === 'L4' ? 'L4+' : activeLevelView})
                                                 </div>
                                                 <div style={{ textAlign: 'center', color: '#475569', fontWeight: 700, fontSize: '0.78rem' }}>
-                                                    Deduções no {activeLevelView === 'L4' ? 'L4+' : activeLevelView}: {formatPct(cv.totalPctSobreBase)}% s/ Base (- R$ {formatCurrencyUnit(cv.totalDeducoesBase, 5)})
+                                                    Deduções no {activeLevelView === 'L4' ? 'L4+' : activeLevelView}: {formatPct(cv.totalPctSobreBase)}% s/ Tarifa (- R$ {formatCurrencyUnit(cv.totalDeducoesBase, 5)})
                                                 </div>
                                                 <div style={{ textAlign: 'right', fontWeight: 800, color: '#0f172a', fontSize: '0.92rem' }}>
                                                     R$ {formatCurrencyUnit(cv.liquidoEfetivoFornecedor, 6)}
@@ -1764,7 +1786,7 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                                                         background: lv.isLevelDeficit ? '#fee2e2' : '#dcfce7',
                                                                         color: lv.isLevelDeficit ? '#b91c1c' : '#15803d'
                                                                     }}>
-                                                                        Pool: {formatPct(lv.totalPctSobreBase, 1)}% Base
+                                                                        Pool: {formatPct(lv.totalPctSobreBase, 1)}% Tarifa
                                                                     </span>
                                                                 </div>
                                                                 <div style={{
@@ -1785,7 +1807,7 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                     )}
 
                                     {/* PAINEL START: B2W e Conect editáveis (janela deste plano); parceiros herdados do Plano do Originador */}
-                                    {(planoUsaStart || heranca.faturasStart.length > 0) && (
+                                    {(planoUsaStart || heranca.usaStart) && (
                                         <div style={{
                                             border: '1px solid #bfdbfe', background: '#eff6ff', borderRadius: '18px',
                                             padding: '1.25rem'
@@ -1799,11 +1821,11 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                                         Start
                                                     </span>
                                                     <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#1e3a8a' }}>
-                                                        Distribuição nas Faturas Iniciais (% sobre Base Líquida: R$ {formatCurrencyUnit(calc.baseLiquida, 4)}/kWh)
+                                                        Bônus Start (% sobre a tarifa cheia: R$ {formatCurrencyUnit(calc.tBruta, 4)}/kWh compensado)
                                                     </span>
                                                 </div>
                                                 <span style={{ fontSize: '0.72rem', color: '#475569', fontWeight: 600 }}>
-                                                    Conta como fatura só a fatura paga com energia compensada.
+                                                    Limite: {formatPct(limiteStartPct)}% da tarifa (Base Líquida do fornecedor).
                                                 </span>
                                             </div>
 
@@ -1848,28 +1870,56 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                                     Este plano não paga Start a B2W nem ao Assinante Conect (tipo de recompensa só recorrente).
                                                 </span>
                                             )}
-                                            <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.72rem', color: '#475569', marginBottom: '1rem' }}>
-                                                <Lock size={11} />
-                                                Líder, PPE, PPP e PPF: {heranca.faturasStart.length
-                                                    ? `Start ${heranca.faturasStart.length > 1 ? `nas ${heranca.faturasStart.length} primeiras faturas` : 'na 1ª fatura'} com energia compensada, por nível (L1 = venda direta; L2 e L3 = cadeia)`
-                                                    : 'sem Start'} ({rotuloHeranca}).
-                                            </span>
+                                            {/* Start dos parceiros: por energia, herdado do Plano do Originador */}
+                                            <div style={{
+                                                background: '#ffffff', padding: '0.9rem 1.1rem', borderRadius: '12px',
+                                                border: `1px solid ${startParceirosPiorNivel > limiteStartPct + 0.000001 ? '#ef4444' : '#bfdbfe'}`,
+                                                marginBottom: '0.85rem'
+                                            }}>
+                                                <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.8rem', fontWeight: 800, color: '#1e3a8a', marginBottom: '0.35rem' }}>
+                                                    <Lock size={11} />
+                                                    Líder, PPE, PPP e PPF: {heranca.usaStart
+                                                        ? `Start de ${formatarMultiplicador(heranca.multiplicador)} o consumo médio, em kWh compensados`
+                                                        : 'sem Start'} ({rotuloHeranca})
+                                                </span>
+                                                {heranca.usaStart && (
+                                                    <>
+                                                        <span style={{ display: 'block', fontSize: '0.72rem', color: '#475569', marginBottom: '0.55rem', lineHeight: 1.45 }}>
+                                                            {TEXTO_TETO_START} Não segue as faturas da B2W abaixo: pode cair em qualquer das primeiras faturas.
+                                                            L1 = venda direta; L2 e L3 = cadeia.
+                                                        </span>
+                                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.6rem' }}>
+                                                            {CARGOS_ORIGINADOR.map(c => (
+                                                                <div key={c} style={{ fontSize: '0.72rem', color: '#334155' }}>
+                                                                    <strong style={{ display: 'block' }}>{ROTULO_CARGO[c]}</strong>
+                                                                    {niveisDoCargo(heranca.startMatriz, c)}
+                                                                    <span style={{ display: 'block', color: '#64748b' }}>
+                                                                        L1: R$ {formatCurrencyUnit(calc.tBruta * (heranca.startPct(c, 'L1') / 100), 4)}/kWh
+                                                                    </span>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                        <span style={{ display: 'block', fontSize: '0.7rem', color: '#475569', marginTop: '0.55rem', fontWeight: 600 }}>
+                                                            Por nível (Líder + maior entre PPE/PPP/PPF): {NIVEIS_TELA.map(lk => `${lk} ${formatPct(startParceirosNoNivel(lk))}%`).join(' · ')} da tarifa
+                                                        </span>
+                                                    </>
+                                                )}
+                                            </div>
 
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
                                                 {faturasStartAvaliadas.map(fatNum => {
                                                     const r = regrasStart[fatNum] || {};
-                                                    const faturaDoPlano = planoUsaStart && faturasElegiveisStart.includes(fatNum);
                                                     const somaPct = somaStartDaFatura(fatNum);
-                                                    const excedeu = somaPct > 100;
+                                                    const excedeu = somaPct > limiteStartPct + 0.000001;
 
                                                     return (
                                                         <div key={fatNum} style={{
                                                             background: '#ffffff', padding: '1rem 1.25rem', borderRadius: '12px',
                                                             border: `1px solid ${excedeu ? '#ef4444' : '#bfdbfe'}`
                                                         }}>
-                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.4rem' }}>
                                                                 <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#1e3a8a' }}>
-                                                                    Fatura {fatNum} — Repasse Único (% sobre Base Líquida)
+                                                                    Fatura {fatNum} — Start de B2W e Assinante Conect (% sobre a tarifa cheia)
                                                                 </span>
                                                                 <span style={{
                                                                     fontSize: '0.75rem', fontWeight: 800,
@@ -1877,28 +1927,20 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                                                     background: excedeu ? '#fef2f2' : '#f0fdf4',
                                                                     padding: '0.2rem 0.6rem', borderRadius: '8px'
                                                                 }}>
-                                                                    Total comprometido (pior nível): {formatPct(somaPct)}% da Base Líquida
+                                                                    Pior caso com o Start dos parceiros: {formatPct(somaPct)}% da tarifa (limite {formatPct(limiteStartPct)}%)
                                                                 </span>
                                                             </div>
 
-                                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '0.6rem' }}>
+                                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 220px))', gap: '0.6rem' }}>
                                                                 {[
                                                                     { key: 'b2w', label: 'B2W (%)' },
-                                                                    { key: 'lider', label: 'Líder (%)', herdado: true },
-                                                                    { key: 'ppe', label: 'PPE (%)', herdado: true },
-                                                                    { key: 'ppp', label: 'PPP (%)', herdado: true },
-                                                                    { key: 'ppf', label: 'PPF (%)', herdado: true },
                                                                     { key: 'assinante_conect', label: 'Assin. Conect (%)' }
                                                                 ].map(item => {
-                                                                    const editavel = !item.herdado && faturaDoPlano;
-                                                                    const pctVal = item.herdado
-                                                                        ? heranca.startPct(fatNum, item.key, 'L1')
-                                                                        : (faturaDoPlano ? parseFloat(r[item.key]) || 0 : 0);
-                                                                    const rsVal = Math.max(0, calc.baseLiquida) * (pctVal / 100);
+                                                                    const pctVal = parseFloat(r[item.key]) || 0;
+                                                                    const rsVal = calc.tBruta * (pctVal / 100);
                                                                     return (
                                                                         <div key={item.key}>
-                                                                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.7rem', color: '#475569', fontWeight: 700, marginBottom: '0.25rem' }}>
-                                                                                {!editavel && <Lock size={10} />}
+                                                                            <label style={{ display: 'block', fontSize: '0.7rem', color: '#475569', fontWeight: 700, marginBottom: '0.25rem' }}>
                                                                                 {item.label}
                                                                             </label>
                                                                             <input
@@ -1907,35 +1949,24 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                                                                 min="0"
                                                                                 max="100"
                                                                                 className="crm-input"
-                                                                                value={editavel ? (r[item.key] ?? '') : String(pctVal)}
-                                                                                readOnly={!editavel}
-                                                                                tabIndex={editavel ? undefined : -1}
-                                                                                title={item.herdado ? `Somente leitura (${rotuloHeranca}). Por nível: ${niveisDoCargo(heranca.startMatriz, item.key)}` : (editavel ? undefined : 'Fatura fora da janela de Start deste plano')}
-                                                                                onChange={e => { if (editavel) handleStartPctChange(fatNum, item.key, e.target.value); }}
+                                                                                value={r[item.key] ?? ''}
+                                                                                onChange={e => handleStartPctChange(fatNum, item.key, e.target.value)}
                                                                                 style={{
                                                                                     width: '100%', padding: '0.45rem 0.5rem', borderRadius: '8px',
-                                                                                    border: `1px ${editavel ? 'solid' : 'dashed'} #cbd5e1`,
-                                                                                    background: editavel ? '#ffffff' : '#f8fafc',
-                                                                                    color: editavel ? undefined : '#64748b',
+                                                                                    border: '1px solid #cbd5e1', background: '#ffffff',
                                                                                     fontSize: '0.82rem', fontWeight: 700,
-                                                                                    boxSizing: 'border-box', textAlign: 'center',
-                                                                                    cursor: editavel ? undefined : 'default'
+                                                                                    boxSizing: 'border-box', textAlign: 'center'
                                                                                 }}
                                                                             />
                                                                             <span style={{ display: 'block', fontSize: '0.68rem', color: '#64748b', textAlign: 'center', marginTop: '0.2rem', fontWeight: 600 }}>
-                                                                                R$ {formatCurrencyUnit(rsVal, 4)}
+                                                                                R$ {formatCurrencyUnit(rsVal, 4)}/kWh
                                                                             </span>
-                                                                            {item.herdado && heranca.faturasStart.includes(fatNum) && (
-                                                                                <span style={{ display: 'block', fontSize: '0.64rem', color: '#64748b', textAlign: 'center', marginTop: '0.1rem' }}>
-                                                                                    {niveisDoCargo(heranca.startMatriz, item.key)}
-                                                                                </span>
-                                                                            )}
                                                                         </div>
                                                                     );
                                                                 })}
                                                             </div>
                                                             <span style={{ display: 'block', fontSize: '0.7rem', color: '#475569', marginTop: '0.6rem', fontWeight: 600 }}>
-                                                                Por nível (B2W + Conect + Líder + maior entre PPE/PPP/PPF): {NIVEIS_TELA.map(lk => `${lk} ${formatPct(somaStartDaFaturaNoNivel(fatNum, lk))}%`).join(' · ')}
+                                                                Por nível (B2W + Conect + Start dos parceiros, se ainda houver saldo): {NIVEIS_TELA.map(lk => `${lk} ${formatPct(somaStartDaFaturaNoNivel(fatNum, lk))}%`).join(' · ')}
                                                             </span>
                                                         </div>
                                                     );
@@ -1966,7 +1997,11 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                     <strong style={{ display: 'block', fontSize: '0.9rem' }}>
                                         Trava Antidéficit Acionada ({calc.worstDeficitLevel}) — Não é permitido salvar plano deficitário
                                     </strong>
-                                    No <strong>{calc.worstDeficitLevel}</strong>, o Líquido Efetivo do Fornecedor (<strong>R$ {formatCurrencyUnit(calc.byLevel[calc.worstDeficitLevel]?.liquidoEfetivoFornecedor, 6)}/kWh</strong>) está abaixo do Piso Contratual (<strong>R$ {formatCurrencyUnit(calc.vPisoFornecedor, 6)}/kWh</strong>). Reduza o desconto ou ajuste as alíquotas dos níveis para prosseguir.
+                                    {((tipoRecompensa === 'recorrente' || tipoRecompensa === 'hibrido') && calc.isDeficitario) ? (
+                                        <>No <strong>{calc.worstDeficitLevel}</strong>, o Líquido Efetivo do Fornecedor (<strong>R$ {formatCurrencyUnit(calc.byLevel[calc.worstDeficitLevel]?.liquidoEfetivoFornecedor, 6)}/kWh</strong>) está abaixo do Piso Contratual (<strong>R$ {formatCurrencyUnit(calc.vPisoFornecedor, 6)}/kWh</strong>). Reduza o desconto ou ajuste as alíquotas dos níveis para prosseguir. Os percentuais incidem sobre a tarifa cheia.</>
+                                    ) : (
+                                        <>O Start (B2W + Conect + parceiros, no pior nível) passa de <strong>{formatPct(limiteStartPct)}% da tarifa</strong>, que é a Base Líquida do fornecedor. Reduza os percentuais do Start para prosseguir.</>
+                                    )}
                                 </div>
                             </div>
                         )}

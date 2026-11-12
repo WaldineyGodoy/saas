@@ -188,7 +188,7 @@ CLÁUSULA 5 – DA REMUNERAÇÃO DA GESTORA
 (c) Taxa de Administração — ${valorEmReais(taxaAdmin)} por CONSUMIDOR ativo, incluindo emissão e envio de boleto.
 5.2. Definição de "captado pela GESTORA". Considera-se captado pela GESTORA o CONSUMIDOR cujo cadastro tenha sido originado por canal, link de indicação ou corretor da GESTORA, conforme registro do sistema de CRM da GESTORA na data da adesão.
 5.3. Cálculo do Valor Integral ${varias ? 'de cada Fatura Retida' : 'da Primeira Fatura'}: Tarifa de Aplicação x (1 – Desconto %) x Volume de Energia Gerada x % Efetivamente Compensado.
-5.4. Cálculo da Remuneração Recorrente: [Tarifa de Aplicação x (1 – Desconto %) x Volume de Energia Gerada x % Efetivamente Compensado, no período de apuração] x Percentual Recorrente.
+5.4. Cálculo da Remuneração Recorrente: [Tarifa de Aplicação x Volume de Energia Gerada x % Efetivamente Compensado, no período de apuração] x Percentual Recorrente, sem dedução do Desconto concedido ao CONSUMIDOR.
 5.5. Definições:
 (a) Tarifa de Aplicação — todas as componentes da tarifa de energia elétrica, incluindo impostos e tributos cobrados pela distribuidora na área de concessão;
 (b) Desconto — ${numeroBr(desconto)}% (${percentualExtenso(desconto)} por cento) aplicado sobre a Tarifa de Aplicação, praticado para a área de concessão, conforme Anexo I;
