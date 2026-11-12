@@ -38,67 +38,48 @@ DECLARE
     v_user       uuid := gen_random_uuid();
 BEGIN
     -- =================================================================== (a)
+    -- Revisao de 12/11/2026: o dono passou a EDITAR os planos em producao (criou
+    -- o "Plano Hibrido", mudou o Padrao para Start na 1a fatura). Este caso
+    -- deixou de conferir os numeros do seed de 10/11 -- que ele tem direito de
+    -- mudar -- e passou a conferir INVARIANTES que valem para qualquer edicao.
     SELECT * INTO v_padrao FROM public.planos_originador WHERE padrao;
     SELECT * INTO v_recorrente FROM public.planos_originador WHERE nome = 'Plano Recorrente';
-    SELECT count(*) INTO v_n FROM public.planos_originador;
-
-    IF v_n <> 2 THEN
-        RAISE EXCEPTION 'FALHA (a): planos_originador tem % linhas, esperado 2', v_n;
-    END IF;
-    IF v_padrao.id IS NULL OR v_padrao.nome <> 'Plano Padrão' OR v_padrao.status <> 'ativo' THEN
-        RAISE EXCEPTION 'FALHA (a): Plano Padrao ausente ou errado: %', to_jsonb(v_padrao);
-    END IF;
-    IF v_recorrente.id IS NULL OR v_recorrente.padrao OR v_recorrente.status <> 'ativo' THEN
-        RAISE EXCEPTION 'FALHA (a): Plano Recorrente ausente ou errado: %', to_jsonb(v_recorrente);
-    END IF;
-
-    -- Padrao = Premium: tipo start, Start so na 2a fatura (lider 20 / ppe 20 /
-    -- ppp 0 / ppf 0) e a matriz de parceiro do Premium.
-    IF v_padrao.tipo_recompensa <> 'start' THEN
-        RAISE EXCEPTION 'FALHA (a): Padrao tipo %, esperado start (o do Premium)', v_padrao.tipo_recompensa;
-    END IF;
-    -- 20261112a: a 20261112a converte o seed -- o % da menor fatura elegivel vira L1
-    -- e faturas_elegiveis vira [1..N] (revisao do dono 12/11/2026)
-    IF v_padrao.start_config <> '{"faturas_elegiveis": [1], "regras_multinivel": {"lider": {"niveis": {"L1": "20", "L2": "0", "L3": "0", "L4": "0"}, "max_niveis": 1}, "ppe": {"niveis": {"L1": "20", "L2": "0", "L3": "0", "L4": "0"}, "max_niveis": 1}, "ppp": {"niveis": {"L1": "0", "L2": "0", "L3": "0", "L4": "0"}, "max_niveis": 1}, "ppf": {"niveis": {"L1": "0", "L2": "0", "L3": "0", "L4": "0"}, "max_niveis": 1}}}'::jsonb THEN
-        RAISE EXCEPTION 'FALHA (a): Padrao start_config = %', v_padrao.start_config;
-    END IF;
-    IF v_padrao.recorrente_config <> '{"regras_multinivel": {
-          "lider": {"niveis": {"L1": "1", "L2": "1", "L3": "1", "L4": "0"}, "max_niveis": 3},
-          "ppe":   {"niveis": {"L1": "5", "L2": "2", "L3": "0", "L4": "0"}, "max_niveis": 2},
-          "ppp":   {"niveis": {"L1": "4", "L2": "2", "L3": "0", "L4": "0"}, "max_niveis": 2},
-          "ppf":   {"niveis": {"L1": "2", "L2": "2", "L3": "0", "L4": "0"}, "max_niveis": 2}}}'::jsonb THEN
-        RAISE EXCEPTION 'FALHA (a): Padrao recorrente_config = %', v_padrao.recorrente_config;
-    END IF;
-
-    -- Recorrente = Ultra Connect: tipo recorrente, a janela e o Start do
-    -- ordinal 2 copiados (lider 50 / ppe 50 / ppp 40 / ppf 20) e a matriz do
-    -- Ultra (ppf L2 0, lider 1/0/2).
-    IF v_recorrente.tipo_recompensa <> 'recorrente' THEN
-        RAISE EXCEPTION 'FALHA (a): Recorrente tipo %, esperado recorrente (o do Ultra)', v_recorrente.tipo_recompensa;
-    END IF;
-    IF v_recorrente.start_config <> '{"faturas_elegiveis": [1], "regras_multinivel": {"lider": {"niveis": {"L1": "50", "L2": "0", "L3": "0", "L4": "0"}, "max_niveis": 1}, "ppe": {"niveis": {"L1": "50", "L2": "0", "L3": "0", "L4": "0"}, "max_niveis": 1}, "ppp": {"niveis": {"L1": "40", "L2": "0", "L3": "0", "L4": "0"}, "max_niveis": 1}, "ppf": {"niveis": {"L1": "20", "L2": "0", "L3": "0", "L4": "0"}, "max_niveis": 1}}}'::jsonb THEN
-        RAISE EXCEPTION 'FALHA (a): Recorrente start_config = %', v_recorrente.start_config;
-    END IF;
-    IF v_recorrente.recorrente_config <> '{"regras_multinivel": {
-          "lider": {"niveis": {"L1": "1", "L2": "0", "L3": "2", "L4": "0"}, "max_niveis": 3},
-          "ppe":   {"niveis": {"L1": "5", "L2": "2", "L3": "0", "L4": "0"}, "max_niveis": 2},
-          "ppp":   {"niveis": {"L1": "4", "L2": "2", "L3": "0", "L4": "0"}, "max_niveis": 2},
-          "ppf":   {"niveis": {"L1": "2", "L2": "0", "L3": "0", "L4": "0"}, "max_niveis": 2}}}'::jsonb THEN
-        RAISE EXCEPTION 'FALHA (a): Recorrente recorrente_config = %', v_recorrente.recorrente_config;
-    END IF;
-
-    -- vinculos
     SELECT * INTO v_premium FROM public.planos_assinatura_energia WHERE id = c_premium;
     SELECT * INTO v_ultra   FROM public.planos_assinatura_energia WHERE id = c_ultra;
-    IF v_premium.plano_originador_id IS DISTINCT FROM v_padrao.id THEN
-        RAISE EXCEPTION 'FALHA (a): Premium aponta para %, esperado o Padrao', v_premium.plano_originador_id;
+
+    SELECT count(*) INTO v_n FROM public.planos_originador WHERE padrao;
+    IF v_n <> 1 THEN
+        RAISE EXCEPTION 'FALHA (a): % Plano(s) Padrao, esperado exatamente 1', v_n;
     END IF;
-    IF v_ultra.plano_originador_id IS DISTINCT FROM v_recorrente.id THEN
-        RAISE EXCEPTION 'FALHA (a): Ultra aponta para %, esperado o Recorrente', v_ultra.plano_originador_id;
+    IF v_padrao.status <> 'ativo' THEN
+        RAISE EXCEPTION 'FALHA (a): Plano Padrao nao esta ativo: %', to_jsonb(v_padrao);
     END IF;
-    SELECT count(*) INTO v_n FROM public.originators_v2 WHERE plano_originador_id IS DISTINCT FROM v_padrao.id;
+    IF v_recorrente.id IS NULL OR v_recorrente.padrao THEN
+        RAISE EXCEPTION 'FALHA (a): Plano Recorrente (seed) ausente ou marcado como Padrao: %', to_jsonb(v_recorrente);
+    END IF;
+
+    -- formato novo em TODOS os planos (20261112a): Start por nivel, sem `regras`
+    SELECT count(*) INTO v_n FROM public.planos_originador po
+     WHERE jsonb_typeof(po.start_config -> 'regras_multinivel') IS DISTINCT FROM 'object'
+        OR jsonb_typeof(po.start_config -> 'faturas_elegiveis') IS DISTINCT FROM 'array'
+        OR po.start_config ? 'regras'
+        OR jsonb_typeof(po.recorrente_config -> 'regras_multinivel') IS DISTINCT FROM 'object';
     IF v_n <> 0 THEN
-        RAISE EXCEPTION 'FALHA (a): % originador(es) fora do Padrao depois do backfill', v_n;
+        RAISE EXCEPTION 'FALHA (a): % Plano(s) do Originador fora do formato novo', v_n;
+    END IF;
+
+    -- vinculos: todo plano de assinatura e todo originador apontam para um plano que existe
+    SELECT count(*) INTO v_n FROM public.planos_assinatura_energia pa
+     WHERE pa.plano_originador_id IS NULL
+        OR NOT EXISTS (SELECT 1 FROM public.planos_originador po WHERE po.id = pa.plano_originador_id);
+    IF v_n <> 0 THEN
+        RAISE EXCEPTION 'FALHA (a): % plano(s) de assinatura sem Plano do Originador valido', v_n;
+    END IF;
+    SELECT count(*) INTO v_n FROM public.originators_v2 o
+     WHERE o.plano_originador_id IS NULL
+        OR NOT EXISTS (SELECT 1 FROM public.planos_originador po WHERE po.id = o.plano_originador_id);
+    IF v_n <> 0 THEN
+        RAISE EXCEPTION 'FALHA (a): % originador(es) sem Plano do Originador valido', v_n;
     END IF;
 
     -- limpeza: nenhuma chave de parceiro sobrou nos planos de assinatura

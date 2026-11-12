@@ -128,6 +128,42 @@ BEGIN
     SELECT id INTO v_padrao FROM public.planos_originador WHERE padrao;
     SELECT plano_originador_id INTO v_recorr FROM public.planos_assinatura_energia WHERE id = c_ultra;
 
+    -- O dono edita os planos em producao (12/11/2026: Padrao passou a Start na
+    -- 1a fatura). Este teste confere a EQUIVALENCIA com as regras do seed de
+    -- 10/11, entao fixa esses valores DENTRO da transacao (tudo e desfeito no
+    -- fim) e independe do que estiver salvo hoje.
+    IF v_recorr IS NULL OR v_recorr = v_padrao THEN
+        SELECT id INTO v_recorr FROM public.planos_originador WHERE nome = 'Plano Recorrente' AND NOT padrao;
+    END IF;
+    UPDATE public.planos_assinatura_energia SET plano_originador_id = v_padrao WHERE id = c_premium;
+    UPDATE public.planos_assinatura_energia SET plano_originador_id = v_recorr WHERE id = c_ultra;
+    UPDATE public.planos_originador SET
+        tipo_recompensa = 'start',
+        start_config = '{"faturas_elegiveis":[2],"regras_multinivel":{
+            "lider":{"niveis":{"L1":"20","L2":"0","L3":"0","L4":"0"},"max_niveis":1},
+            "ppe":{"niveis":{"L1":"20","L2":"0","L3":"0","L4":"0"},"max_niveis":1},
+            "ppp":{"niveis":{"L1":"0","L2":"0","L3":"0","L4":"0"},"max_niveis":1},
+            "ppf":{"niveis":{"L1":"0","L2":"0","L3":"0","L4":"0"},"max_niveis":1}}}'::jsonb,
+        recorrente_config = '{"regras_multinivel":{
+            "lider":{"niveis":{"L1":"1","L2":"1","L3":"1","L4":"0"},"max_niveis":3},
+            "ppe":{"niveis":{"L1":"5","L2":"2","L3":"0","L4":"0"},"max_niveis":2},
+            "ppp":{"niveis":{"L1":"4","L2":"2","L3":"0","L4":"0"},"max_niveis":2},
+            "ppf":{"niveis":{"L1":"2","L2":"2","L3":"0","L4":"0"},"max_niveis":2}}}'::jsonb
+     WHERE id = v_padrao;
+    UPDATE public.planos_originador SET
+        tipo_recompensa = 'recorrente',
+        start_config = '{"faturas_elegiveis":[2],"regras_multinivel":{
+            "lider":{"niveis":{"L1":"50","L2":"0","L3":"0","L4":"0"},"max_niveis":1},
+            "ppe":{"niveis":{"L1":"50","L2":"0","L3":"0","L4":"0"},"max_niveis":1},
+            "ppp":{"niveis":{"L1":"40","L2":"0","L3":"0","L4":"0"},"max_niveis":1},
+            "ppf":{"niveis":{"L1":"20","L2":"0","L3":"0","L4":"0"},"max_niveis":1}}}'::jsonb,
+        recorrente_config = '{"regras_multinivel":{
+            "lider":{"niveis":{"L1":"1","L2":"0","L3":"2","L4":"0"},"max_niveis":3},
+            "ppe":{"niveis":{"L1":"5","L2":"2","L3":"0","L4":"0"},"max_niveis":2},
+            "ppp":{"niveis":{"L1":"4","L2":"2","L3":"0","L4":"0"},"max_niveis":2},
+            "ppf":{"niveis":{"L1":"2","L2":"0","L3":"0","L4":"0"},"max_niveis":2}}}'::jsonb
+     WHERE id = v_recorr;
+
     INSERT INTO public."Concessionaria"
         ("Cod. Ibge", "Município", "Concessionaria", "UF", "Tarifa Concessionaria", "Fio B")
     VALUES ('SBX-PO-1', 'Sandbox PO', 'SANDBOX PO conc', 'RN', 1.20, 0.20);
