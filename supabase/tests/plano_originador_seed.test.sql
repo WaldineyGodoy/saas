@@ -1,9 +1,11 @@
 -- Teste: PLANO DO ORIGINADOR -- seed, vinculos, limpeza, trava e guardas.
 -- Spec: docs/superpowers/specs/2026-11-10-plano-originador-design.md
 --
--- Roda DEPOIS de 20261110a_plano_originador.sql e 20261110b, no mesmo
--- BEGIN/ROLLBACK (nada e aplicado):
---   BEGIN; <20261110a>; <20261110b>; <este arquivo>; ROLLBACK;
+-- Roda DEPOIS de 20261110a_plano_originador.sql, 20261110b e 20261112a, no
+-- mesmo BEGIN/ROLLBACK (nada e aplicado):
+--   BEGIN; <20261110a>; <20261110b>; <20261112a>; <este arquivo>; ROLLBACK;
+-- 20261112a (revisao do dono 12/11/2026): start_config no formato novo
+-- (regras_multinivel; faturas_elegiveis [1..N]); `regras` e recusado.
 -- Sucesso = erro 'SANDBOX_OK'.
 --
 -- (a) Padrao = regras de parceiro do Plano Premium, Recorrente = as do Ultra
@@ -55,7 +57,9 @@ BEGIN
     IF v_padrao.tipo_recompensa <> 'start' THEN
         RAISE EXCEPTION 'FALHA (a): Padrao tipo %, esperado start (o do Premium)', v_padrao.tipo_recompensa;
     END IF;
-    IF v_padrao.start_config <> '{"faturas_elegiveis": [2], "regras": {"2": {"lider": 20, "ppe": 20, "ppp": 0, "ppf": 0}}}'::jsonb THEN
+    -- 20261112a: a 20261112a converte o seed -- o % da menor fatura elegivel vira L1
+    -- e faturas_elegiveis vira [1..N] (revisao do dono 12/11/2026)
+    IF v_padrao.start_config <> '{"faturas_elegiveis": [1], "regras_multinivel": {"lider": {"niveis": {"L1": "20", "L2": "0", "L3": "0", "L4": "0"}, "max_niveis": 1}, "ppe": {"niveis": {"L1": "20", "L2": "0", "L3": "0", "L4": "0"}, "max_niveis": 1}, "ppp": {"niveis": {"L1": "0", "L2": "0", "L3": "0", "L4": "0"}, "max_niveis": 1}, "ppf": {"niveis": {"L1": "0", "L2": "0", "L3": "0", "L4": "0"}, "max_niveis": 1}}}'::jsonb THEN
         RAISE EXCEPTION 'FALHA (a): Padrao start_config = %', v_padrao.start_config;
     END IF;
     IF v_padrao.recorrente_config <> '{"regras_multinivel": {
@@ -72,7 +76,7 @@ BEGIN
     IF v_recorrente.tipo_recompensa <> 'recorrente' THEN
         RAISE EXCEPTION 'FALHA (a): Recorrente tipo %, esperado recorrente (o do Ultra)', v_recorrente.tipo_recompensa;
     END IF;
-    IF v_recorrente.start_config <> '{"faturas_elegiveis": [2], "regras": {"2": {"lider": 50, "ppe": 50, "ppp": 40, "ppf": 20}}}'::jsonb THEN
+    IF v_recorrente.start_config <> '{"faturas_elegiveis": [1], "regras_multinivel": {"lider": {"niveis": {"L1": "50", "L2": "0", "L3": "0", "L4": "0"}, "max_niveis": 1}, "ppe": {"niveis": {"L1": "50", "L2": "0", "L3": "0", "L4": "0"}, "max_niveis": 1}, "ppp": {"niveis": {"L1": "40", "L2": "0", "L3": "0", "L4": "0"}, "max_niveis": 1}, "ppf": {"niveis": {"L1": "20", "L2": "0", "L3": "0", "L4": "0"}, "max_niveis": 1}}}'::jsonb THEN
         RAISE EXCEPTION 'FALHA (a): Recorrente start_config = %', v_recorrente.start_config;
     END IF;
     IF v_recorrente.recorrente_config <> '{"regras_multinivel": {
@@ -212,7 +216,7 @@ BEGIN
     v_ok := false;
     BEGIN
         INSERT INTO public.planos_originador (nome, padrao, start_config, recorrente_config)
-        VALUES ('SANDBOX outro padrao', true, '{"faturas_elegiveis": [], "regras": {}}', '{"regras_multinivel": {}}');
+        VALUES ('SANDBOX outro padrao', true, '{"faturas_elegiveis": [], "regras_multinivel": {}}', '{"regras_multinivel": {}}');
     EXCEPTION WHEN unique_violation THEN v_ok := true; END;
     IF NOT v_ok THEN RAISE EXCEPTION 'FALHA (g): um segundo Padrao foi aceito'; END IF;
 
@@ -231,17 +235,18 @@ BEGIN
     IF NOT v_ok THEN RAISE EXCEPTION 'FALHA (g): plano referenciado pelo Ultra foi excluido'; END IF;
 
     INSERT INTO public.planos_originador (nome, tipo_recompensa, start_config, recorrente_config)
-    VALUES ('SANDBOX livre', 'ambos', '{"faturas_elegiveis": [1, 2], "regras": {"1": {"ppf": 50}, "2": {"ppf": "50"}}}',
+    VALUES ('SANDBOX livre', 'ambos', '{"faturas_elegiveis": [1, 2], "regras_multinivel": {"ppf": {"niveis": {"L1": 50, "L2": "10", "L3": "5", "L4": "0"}, "max_niveis": 3}}}',
             '{"regras_multinivel": {"ppf": {"niveis": {"L1": "2", "L2": "2", "L3": "0", "L4": "0"}, "max_niveis": 2}}}')
     RETURNING id INTO v_id;
     DELETE FROM public.planos_originador WHERE id = v_id;
 
     -- formato: b2w, assinante_conect e chave legada nao entram; percentual > 100 nao entra
     FOREACH v_txt IN ARRAY ARRAY[
-        '{"faturas_elegiveis": [1], "regras": {"1": {"b2w": 10}}}',
-        '{"faturas_elegiveis": [1], "regras": {"1": {"embaixador": 10}}}',
-        '{"faturas_elegiveis": [0], "regras": {}}',
-        '{"faturas_elegiveis": [1], "regras": {"1": {"ppe": 101}}}'] LOOP
+        '{"faturas_elegiveis": [1], "regras_multinivel": {"b2w": {"niveis": {"L1": "10", "L2": "0", "L3": "0", "L4": "0"}, "max_niveis": 1}}}',
+        '{"faturas_elegiveis": [1], "regras_multinivel": {"embaixador": {"niveis": {"L1": "10", "L2": "0", "L3": "0", "L4": "0"}, "max_niveis": 1}}}',
+        '{"faturas_elegiveis": [0], "regras_multinivel": {}}',
+        '{"faturas_elegiveis": [1], "regras_multinivel": {"ppe": {"niveis": {"L1": "101", "L2": "0", "L3": "0", "L4": "0"}, "max_niveis": 1}}}',
+        '{"faturas_elegiveis": [1], "regras": {"1": {"ppe": 10}}}'] LOOP
         v_ok := false;
         BEGIN
             INSERT INTO public.planos_originador (nome, start_config, recorrente_config)
@@ -257,7 +262,7 @@ BEGIN
         v_ok := false;
         BEGIN
             INSERT INTO public.planos_originador (nome, start_config, recorrente_config)
-            VALUES ('SANDBOX invalido', '{"faturas_elegiveis": [], "regras": {}}', v_txt::jsonb);
+            VALUES ('SANDBOX invalido', '{"faturas_elegiveis": [], "regras_multinivel": {}}', v_txt::jsonb);
         EXCEPTION WHEN check_violation THEN v_ok := true; END;
         IF NOT v_ok THEN RAISE EXCEPTION 'FALHA (g): recorrente_config invalido aceito: %', v_txt; END IF;
     END LOOP;

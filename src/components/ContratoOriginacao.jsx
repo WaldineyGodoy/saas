@@ -25,7 +25,7 @@ import { listarPlanosOriginador, planoOriginadorAusente, planoPadraoDe, resumoPl
  * link por WhatsApp e e-mail feita por nós.
  *
  * O que muda é de onde vêm os números: o Start e a Recorrência saem do
- * Plano do Originador escolhido no cadastro (aba Financeiro), e não de
+ * Plano do Originador escolhido no cadastro (aba Indicação), e não de
  * campos deste painel. Duplicá-los aqui criaria uma terceira fonte de
  * verdade sobre comissão — e a primeira a divergir das outras duas. Ver
  * a memória crm-comissao-duas-fontes.

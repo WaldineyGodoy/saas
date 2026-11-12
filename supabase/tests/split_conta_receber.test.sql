@@ -137,16 +137,22 @@ BEGIN
                  'faturas_elegiveis', COALESCE((SELECT jsonb_agg(f::int) FROM jsonb_array_elements_text(
                      CASE WHEN jsonb_typeof(NEW.start_config -> 'faturas_elegiveis') = 'array' THEN NEW.start_config -> 'faturas_elegiveis' ELSE '[]' END) f
                    WHERE f ~ '^[1-9][0-9]*$'), '[]'),
-                 'regras', COALESCE((SELECT jsonb_object_agg(e.key, (
-                       SELECT COALESCE(jsonb_object_agg(k.key, k.value), '{}') FROM jsonb_each(e.value) k
-                        WHERE k.key = ANY (c) AND (k.value #>> '{}') ~ '^[0-9]+(\.[0-9]+)?$' AND (k.value #>> '{}')::numeric <= 100))
-                     FROM jsonb_each(CASE WHEN jsonb_typeof(NEW.start_config -> 'regras') = 'object' THEN NEW.start_config -> 'regras' ELSE '{}' END) e
-                    WHERE e.key ~ '^[1-9][0-9]*$' AND jsonb_typeof(e.value) = 'object'), '{}')),
+                 -- revisao do dono 12/11/2026 (20261112a): UMA matriz de Start por
+                 -- nivel; o L1 do cargo e o % da MENOR fatura elegivel (max_niveis 1)
+                 'regras_multinivel', (SELECT jsonb_object_agg(cg, jsonb_build_object(
+                       'niveis', jsonb_build_object('L1', COALESCE((
+                           SELECT CASE WHEN (s.x ->> cg) ~ '^[0-9]+(\.[0-9]+)?$' AND (s.x ->> cg)::numeric <= 100 THEN s.x ->> cg END
+                             FROM (SELECT NEW.start_config -> 'regras' -> f AS x
+                                     FROM jsonb_array_elements_text(CASE WHEN jsonb_typeof(NEW.start_config -> 'faturas_elegiveis') = 'array' THEN NEW.start_config -> 'faturas_elegiveis' ELSE '[]' END) f
+                                    WHERE f ~ '^[1-9][0-9]*$' AND jsonb_typeof(NEW.start_config -> 'regras' -> f) = 'object'
+                                    ORDER BY f::int LIMIT 1) s), '0'),
+                         'L2', '0', 'L3', '0', 'L4', '0'),
+                       'max_niveis', 1)) FROM unnest(c) cg)),
                jsonb_build_object('regras_multinivel', COALESCE((SELECT jsonb_object_agg(m.key, jsonb_build_object(
                      'niveis', COALESCE((SELECT jsonb_object_agg(l.key, l.value) FROM jsonb_each(m.value -> 'niveis') l
                                           WHERE l.key IN ('L1', 'L2', 'L3', 'L4') AND (l.value #>> '{}') ~ '^[0-9]+(\.[0-9]+)?$'
                                             AND (l.value #>> '{}')::numeric <= 100), '{}'),
-                     'max_niveis', CASE WHEN (m.value ->> 'max_niveis') ~ '^[0-4]$' THEN (m.value ->> 'max_niveis')::int ELSE 0 END))
+                     'max_niveis', CASE WHEN (m.value ->> 'max_niveis') ~ '^[0-4]$' THEN LEAST((m.value ->> 'max_niveis')::int, 3) ELSE 0 END))
                    FROM jsonb_each(CASE WHEN jsonb_typeof(NEW.recorrente_config -> 'regras_multinivel') = 'object' THEN NEW.recorrente_config -> 'regras_multinivel' ELSE '{}' END) m
                   WHERE m.key = ANY (c) AND jsonb_typeof(m.value -> 'niveis') = 'object'), '{}'))
         RETURNING id INTO v_id;

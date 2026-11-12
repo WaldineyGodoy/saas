@@ -1,5 +1,5 @@
 import { baixarPdfContrato, dataPorExtenso, gerarPdfBase64, moeda, numeroBr, paginarTexto, paraNumero, percentualExtenso, porExtenso, qualificaParte, rotuloDocumento } from './contratoBase';
-import { NIVEIS, normalizarPlanoOriginador } from './planoOriginador';
+import { NIVEIS_TELA, normalizarPlanoOriginador } from './planoOriginador';
 
 /**
  * Contrato de Originação e Indicação de Negócios — o instrumento firmado
@@ -99,10 +99,15 @@ const pct = (valor) => {
     return `${numeroBr(n)}% (${percentualExtenso(n)} por cento)`;
 };
 
-/** "1ª", "1ª e 2ª", "1ª, 2ª e 3ª". */
-const ordinaisFatura = (ords) => {
-    const o = ords.map(n => `${n}ª`);
-    return o.length > 1 ? `${o.slice(0, -1).join(', ')} e ${o.at(-1)}` : o[0];
+/**
+ * "1º nível (L1), 50% (...); 2º nível (L2), 10% (...)" para um cargo, só nos
+ * níveis liberados (`max_niveis`). Vazio quando nenhum nível paga.
+ */
+const niveisContrato = (matriz, cargoChave) => {
+    const linha = matriz?.[cargoChave];
+    const niveis = linha ? NIVEIS_TELA.slice(0, linha.max_niveis).map((lk, i) => ({ n: i + 1, lk, v: Number(linha.niveis[lk]) || 0 })) : [];
+    if (!niveis.some(x => x.v > 0)) return '';
+    return niveis.map(x => `${x.n}º nível (${x.lk}), ${pct(x.v)}`).join('; ');
 };
 
 /**
@@ -126,29 +131,26 @@ const linhasRemuneracao = (plano, cargoChave) => {
         `Plano do Originador: ${p.nome}, aplicável a todas as unidades consumidoras originadas pelo ORIGINADOR, em lugar do plano vinculado ao plano de assinatura.`
     ];
 
-    // Ordinal = posição entre as faturas pagas COM energia compensada da UC.
-    const comStart = p.start_config.faturas_elegiveis
-        .map(f => ({ f, v: Number(p.start_config.regras[String(f)]?.[cargoChave]) || 0 }))
-        .filter(x => x.v > 0);
-    if (p.tipo_recompensa !== 'recorrente' && comStart.length) {
-        const fats = comStart.map(x => x.f);
-        const iguais = comStart.every(x => x.v === comStart[0].v);
-        const detalhe = iguais
-            ? `${pct(comStart[0].v)} da Base de Cálculo Líquida ${fats.length > 1 ? 'das' : 'da'} ${ordinaisFatura(fats)} ${fats.length > 1 ? 'faturas pagas' : 'fatura paga'} com energia compensada da unidade consumidora`
-            : comStart.map(x => `${pct(x.v)} na ${x.f}ª fatura paga com energia compensada`).join('; ') + ' da unidade consumidora, sobre a Base de Cálculo Líquida';
-        linhas.push(`Bônus Start: ${detalhe}, nos termos da Cláusula 7.`);
-    } else {
-        linhas.push('Bônus Start: não previsto no plano para o cargo do ORIGINADOR.');
-    }
+    // Start (revisão de 12/11/2026): uma matriz por nível, igual para as N
+    // primeiras faturas pagas COM energia compensada de cada UC. Híbrido é
+    // sequencial: a recorrência só começa depois do fim do Start.
+    const n = p.start_config.faturas_elegiveis.length;
+    const usaStart = p.tipo_recompensa !== 'recorrente' && n > 0;
+    const janela = n === 1
+        ? 'na 1ª fatura paga com energia compensada de cada unidade consumidora'
+        : `nas ${n} (${porExtenso(n).replace(/\bum\b/g, 'uma').replace(/\bdois\b/g, 'duas')}) primeiras faturas pagas com energia compensada de cada unidade consumidora`;
+    const start = usaStart ? niveisContrato(p.start_config.regras_multinivel, cargoChave) : '';
+    linhas.push(start
+        ? `Bônus Start: ${janela}: ${start}, da Base de Cálculo Líquida, nos termos da Cláusula 7.`
+        : 'Bônus Start: não previsto no plano para o cargo do ORIGINADOR.');
 
-    const rec = p.recorrente_config.regras_multinivel[cargoChave];
-    const niveis = rec ? NIVEIS.slice(0, rec.max_niveis).map((lk, i) => ({ n: i + 1, v: Number(rec.niveis[lk]) || 0 })) : [];
-    if (p.tipo_recompensa !== 'start' && niveis.some(x => x.v > 0)) {
-        const porNivel = niveis.map(x => `${x.n}º nível, ${pct(x.v)}`).join('; ');
-        linhas.push(`Recorrência: ${porNivel}, da Base de Cálculo Líquida, nos termos da Cláusula 8${p.tipo_recompensa === 'ambos' ? ', nas faturas em que não incidir o Bônus Start' : ''}.`);
-    } else {
-        linhas.push('Recorrência: não prevista no plano para o cargo do ORIGINADOR.');
-    }
+    const rec = p.tipo_recompensa !== 'start' ? niveisContrato(p.recorrente_config.regras_multinivel, cargoChave) : '';
+    const sequencia = p.tipo_recompensa === 'ambos' && n > 0
+        ? `, a partir da ${n + 1}ª fatura paga com energia compensada de cada unidade consumidora, isto é, somente após o término do Bônus Start, não se acumulando com ele no mesmo período`
+        : '';
+    linhas.push(rec
+        ? `Recorrência: ${rec}, da Base de Cálculo Líquida, nos termos da Cláusula 8${sequencia}.`
+        : 'Recorrência: não prevista no plano para o cargo do ORIGINADOR.');
 
     return linhas;
 };

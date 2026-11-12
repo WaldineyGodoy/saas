@@ -1,8 +1,10 @@
 -- Teste: MOTOR com o PLANO DO ORIGINADOR (handle_invoice_paid_ledger, 20261110b).
 -- Spec: docs/superpowers/specs/2026-11-10-plano-originador-design.md
 --
--- Roda DEPOIS de 20261110a e 20261110b, no mesmo BEGIN/ROLLBACK:
---   BEGIN; <20261110a>; <20261110b>; <este arquivo>; ROLLBACK;
+-- Roda DEPOIS de 20261110a, 20261110b e 20261112a, no mesmo BEGIN/ROLLBACK:
+--   BEGIN; <20261110a>; <20261110b>; <20261112a>; <este arquivo>; ROLLBACK;
+-- 20261112a (revisao do dono 12/11/2026): planos sandbox no formato novo
+-- (start_config.regras_multinivel, uma matriz para as N faturas).
 -- Sucesso = erro 'SANDBOX_OK'.
 --
 -- Usa os planos REAIS (Premium e Ultra Connect, ja limpos e ligados ao Padrao
@@ -33,7 +35,7 @@ DECLARE
 
     v_padrao   uuid;
     v_recorr   uuid;
-    v_plano_x  uuid;   -- excecao: start nas faturas 1 e 2
+    v_plano_x  uuid;   -- excecao: start nas faturas 1 e 2 (ppe L1 10%)
     v_plano_y  uuid;   -- excecao: so recorrencia, ppe 7%
     v_plano_z  uuid;   -- excecao: ambos, lider 30% na 1a
 
@@ -98,7 +100,7 @@ BEGIN
         IF (r->>'total')::numeric <> 0 THEN
           RAISE EXCEPTION 'FALHA %: a transacao nao fecha em zero (%)', p_rot, r->>'total';
         END IF;
-        IF r #>> '{rec,versao}' IS DISTINCT FROM '20261110_plano_originador' THEN
+        IF r #>> '{rec,versao}' IS DISTINCT FROM '20261112_plano_originador_niveis' THEN
           RAISE EXCEPTION 'FALHA %: versao gravada %', p_rot, r #>> '{rec,versao}';
         END IF;
       END $b$
@@ -138,17 +140,17 @@ BEGIN
 
     INSERT INTO public.planos_originador (nome, tipo_recompensa, start_config, recorrente_config)
     VALUES ('SANDBOX excecao start 1 e 2', 'start',
-            '{"faturas_elegiveis": [1, 2], "regras": {"1": {"ppe": 50}, "2": {"ppe": 10}}}',
+            '{"faturas_elegiveis": [1, 2], "regras_multinivel": {"ppe": {"niveis": {"L1": "10", "L2": "0", "L3": "0", "L4": "0"}, "max_niveis": 1}, "lider": {"niveis": {"L1": "0", "L2": "0", "L3": "0", "L4": "0"}, "max_niveis": 1}, "ppp": {"niveis": {"L1": "0", "L2": "0", "L3": "0", "L4": "0"}, "max_niveis": 1}, "ppf": {"niveis": {"L1": "0", "L2": "0", "L3": "0", "L4": "0"}, "max_niveis": 1}}}',
             '{"regras_multinivel": {}}')
     RETURNING id INTO v_plano_x;
     INSERT INTO public.planos_originador (nome, tipo_recompensa, start_config, recorrente_config)
     VALUES ('SANDBOX excecao recorrente', 'recorrente',
-            '{"faturas_elegiveis": [1], "regras": {"1": {"ppe": 99}}}',
+            '{"faturas_elegiveis": [1], "regras_multinivel": {"ppe": {"niveis": {"L1": "99", "L2": "0", "L3": "0", "L4": "0"}, "max_niveis": 1}}}',
             '{"regras_multinivel": {"ppe": {"niveis": {"L1": "7", "L2": "0", "L3": "0", "L4": "0"}, "max_niveis": 2}}}')
     RETURNING id INTO v_plano_y;
     INSERT INTO public.planos_originador (nome, tipo_recompensa, start_config, recorrente_config)
     VALUES ('SANDBOX excecao ambos', 'ambos',
-            '{"faturas_elegiveis": [1], "regras": {"1": {"lider": 30}}}',
+            '{"faturas_elegiveis": [1], "regras_multinivel": {"lider": {"niveis": {"L1": "30", "L2": "0", "L3": "0", "L4": "0"}, "max_niveis": 1}}}',
             '{"regras_multinivel": {"lider": {"niveis": {"L1": "3", "L2": "3", "L3": "0", "L4": "0"}, "max_niveis": 2}}}')
     RETURNING id INTO v_plano_z;
 
@@ -237,11 +239,14 @@ BEGIN
     INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address, plano_assinatura_id)
     VALUES (v_sub, v_usina, 'consumidora', 'ativo', 'SANDBOX PO conc', '{"uf": "RN"}', c_premium) RETURNING id INTO v_uc;
 
-    -- ord 1: Premium fora da janela (B2W 10%), mas o parceiro tem Start de 50%
-    -- na 1a pela excecao: 380. O lider fica no Padrao (Start so na 2a): 0.
-    -- Com o piso o teto seria 160 e cortaria; o Start do parceiro isenta.
+    -- ord 1: Premium fora da janela (B2W 10%), mas o parceiro tem Start de 10%
+    -- na 1a pela excecao: 76. O lider fica no Padrao (Start so na 2a): 0.
+    -- O Start do parceiro isenta o piso (teto = base 760).
+    -- 20261112a (revisao do dono 12/11/2026): o Start e UMA matriz para as N
+    -- faturas, entao a excecao paga 10% nas duas (antes: 50% na 1a = 380 e
+    -- 10% na 2a); a 2a nao muda.
     r := pg_temp.pagar(pg_temp.fatura(v_uc, 1000, 5));
-    PERFORM pg_temp.confere('c excecao ord 1', r, -76, -380, 0, -304);
+    PERFORM pg_temp.confere('c excecao ord 1', r, -76, -76, 0, -608);
     IF pg_temp.com(r, v_lider) <> 0 THEN
         RAISE EXCEPTION 'FALHA c: lider recebeu % na 1a (o plano dele e o Padrao)', pg_temp.com(r, v_lider);
     END IF;

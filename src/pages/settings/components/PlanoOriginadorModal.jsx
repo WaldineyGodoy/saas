@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { X, Save, Lock, Info, Star } from 'lucide-react';
 import { supabase } from '../../../lib/supabase';
 import {
@@ -6,42 +6,42 @@ import {
     ROTULO_CARGO,
     TIPOS_RECOMPENSA,
     NIVEIS,
+    NIVEIS_TELA,
+    MAX_NIVEIS_ORIGINADOR,
     PLANO_ORIGINADOR_VAZIO,
     normalizarPlanoOriginador,
     validarPlanoOriginador,
     payloadPlanoOriginador,
-    lerFaturasElegiveis,
+    faturasDoStart,
+    quantidadeFaturasStart,
     mensagemErroPlanoOriginador
 } from '../../../lib/planoOriginador';
-import { MAX_NIVEIS } from '../../../lib/planoRecompensas';
 
 /**
  * Cria ou edita um Plano do Originador
- * (spec docs/superpowers/specs/2026-11-10-plano-originador-design.md).
+ * (spec docs/superpowers/specs/2026-11-10-plano-originador-design.md,
+ * revisão de 12/11/2026).
  *
- * Remunera só Líder, PPE, PPP e PPF. O formato gravado sai de
- * payloadPlanoOriginador (nunca grava `padrao`); o banco guarda o Padrão
- * contra inativação e exclusão.
+ * Remunera só Líder, PPE, PPP e PPF. Start = N primeiras faturas com energia
+ * compensada, com uma matriz cargo x nível (igual para as N). Recorrência =
+ * matriz cargo x nível. Híbrido = Start nas N primeiras, recorrência depois.
+ * O formato gravado sai de payloadPlanoOriginador (nunca grava `padrao`); o
+ * banco guarda o Padrão contra inativação e exclusão.
  */
 export default function PlanoOriginadorModal({ isOpen, plano, onClose, onSave, showAlert }) {
-    const [dados, setDados] = useState(PLANO_ORIGINADOR_VAZIO);
-    const [faturasTexto, setFaturasTexto] = useState('');
+    const [dados, setDados] = useState(() => normalizarPlanoOriginador(PLANO_ORIGINADOR_VAZIO));
+    const [nTexto, setNTexto] = useState('1');
     const [erros, setErros] = useState([]);
     const [salvando, setSalvando] = useState(false);
 
     useEffect(() => {
         if (!isOpen) return;
+        // normalizarPlanoOriginador converte o Start antigo (por fatura) para a matriz por nível.
         const base = normalizarPlanoOriginador({ ...PLANO_ORIGINADOR_VAZIO, ...(plano || {}) });
-        // Percentuais ficam como texto enquanto se digita.
-        const regras = Object.fromEntries(Object.entries(base.start_config.regras).map(([ord, r]) => [
-            ord, Object.fromEntries(CARGOS_ORIGINADOR.map(c => [c, String(r[c] ?? 0)]))
-        ]));
-        setDados({ ...base, start_config: { ...base.start_config, regras } });
-        setFaturasTexto(base.start_config.faturas_elegiveis.join(', '));
+        setDados(base);
+        setNTexto(String(quantidadeFaturasStart(base) || 1));
         setErros([]);
     }, [isOpen, plano]);
-
-    const faturasLidas = useMemo(() => lerFaturasElegiveis(faturasTexto), [faturasTexto]);
 
     if (!isOpen) return null;
 
@@ -49,51 +49,50 @@ export default function PlanoOriginadorModal({ isOpen, plano, onClose, onSave, s
     const ehPadrao = !!plano?.padrao;
     const usaStart = dados.tipo_recompensa !== 'recorrente';
     const usaRecorrencia = dados.tipo_recompensa !== 'start';
-    const faturasDaGrade = faturasLidas || dados.start_config.faturas_elegiveis;
+    const nNumero = Number(nTexto);
+    const nValido = Number.isInteger(nNumero) && nNumero >= 1;
 
     const definir = (chave, valor) => setDados(prev => ({ ...prev, [chave]: valor }));
 
-    const definirStart = (ord, cargo, valor) => setDados(prev => {
-        const regras = { ...(prev.start_config.regras || {}) };
-        regras[String(ord)] = { ...(regras[String(ord)] || {}), [cargo]: valor };
-        return { ...prev, start_config: { ...prev.start_config, regras } };
-    });
-
-    const definirNivel = (cargo, nivel, valor) => setDados(prev => {
-        const matriz = prev.recorrente_config.regras_multinivel;
+    // config = 'start_config' | 'recorrente_config'
+    const definirNivel = (config, cargo, nivel, valor) => setDados(prev => {
+        const matriz = prev[config].regras_multinivel;
         const linha = matriz[cargo];
         return {
             ...prev,
-            recorrente_config: {
-                ...prev.recorrente_config,
+            [config]: {
+                ...prev[config],
                 regras_multinivel: { ...matriz, [cargo]: { ...linha, niveis: { ...linha.niveis, [nivel]: valor } } }
             }
         };
     });
 
-    const definirMaxNiveis = (cargo, max) => setDados(prev => {
-        const matriz = prev.recorrente_config.regras_multinivel;
+    const definirMaxNiveis = (config, cargo, max) => setDados(prev => {
+        const matriz = prev[config].regras_multinivel;
         const linha = matriz[cargo];
-        // Nível acima do máximo fica 0.
+        // Nível acima do máximo fica 0 (L4 sempre 0).
         const niveis = Object.fromEntries(NIVEIS.map((lk, i) => [lk, i + 1 > max ? '0' : linha.niveis[lk]]));
         return {
             ...prev,
-            recorrente_config: {
-                ...prev.recorrente_config,
+            [config]: {
+                ...prev[config],
                 regras_multinivel: { ...matriz, [cargo]: { niveis, max_niveis: max } }
             }
         };
     });
 
     const salvar = async () => {
-        if (usaStart && faturasLidas === null) {
-            setErros(['Faturas do Start: use números inteiros a partir de 1, separados por vírgula, como 1, 2.']);
+        if (usaStart && !nValido) {
+            setErros(['Start: informe em quantas faturas com energia compensada ele é pago (número inteiro a partir de 1).']);
             return;
         }
         const completo = {
             ...dados,
             padrao: ehPadrao,
-            start_config: { ...dados.start_config, faturas_elegiveis: faturasLidas || dados.start_config.faturas_elegiveis }
+            start_config: {
+                ...dados.start_config,
+                faturas_elegiveis: usaStart ? faturasDoStart(nNumero) : dados.start_config.faturas_elegiveis
+            }
         };
         const lista = validarPlanoOriginador(completo);
         setErros(lista);
@@ -128,6 +127,59 @@ export default function PlanoOriginadorModal({ isOpen, plano, onClose, onSave, s
     const tituloSecao = { margin: 0, fontSize: '0.92rem', fontWeight: 800, color: '#0f172a' };
     const th = { padding: '0.5rem', fontSize: '0.72rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.4px', textAlign: 'left' };
     const td = { padding: '0.4rem 0.5rem' };
+
+    // Grade cargo x L1..L3 com "Níveis pagos" (0..3), igual para Start e Recorrência.
+    const grade = (config) => (
+        <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.84rem' }}>
+                <thead>
+                    <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                        <th style={th}>Cargo</th>
+                        <th style={th}>Níveis pagos</th>
+                        {NIVEIS_TELA.map(lk => <th key={lk} style={th}>{lk} (%)</th>)}
+                    </tr>
+                </thead>
+                <tbody>
+                    {CARGOS_ORIGINADOR.map(c => {
+                        const linha = dados[config].regras_multinivel[c];
+                        const teto = MAX_NIVEIS_ORIGINADOR[c];
+                        return (
+                            <tr key={c} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                <td style={{ ...td, fontWeight: 700, color: '#334155', whiteSpace: 'nowrap' }}>{ROTULO_CARGO[c]}</td>
+                                <td style={td}>
+                                    <select
+                                        value={linha.max_niveis}
+                                        onChange={e => definirMaxNiveis(config, c, Number(e.target.value))}
+                                        style={{ ...campo(false), padding: '0.45rem 0.5rem', minWidth: '70px' }}
+                                        title={`Máximo para este cargo: ${teto}`}
+                                    >
+                                        {Array.from({ length: teto + 1 }, (_, i) => (
+                                            <option key={i} value={i}>{i}</option>
+                                        ))}
+                                    </select>
+                                </td>
+                                {NIVEIS_TELA.map((lk, i) => {
+                                    const bloqueado = i + 1 > linha.max_niveis;
+                                    return (
+                                        <td key={lk} style={td}>
+                                            <input
+                                                type="number" min="0" max="100" step="0.01"
+                                                disabled={bloqueado}
+                                                value={bloqueado ? '0' : linha.niveis[lk]}
+                                                onChange={e => definirNivel(config, c, lk, e.target.value)}
+                                                style={pct(bloqueado)}
+                                                title={bloqueado ? 'Nível acima dos níveis pagos deste cargo' : undefined}
+                                            />
+                                        </td>
+                                    );
+                                })}
+                            </tr>
+                        );
+                    })}
+                </tbody>
+            </table>
+        </div>
+    );
 
     return (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
@@ -199,61 +251,29 @@ export default function PlanoOriginadorModal({ isOpen, plano, onClose, onSave, s
                             <select value={dados.tipo_recompensa} onChange={e => definir('tipo_recompensa', e.target.value)} style={campo(false)}>
                                 {TIPOS_RECOMPENSA.map(t => <option key={t.valor} value={t.valor}>{t.rotulo}</option>)}
                             </select>
+                            <p style={ajuda}>{TIPOS_RECOMPENSA.find(t => t.valor === dados.tipo_recompensa)?.ajuda}</p>
                         </div>
                     </div>
 
                     {usaStart && (
                         <div style={secao}>
-                            <h4 style={tituloSecao}>Bônus Start</h4>
+                            <h4 style={tituloSecao}>Start — N primeiras faturas com energia compensada</h4>
                             <div>
-                                <label style={rotulo}>Faturas em que o Start é pago</label>
+                                <label style={rotulo}>Quantidade de faturas com energia compensada (N)</label>
                                 <input
-                                    placeholder="ex.: 1, 2"
-                                    value={faturasTexto}
-                                    onChange={e => setFaturasTexto(e.target.value)}
-                                    style={{ ...campo(false), maxWidth: '240px', borderColor: faturasLidas === null ? '#f87171' : '#cbd5e1' }}
+                                    type="number" min="1" step="1"
+                                    value={nTexto}
+                                    onChange={e => setNTexto(e.target.value)}
+                                    style={{ ...campo(false), maxWidth: '160px', borderColor: nValido ? '#cbd5e1' : '#f87171' }}
                                 />
-                                <p style={ajuda}>
-                                    Conta só fatura paga com energia compensada. 1 = a primeira fatura com compensação da UC.
-                                </p>
-                                {faturasLidas === null && (
-                                    <p style={{ ...ajuda, color: '#b91c1c' }}>Use números inteiros a partir de 1, separados por vírgula.</p>
+                                {!nValido && (
+                                    <p style={{ ...ajuda, color: '#b91c1c' }}>Use um número inteiro a partir de 1.</p>
                                 )}
                             </div>
-
-                            {faturasDaGrade.length === 0 ? (
-                                <p style={{ ...ajuda, margin: 0 }}>Informe as faturas para preencher os percentuais.</p>
-                            ) : (
-                                <div style={{ overflowX: 'auto' }}>
-                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.84rem' }}>
-                                        <thead>
-                                            <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                                                <th style={th}>Fatura</th>
-                                                {CARGOS_ORIGINADOR.map(c => <th key={c} style={th}>{ROTULO_CARGO[c]} (%)</th>)}
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {faturasDaGrade.map(ord => (
-                                                <tr key={ord} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                                    <td style={{ ...td, fontWeight: 700, color: '#334155', whiteSpace: 'nowrap' }}>{ord}ª fatura</td>
-                                                    {CARGOS_ORIGINADOR.map(c => (
-                                                        <td key={c} style={td}>
-                                                            <input
-                                                                type="number" min="0" max="100" step="0.01"
-                                                                value={dados.start_config.regras?.[String(ord)]?.[c] ?? '0'}
-                                                                onChange={e => definirStart(ord, c, e.target.value)}
-                                                                style={pct(false)}
-                                                            />
-                                                        </td>
-                                                    ))}
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            )}
+                            {grade('start_config')}
                             <p style={{ ...ajuda, margin: 0 }}>
-                                Percentual sobre a base de cálculo líquida da fatura. O Start vai só para o originador direto (nível 1).
+                                Vale para as N primeiras faturas com energia compensada de cada UC. L1 = venda direta; L2 e L3 = UCs indicadas na cadeia.
+                                Percentual sobre a base de cálculo líquida da fatura.
                             </p>
                         </div>
                     )}
@@ -261,60 +281,18 @@ export default function PlanoOriginadorModal({ isOpen, plano, onClose, onSave, s
                     {usaRecorrencia && (
                         <div style={secao}>
                             <h4 style={tituloSecao}>Recorrência</h4>
-                            <div style={{ overflowX: 'auto' }}>
-                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.84rem' }}>
-                                    <thead>
-                                        <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                                            <th style={th}>Cargo</th>
-                                            <th style={th}>Níveis pagos</th>
-                                            {NIVEIS.map(lk => <th key={lk} style={th}>{lk} (%)</th>)}
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {CARGOS_ORIGINADOR.map(c => {
-                                            const linha = dados.recorrente_config.regras_multinivel[c];
-                                            const teto = MAX_NIVEIS[c];
-                                            return (
-                                                <tr key={c} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                                    <td style={{ ...td, fontWeight: 700, color: '#334155', whiteSpace: 'nowrap' }}>{ROTULO_CARGO[c]}</td>
-                                                    <td style={td}>
-                                                        <select
-                                                            value={linha.max_niveis}
-                                                            onChange={e => definirMaxNiveis(c, Number(e.target.value))}
-                                                            style={{ ...campo(false), padding: '0.45rem 0.5rem', minWidth: '70px' }}
-                                                            title={`Máximo para este cargo: ${teto}`}
-                                                        >
-                                                            {Array.from({ length: teto + 1 }, (_, i) => (
-                                                                <option key={i} value={i}>{i}</option>
-                                                            ))}
-                                                        </select>
-                                                    </td>
-                                                    {NIVEIS.map((lk, i) => {
-                                                        const bloqueado = i + 1 > linha.max_niveis;
-                                                        return (
-                                                            <td key={lk} style={td}>
-                                                                <input
-                                                                    type="number" min="0" max="100" step="0.01"
-                                                                    disabled={bloqueado}
-                                                                    value={bloqueado ? '0' : linha.niveis[lk]}
-                                                                    onChange={e => definirNivel(c, lk, e.target.value)}
-                                                                    style={pct(bloqueado)}
-                                                                    title={bloqueado ? 'Nível acima do máximo deste cargo' : undefined}
-                                                                />
-                                                            </td>
-                                                        );
-                                                    })}
-                                                </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
-                            </div>
+                            {grade('recorrente_config')}
                             <p style={{ ...ajuda, margin: 0 }}>
-                                Percentual sobre a base de cálculo líquida, em toda fatura paga. Máximo de níveis: Líder 3, demais 2.
-                                Nível acima do máximo fica 0.
-                                {dados.tipo_recompensa === 'ambos' && ' Nas faturas do Start, o nível 1 recebe o Start no lugar da recorrência. Nas outras faturas e nos demais níveis vale a recorrência.'}
+                                Percentual sobre a base de cálculo líquida, em toda fatura paga com energia compensada, enquanto o parceiro estiver ativo.
+                                Até 3 níveis por cargo; nível acima do escolhido fica 0.
                             </p>
+                        </div>
+                    )}
+
+                    {dados.tipo_recompensa === 'ambos' && (
+                        <div style={{ display: 'flex', gap: '0.5rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '0.75rem 1rem', fontSize: '0.82rem', color: '#334155', lineHeight: 1.45 }}>
+                            <Info size={16} style={{ flexShrink: 0, marginTop: '2px' }} />
+                            <span>No Híbrido o Start vale nas N primeiras faturas; a recorrência começa na fatura seguinte. Nunca os dois na mesma fatura.</span>
                         </div>
                     )}
                 </div>

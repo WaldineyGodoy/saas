@@ -24,11 +24,13 @@ import {
     CARGOS_ORIGINADOR,
     ROTULO_CARGO,
     NIVEIS,
+    NIVEIS_TELA,
     listarPlanosOriginador,
     planoPadraoDe,
     resumoPlanoOriginador,
     semCargosDeParceiro,
     normalizarPlanoOriginador,
+    niveisDoCargo,
     matrizPadraoOriginador,
     planoOriginadorAusente
 } from '../../../lib/planoOriginador';
@@ -369,8 +371,17 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                 max_niveis: p.recorrente_config.regras_multinivel[c].max_niveis,
                 niveis: usaRecorrencia ? p.recorrente_config.regras_multinivel[c].niveis : NIVEIS_ZERADOS()
             }])),
+            // Start (revisão de 12/11/2026): N primeiras faturas com energia
+            // compensada ([1..N]) e UMA matriz cargo x nível, igual para as N.
             faturasStart: usaStart ? p.start_config.faturas_elegiveis : [],
-            startPct: (ord, cargo) => (usaStart ? Number(p.start_config.regras[String(ord)]?.[cargo]) || 0 : 0)
+            startPct: (ord, cargo, nivel = 'L1') => {
+                if (!usaStart || !p.start_config.faturas_elegiveis.includes(Number(ord))) return 0;
+                const linha = p.start_config.regras_multinivel[cargo];
+                const i = NIVEIS.indexOf(nivel);
+                if (!linha || i < 0 || i + 1 > linha.max_niveis) return 0;
+                return Number(linha.niveis[nivel]) || 0;
+            },
+            startMatriz: p.start_config.regras_multinivel
         };
     }, [planoOriginadorSel, planToEdit]);
 
@@ -543,14 +554,18 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
     // Originador (se ele usa Start e a fatura é dele). As janelas podem ser
     // diferentes: a trava olha a união das duas.
     const planoUsaStart = tipoRecompensa === 'start' || tipoRecompensa === 'hibrido';
-    const somaStartDaFatura = (fatNum) => {
+    // O Start dos parceiros tem níveis (L1..L3): a soma de cada nível conta
+    // B2W + Conect deste plano + Líder + teto PPE/PPP/PPF daquele nível, e a
+    // fatura vale pelo pior nível.
+    const somaStartDaFaturaNoNivel = (fatNum, nivel) => {
         const r = regrasStart[fatNum] || {};
         const doPlano = planoUsaStart && faturasElegiveisStart.includes(fatNum)
             ? (parseFloat(r.b2w) || 0) + (parseFloat(r.assinante_conect) || 0)
             : 0;
-        const pp = Math.max(heranca.startPct(fatNum, 'ppe'), heranca.startPct(fatNum, 'ppp'), heranca.startPct(fatNum, 'ppf'));
-        return doPlano + heranca.startPct(fatNum, 'lider') + pp;
+        const pp = Math.max(heranca.startPct(fatNum, 'ppe', nivel), heranca.startPct(fatNum, 'ppp', nivel), heranca.startPct(fatNum, 'ppf', nivel));
+        return doPlano + heranca.startPct(fatNum, 'lider', nivel) + pp;
     };
+    const somaStartDaFatura = (fatNum) => Math.max(...NIVEIS_TELA.map(lk => somaStartDaFaturaNoNivel(fatNum, lk)));
     const faturasStartAvaliadas = [...new Set([
         ...(planoUsaStart ? faturasElegiveisStart : []),
         ...heranca.faturasStart
@@ -1836,7 +1851,7 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                             <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.72rem', color: '#475569', marginBottom: '1rem' }}>
                                                 <Lock size={11} />
                                                 Líder, PPE, PPP e PPF: {heranca.faturasStart.length
-                                                    ? `Start na${heranca.faturasStart.length > 1 ? 's faturas' : ' fatura'} ${heranca.faturasStart.join(', ')}`
+                                                    ? `Start ${heranca.faturasStart.length > 1 ? `nas ${heranca.faturasStart.length} primeiras faturas` : 'na 1ª fatura'} com energia compensada, por nível (L1 = venda direta; L2 e L3 = cadeia)`
                                                     : 'sem Start'} ({rotuloHeranca}).
                                             </span>
 
@@ -1862,7 +1877,7 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                                                     background: excedeu ? '#fef2f2' : '#f0fdf4',
                                                                     padding: '0.2rem 0.6rem', borderRadius: '8px'
                                                                 }}>
-                                                                    Total comprometido: {formatPct(somaPct)}% da Base Líquida
+                                                                    Total comprometido (pior nível): {formatPct(somaPct)}% da Base Líquida
                                                                 </span>
                                                             </div>
 
@@ -1877,7 +1892,7 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                                                 ].map(item => {
                                                                     const editavel = !item.herdado && faturaDoPlano;
                                                                     const pctVal = item.herdado
-                                                                        ? heranca.startPct(fatNum, item.key)
+                                                                        ? heranca.startPct(fatNum, item.key, 'L1')
                                                                         : (faturaDoPlano ? parseFloat(r[item.key]) || 0 : 0);
                                                                     const rsVal = Math.max(0, calc.baseLiquida) * (pctVal / 100);
                                                                     return (
@@ -1895,7 +1910,7 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                                                                 value={editavel ? (r[item.key] ?? '') : String(pctVal)}
                                                                                 readOnly={!editavel}
                                                                                 tabIndex={editavel ? undefined : -1}
-                                                                                title={item.herdado ? `Somente leitura: ${rotuloHeranca}` : (editavel ? undefined : 'Fatura fora da janela de Start deste plano')}
+                                                                                title={item.herdado ? `Somente leitura (${rotuloHeranca}). Por nível: ${niveisDoCargo(heranca.startMatriz, item.key)}` : (editavel ? undefined : 'Fatura fora da janela de Start deste plano')}
                                                                                 onChange={e => { if (editavel) handleStartPctChange(fatNum, item.key, e.target.value); }}
                                                                                 style={{
                                                                                     width: '100%', padding: '0.45rem 0.5rem', borderRadius: '8px',
@@ -1910,10 +1925,18 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                                                             <span style={{ display: 'block', fontSize: '0.68rem', color: '#64748b', textAlign: 'center', marginTop: '0.2rem', fontWeight: 600 }}>
                                                                                 R$ {formatCurrencyUnit(rsVal, 4)}
                                                                             </span>
+                                                                            {item.herdado && heranca.faturasStart.includes(fatNum) && (
+                                                                                <span style={{ display: 'block', fontSize: '0.64rem', color: '#64748b', textAlign: 'center', marginTop: '0.1rem' }}>
+                                                                                    {niveisDoCargo(heranca.startMatriz, item.key)}
+                                                                                </span>
+                                                                            )}
                                                                         </div>
                                                                     );
                                                                 })}
                                                             </div>
+                                                            <span style={{ display: 'block', fontSize: '0.7rem', color: '#475569', marginTop: '0.6rem', fontWeight: 600 }}>
+                                                                Por nível (B2W + Conect + Líder + maior entre PPE/PPP/PPF): {NIVEIS_TELA.map(lk => `${lk} ${formatPct(somaStartDaFaturaNoNivel(fatNum, lk))}%`).join(' · ')}
+                                                            </span>
                                                         </div>
                                                     );
                                                 })}

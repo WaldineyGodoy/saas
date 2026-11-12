@@ -482,7 +482,7 @@ export default function OriginatorModal({ originator, onClose, onSave, onDelete 
                                         </div>
                                         <div>
                                             <h4 style={{ margin: 0, fontSize: '1rem', color: '#1e293b' }}>Configurações de Pagamento</h4>
-                                            <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b' }}>Defina o Plano do Originador e os dados bancários</p>
+                                            <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b' }}>Defina os dados bancários para o pagamento</p>
                                         </div>
                                     </div>
 
@@ -508,11 +508,18 @@ export default function OriginatorModal({ originator, onClose, onSave, onDelete 
                                             placeholder="Insira a chave PIX"
                                         />
                                     </div>
+                                </div>
+                            </div>
+                        )}
 
-                                    <div style={{ gridColumn: '1 / -1', height: '1px', background: '#f1f5f9', margin: '0.5rem 0' }}></div>
-
-                                    <div style={{ gridColumn: '1 / -1', background: '#f0f9ff', padding: '1.25rem', borderRadius: '20px', border: '1px solid #d0e8ff' }}>
+                        {/* Tab Content: Indicação */}
+                        {activeTab === 'indicacao' && (
+                            <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                                    {/* Plano do Originador: vinculado aqui, junto da indicação (revisão de 12/11/2026). */}
+                                    <div style={{ background: '#f0f9ff', padding: '1.25rem', borderRadius: '20px', border: '1px solid #d0e8ff' }}>
                                         <label style={{ ...labelStyle, color: '#075985' }}>Plano do Originador</label>
+                                        <p style={{ margin: '-0.25rem 0 0.75rem', fontSize: '0.8rem', color: '#0369a1' }}>Define a remuneração deste originador e da rede dele (Start, recorrência ou híbrido) sobre as UCs indicadas.</p>
                                         {planosStatus === 'ok' && planos.length > 0 ? (
                                             <>
                                                 <select
@@ -546,14 +553,6 @@ export default function OriginatorModal({ originator, onClose, onSave, onDelete 
                                             </div>
                                         )}
                                     </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Tab Content: Indicação */}
-                        {activeTab === 'indicacao' && (
-                            <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                                     <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '12px', border: '1px solid #eff6ff', display: 'flex', alignItems: 'center', gap: '1rem' }}>
                                         <div style={{ padding: '0.75rem', background: 'white', borderRadius: '10px', color: '#3b82f6', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
                                             <LinkIcon size={24} />

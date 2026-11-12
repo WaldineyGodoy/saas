@@ -8,6 +8,10 @@
 --                     recebem nada (sobra a gestao da B2W + o fornecedor).
 --   * 'hibrido'/'ambos' -> Start na fatura elegivel (nivel 1) MAIS recorrencia
 --                     (nivel 2+) na mesma fatura, e recorrencia cheia nas demais.
+--     REVISAO DO DONO 12/11/2026 (20261112a): para os PARCEIROS (lider/ppe/
+--     ppp/ppf, Plano do Originador) o Hibrido e SEQUENCIAL -- Start por nivel
+--     na janela, recorrencia so depois dela, nunca as duas na mesma fatura.
+--     B2W e Conect continuam como acima. Casos 4 e 6 ajustados.
 --   * O percentual do Start vale SO no nivel 1; nivel 2+ recebe recorrencia
 --     (hibrido) ou nada (start).
 --   * Os percentuais vem de start_config.regras[<ordinal>], INCLUSIVE a chave
@@ -130,16 +134,22 @@ BEGIN
                  'faturas_elegiveis', COALESCE((SELECT jsonb_agg(f::int) FROM jsonb_array_elements_text(
                      CASE WHEN jsonb_typeof(NEW.start_config -> 'faturas_elegiveis') = 'array' THEN NEW.start_config -> 'faturas_elegiveis' ELSE '[]' END) f
                    WHERE f ~ '^[1-9][0-9]*$'), '[]'),
-                 'regras', COALESCE((SELECT jsonb_object_agg(e.key, (
-                       SELECT COALESCE(jsonb_object_agg(k.key, k.value), '{}') FROM jsonb_each(e.value) k
-                        WHERE k.key = ANY (c) AND (k.value #>> '{}') ~ '^[0-9]+(\.[0-9]+)?$' AND (k.value #>> '{}')::numeric <= 100))
-                     FROM jsonb_each(CASE WHEN jsonb_typeof(NEW.start_config -> 'regras') = 'object' THEN NEW.start_config -> 'regras' ELSE '{}' END) e
-                    WHERE e.key ~ '^[1-9][0-9]*$' AND jsonb_typeof(e.value) = 'object'), '{}')),
+                 -- revisao do dono 12/11/2026 (20261112a): UMA matriz de Start por
+                 -- nivel; o L1 do cargo e o % da MENOR fatura elegivel (max_niveis 1)
+                 'regras_multinivel', (SELECT jsonb_object_agg(cg, jsonb_build_object(
+                       'niveis', jsonb_build_object('L1', COALESCE((
+                           SELECT CASE WHEN (s.x ->> cg) ~ '^[0-9]+(\.[0-9]+)?$' AND (s.x ->> cg)::numeric <= 100 THEN s.x ->> cg END
+                             FROM (SELECT NEW.start_config -> 'regras' -> f AS x
+                                     FROM jsonb_array_elements_text(CASE WHEN jsonb_typeof(NEW.start_config -> 'faturas_elegiveis') = 'array' THEN NEW.start_config -> 'faturas_elegiveis' ELSE '[]' END) f
+                                    WHERE f ~ '^[1-9][0-9]*$' AND jsonb_typeof(NEW.start_config -> 'regras' -> f) = 'object'
+                                    ORDER BY f::int LIMIT 1) s), '0'),
+                         'L2', '0', 'L3', '0', 'L4', '0'),
+                       'max_niveis', 1)) FROM unnest(c) cg)),
                jsonb_build_object('regras_multinivel', COALESCE((SELECT jsonb_object_agg(m.key, jsonb_build_object(
                      'niveis', COALESCE((SELECT jsonb_object_agg(l.key, l.value) FROM jsonb_each(m.value -> 'niveis') l
                                           WHERE l.key IN ('L1', 'L2', 'L3', 'L4') AND (l.value #>> '{}') ~ '^[0-9]+(\.[0-9]+)?$'
                                             AND (l.value #>> '{}')::numeric <= 100), '{}'),
-                     'max_niveis', CASE WHEN (m.value ->> 'max_niveis') ~ '^[0-4]$' THEN (m.value ->> 'max_niveis')::int ELSE 0 END))
+                     'max_niveis', CASE WHEN (m.value ->> 'max_niveis') ~ '^[0-4]$' THEN LEAST((m.value ->> 'max_niveis')::int, 3) ELSE 0 END))
                    FROM jsonb_each(CASE WHEN jsonb_typeof(NEW.recorrente_config -> 'regras_multinivel') = 'object' THEN NEW.recorrente_config -> 'regras_multinivel' ELSE '{}' END) m
                   WHERE m.key = ANY (c) AND jsonb_typeof(m.value -> 'niveis') = 'object'), '{}'))
         RETURNING id INTO v_id;
@@ -425,11 +435,18 @@ BEGIN
 
     -- ==================================================================
     -- CASO 6 + CASO 4 -- plano 'hibrido' com parceiro no NIVEL 2 + Conect.
-    --   1a fatura (fora da janela): recorrencia cheia
-    --     3.1.1 = -100 | 2.1.2 = -20 (ppe L2 2%) | 2.1.6 = -20 | 2.1.1 = -860
-    --   2a fatura (elegivel): nivel 1 no Start (Conect 0) e nivel 2 na
-    --   recorrencia (ppe 2%), tudo isento do piso
-    --     3.1.1 = -600 | 2.1.2 = -20 | 2.1.6 = 0 | 2.1.1 = -380
+    --   Revisao do dono 12/11/2026 (20261112a): o Hibrido do PARCEIRO e
+    --   sequencial -- Start na janela, recorrencia so DEPOIS dela, nunca as
+    --   duas na mesma fatura -- e o Start vale por nivel (aqui so L1, porque a
+    --   fixture converte o start_config para max_niveis 1). B2W e Conect
+    --   seguem o plano de assinatura, inalterados.
+    --   1a fatura (ANTES da janela [2]): parceiro nao recebe nada
+    --     3.1.1 = -100 | 2.1.2 = 0 | 2.1.6 = -20 | 2.1.1 = -880
+    --     (antes: 2.1.2 = -20 pela recorrencia L2 e 2.1.1 = -860)
+    --   2a fatura (elegivel): b2w e Conect pelo Start; parceiro nivel 2 fica
+    --   fora do Start (max_niveis 1) e NAO recebe recorrencia; isento do piso
+    --     3.1.1 = -600 | 2.1.2 = 0 | 2.1.6 = 0 | 2.1.1 = -400
+    --     (antes: 2.1.2 = -20 pela recorrencia L2 e 2.1.1 = -380)
     --   (com o piso de 50% sobre a tarifa bruta o teto seria 400 -- 1000 -
     --    1000 kWh x 1,20 x 50% -- e os 620 seriam cortados; a isencao vale
     --    para a fatura elegivel inteira)
@@ -458,8 +475,9 @@ BEGIN
       INTO v_gestao, v_com, v_conect, v_forn, v_total
       FROM public.ledger_entries WHERE transaction_id = v_txn;
 
-    IF (v_gestao, v_com, v_conect, v_forn) IS DISTINCT FROM (-100::numeric, -20::numeric, -20::numeric, -860::numeric) THEN
-        RAISE EXCEPTION 'FALHA caso 6 (hibrido fora da janela): 3.1.1=% 2.1.2=% 2.1.6=% 2.1.1=% (esperado -100 / -20 / -20 / -860 -- recorrencia cheia)',
+    -- revisao do dono 12/11/2026: antes da janela o parceiro do Hibrido nao recebe
+    IF (v_gestao, v_com, v_conect, v_forn) IS DISTINCT FROM (-100::numeric, 0::numeric, -20::numeric, -880::numeric) THEN
+        RAISE EXCEPTION 'FALHA caso 6 (hibrido antes da janela): 3.1.1=% 2.1.2=% 2.1.6=% 2.1.1=% (esperado -100 / 0 / -20 / -880 -- parceiro sem recorrencia antes da janela)',
             v_gestao, v_com, v_conect, v_forn;
     END IF;
     IF v_total <> 0 THEN
@@ -486,8 +504,9 @@ BEGIN
       INTO v_gestao, v_com, v_conect, v_forn, v_total
       FROM public.ledger_entries WHERE transaction_id = v_txn;
 
-    IF (v_gestao, v_com, v_conect, v_forn) IS DISTINCT FROM (-600::numeric, -20::numeric, 0::numeric, -380::numeric) THEN
-        RAISE EXCEPTION 'FALHA caso 4 (hibrido na fatura elegivel): 3.1.1=% 2.1.2=% 2.1.6=% 2.1.1=% (esperado -600 / -20 / 0 / -380 -- b2w e Conect pelo Start no nivel 1, parceiro nivel 2 pela recorrencia, tudo sem corte de piso)',
+    -- revisao do dono 12/11/2026: na janela o parceiro so recebe pelo Start (nunca recorrencia)
+    IF (v_gestao, v_com, v_conect, v_forn) IS DISTINCT FROM (-600::numeric, 0::numeric, 0::numeric, -400::numeric) THEN
+        RAISE EXCEPTION 'FALHA caso 4 (hibrido na fatura elegivel): 3.1.1=% 2.1.2=% 2.1.6=% 2.1.1=% (esperado -600 / 0 / 0 / -400 -- b2w e Conect pelo Start, parceiro nivel 2 fora do Start e sem recorrencia na janela, sem corte de piso)',
             v_gestao, v_com, v_conect, v_forn;
     END IF;
     IF v_total <> 0 THEN
@@ -504,7 +523,7 @@ BEGIN
         RAISE EXCEPTION 'FALHA caso 4: bonus_start.tipo_recompensa = %, esperado hibrido', v_rec->'bonus_start'->>'tipo_recompensa';
     END IF;
     IF (v_rec->>'teto_deducao')::numeric IS DISTINCT FROM 1000::numeric THEN
-        RAISE EXCEPTION 'FALHA caso 4: teto_deducao = %, esperado 1000 -- a isencao do piso vale para a fatura elegivel inteira, inclusive a parte de recorrencia do nivel 2',
+        RAISE EXCEPTION 'FALHA caso 4: teto_deducao = %, esperado 1000 -- a isencao do piso vale para a fatura elegivel inteira',
             v_rec->>'teto_deducao';
     END IF;
     IF (v_rec->'resultado'->>'corte_aplicado')::numeric IS DISTINCT FROM 0::numeric THEN
