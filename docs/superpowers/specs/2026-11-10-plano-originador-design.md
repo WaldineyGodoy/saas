@@ -119,3 +119,40 @@ do fornecedor), contagem retroativa (o motor só age em fatura que vira `pago` d
 | C — plano de assinatura | `src/pages/settings/components/PlanModal.jsx`, `src/lib/planoRecompensas.js` (sem quebrar eletroposto) |
 | D — originador | `src/components/OriginatorModal.jsx`, `src/pages/dashboards/OriginatorList.jsx`, `src/lib/contratoOriginador.js`, `src/components/ContratoOriginacao.jsx`, `src/pages/dashboards/OriginatorDashboard.jsx`, `src/components/LeadModal.jsx` (só se ler split_commission) |
 | coordenador | `src/lib/planoOriginador.js` (contrato da tela, já escrito), esta spec |
+
+---
+
+# Revisão de 12/11/2026 (dono, ao testar as telas) — PREVALECE sobre o acima
+
+Decisões: Start **por nível**; Start vale para as **N primeiras faturas com energia compensada**
+com UMA matriz (igual para as N); **Híbrido sequencial** (Start nas N primeiras, recorrência só
+depois, nunca as duas na mesma fatura, "enquanto o parceiro estiver ativo"); **PPE e PPP continuam
+separados**; **Assinante Conect continua no plano de assinatura**; todos os cargos até **L3**;
+o seletor de plano no modal do originador vai para a aba **Indicação**. As edições que o dono já
+salvou em produção (Plano Padrão = Start na 1ª fatura, Líder 50%, PPP 40%; "Plano Hibrido";
+Recorrente alterado) **ficam** — a migração só converte o formato, sem mudar números.
+
+## Formato novo de `planos_originador.start_config`
+```json
+{ "faturas_elegiveis": [1, 2],               // sempre [1..N]
+  "regras_multinivel": { "lider": {"niveis": {"L1":"50","L2":"10","L3":"5","L4":"0"}, "max_niveis": 3},
+                         "ppe": {...}, "ppp": {...}, "ppf": {...} } }
+```
+- A chave antiga `regras` (por fatura, só L1) **some**. Conversão: o % da menor fatura elegível vira o
+  L1 do cargo (`max_niveis` 1); `faturas_elegiveis` vira `[1..quantidade]`.
+- `recorrente_config` não muda de formato. Teto de nível: 3 para os 4 cargos (L4 sempre "0").
+- Fonte da tela: `src/lib/planoOriginador.js` (`faturasDoStart`, `quantidadeFaturasStart`,
+  `normalizarPlanoOriginador`, `niveisDoCargo`, `NIVEIS_TELA`, `MAX_NIVEIS_ORIGINADOR`, `TIPOS_RECOMPENSA` com `ajuda`).
+
+## Motor — semântica nova por participante-parceiro (plano efetivo dele)
+`janela` = ordinal ∈ `faturas_elegiveis` do plano dele (e Start não bloqueado pela guarda de transição).
+| tipo do plano | dentro da janela | fora da janela |
+|---|---|---|
+| `start` | matriz de **Start** (todos os níveis) | nada |
+| `recorrente` | recorrência | recorrência |
+| `ambos` (Híbrido) | matriz de **Start** | recorrência **só se ordinal > max(janela)** ou Start da UC encerrado pela guarda |
+
+`regra` do beneficiário = `start` / `recorrencia` / `nenhuma` conforme a matriz usada e `nivel ≤ max_niveis`.
+Fatura com qualquer parceiro em `start` fica isenta do piso. O preenchimento dos cargos sem
+participante (matriz congelada completa) segue a mesma tabela, pelo plano da UC.
+B2W e Conect: inalterados (plano de assinatura).

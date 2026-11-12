@@ -21,13 +21,21 @@ export const ROTULO_CARGO = {
     ppf: 'PPF — Free'
 };
 
+// Revisão do dono em 12/11/2026: o Start passou a ter níveis (L1..L3), vale
+// para as N primeiras faturas com compensação, e o Híbrido é SEQUENCIAL --
+// Start nas N primeiras, recorrência só depois, nunca as duas na mesma fatura.
 export const TIPOS_RECOMPENSA = [
-    { valor: 'start', rotulo: 'Só Bônus Start' },
-    { valor: 'recorrente', rotulo: 'Só recorrência' },
-    { valor: 'ambos', rotulo: 'Start + recorrência' }
+    { valor: 'start', rotulo: 'Start', ajuda: 'Paga só nas N primeiras faturas com energia compensada.' },
+    { valor: 'recorrente', rotulo: 'Recorrência', ajuda: 'Paga em toda fatura com energia compensada, enquanto o parceiro estiver ativo.' },
+    { valor: 'ambos', rotulo: 'Híbrido', ajuda: 'Start nas N primeiras faturas; depois, recorrência. Nunca os dois na mesma fatura.' }
 ];
 
+/** Níveis guardados no banco (L4 fica sempre 0 no Plano do Originador). */
 export const NIVEIS = ['L1', 'L2', 'L3', 'L4'];
+/** Níveis que a tela mostra e edita. */
+export const NIVEIS_TELA = ['L1', 'L2', 'L3'];
+/** Teto de níveis por cargo no Plano do Originador: todos até L3 (revisão de 12/11/2026). */
+export const MAX_NIVEIS_ORIGINADOR = { lider: 3, ppe: 3, ppp: 3, ppf: 3 };
 
 // Chaves que NÃO podem existir num Plano do Originador nem sobrar, para os
 // parceiros, num plano de assinatura.
@@ -43,43 +51,71 @@ export const matrizPadraoOriginador = () =>
         max_niveis: MAX_NIVEIS[c]
     }]));
 
+/** Matriz zerada (ponto de partida do Start). */
+export const matrizZeradaOriginador = () =>
+    Object.fromEntries(CARGOS_ORIGINADOR.map(c => [c, {
+        niveis: { L1: '0', L2: '0', L3: '0', L4: '0' },
+        max_niveis: MAX_NIVEIS_ORIGINADOR[c]
+    }]));
+
 export const PLANO_ORIGINADOR_VAZIO = {
     nome: '',
     descricao: '',
     status: 'ativo',
     padrao: false,
     tipo_recompensa: 'start',
-    start_config: { faturas_elegiveis: [], regras: {} },
+    // Start: N primeiras faturas com compensação ([1..N]) + matriz cargo x nível.
+    start_config: { faturas_elegiveis: [1], regras_multinivel: matrizZeradaOriginador() },
     recorrente_config: { regras_multinivel: matrizPadraoOriginador() }
 };
 
-/** Deixa o plano no formato exato que o banco aceita: só os 4 cargos, ordinais inteiros ≥ 1. */
-export const normalizarPlanoOriginador = (plano) => {
-    const p = plano || {};
-    const elegiveis = [...new Set((p.start_config?.faturas_elegiveis || [])
-        .map(Number).filter(n => Number.isInteger(n) && n >= 1))].sort((a, b) => a - b);
-
-    const regras = {};
-    for (const ord of elegiveis) {
-        const doOrdinal = p.start_config?.regras?.[String(ord)] || {};
-        regras[String(ord)] = Object.fromEntries(CARGOS_ORIGINADOR.map(c => {
-            const n = num(doOrdinal[c]);
-            return [c, Number.isFinite(n) ? n : 0];
-        }));
-    }
-
-    const matrizSalva = p.recorrente_config?.regras_multinivel || {};
-    const regras_multinivel = {};
+/** Normaliza uma matriz cargo x nível: 4 cargos, teto L3, nível acima do máximo vira 0. */
+const normalizarMatriz = (salva, padraoDoCargo) => {
+    const matriz = {};
     for (const c of CARGOS_ORIGINADOR) {
-        const salvo = matrizSalva[c] || {};
-        const teto = MAX_NIVEIS[c];
-        const max = Math.min(Number.isFinite(num(salvo.max_niveis)) ? num(salvo.max_niveis) : teto, teto);
+        const salvo = (salva || {})[c] || {};
+        const teto = MAX_NIVEIS_ORIGINADOR[c];
+        const max = Math.max(0, Math.min(Number.isFinite(num(salvo.max_niveis)) ? num(salvo.max_niveis) : teto, teto));
         const niveis = {};
         NIVEIS.forEach((lk, i) => {
             const n = num(salvo.niveis?.[lk]);
-            niveis[lk] = i + 1 > max ? '0' : String(Number.isFinite(n) ? n : Number(MATRIZ_PADRAO[c][lk]));
+            niveis[lk] = i + 1 > max ? '0' : String(Number.isFinite(n) ? n : Number(padraoDoCargo(c, lk)));
         });
-        regras_multinivel[c] = { niveis, max_niveis: max };
+        matriz[c] = { niveis, max_niveis: max };
+    }
+    return matriz;
+};
+
+/** Quantas faturas com compensação pagam o Start (N). */
+export const quantidadeFaturasStart = (plano) => {
+    const fats = plano?.start_config?.faturas_elegiveis || [];
+    return fats.filter(n => Number.isInteger(Number(n)) && Number(n) >= 1).length;
+};
+
+/** N → [1, 2, ..., N]: "as N primeiras faturas com energia compensada". */
+export const faturasDoStart = (n) => {
+    const q = Math.max(0, Math.trunc(Number(n) || 0));
+    return Array.from({ length: q }, (_, i) => i + 1);
+};
+
+/**
+ * Deixa o plano no formato exato que o banco aceita.
+ * Start: { faturas_elegiveis: [1..N], regras_multinivel: matriz }. O formato
+ * antigo (regras por fatura, só nível 1) é convertido: o % da primeira fatura
+ * elegível vira o L1 de cada cargo.
+ */
+export const normalizarPlanoOriginador = (plano) => {
+    const p = plano || {};
+    const sc = p.start_config || {};
+
+    let matrizStart = sc.regras_multinivel;
+    if (!matrizStart && sc.regras && typeof sc.regras === 'object') {
+        const primeira = Object.keys(sc.regras).map(Number).filter(Number.isFinite).sort((a, b) => a - b)[0];
+        const doOrdinal = primeira ? sc.regras[String(primeira)] || {} : {};
+        matrizStart = Object.fromEntries(CARGOS_ORIGINADOR.map(c => {
+            const n = num(doOrdinal[c]);
+            return [c, { niveis: { L1: String(Number.isFinite(n) ? n : 0), L2: '0', L3: '0', L4: '0' }, max_niveis: 1 }];
+        }));
     }
 
     return {
@@ -88,8 +124,13 @@ export const normalizarPlanoOriginador = (plano) => {
         descricao: String(p.descricao ?? '').trim() || null,
         status: p.status === 'inativo' ? 'inativo' : 'ativo',
         tipo_recompensa: TIPOS_RECOMPENSA.some(t => t.valor === p.tipo_recompensa) ? p.tipo_recompensa : 'start',
-        start_config: { faturas_elegiveis: elegiveis, regras },
-        recorrente_config: { regras_multinivel }
+        start_config: {
+            faturas_elegiveis: faturasDoStart(quantidadeFaturasStart(p)),
+            regras_multinivel: normalizarMatriz(matrizStart, () => 0)
+        },
+        recorrente_config: {
+            regras_multinivel: normalizarMatriz(p.recorrente_config?.regras_multinivel, (c, lk) => MATRIZ_PADRAO[c]?.[lk] ?? 0)
+        }
     };
 };
 
@@ -102,20 +143,18 @@ export const validarPlanoOriginador = (dados) => {
 
     const usaStart = p.tipo_recompensa !== 'recorrente';
     if (usaStart && p.start_config.faturas_elegiveis.length === 0) {
-        erros.push('Informe em quais faturas (com compensação) o Bônus Start é pago, como 1 ou 1, 2.');
+        erros.push('Informe em quantas faturas com energia compensada o Start é pago (1 ou mais).');
     }
-    for (const [ord, porCargo] of Object.entries(p.start_config.regras)) {
+    const confere = (matriz, rotulo) => {
         for (const c of CARGOS_ORIGINADOR) {
-            const n = Number(porCargo[c]);
-            if (n < 0 || n > 100) erros.push(`Start, fatura ${ord}, ${ROTULO_CARGO[c]}: entre 0 e 100%.`);
+            for (const lk of NIVEIS_TELA) {
+                const n = Number(matriz[c].niveis[lk]);
+                if (!Number.isFinite(n) || n < 0 || n > 100) erros.push(`${rotulo}, ${ROTULO_CARGO[c]} ${lk}: entre 0 e 100%.`);
+            }
         }
-    }
-    for (const c of CARGOS_ORIGINADOR) {
-        for (const lk of NIVEIS) {
-            const n = Number(p.recorrente_config.regras_multinivel[c].niveis[lk]);
-            if (!Number.isFinite(n) || n < 0 || n > 100) erros.push(`Recorrência, ${ROTULO_CARGO[c]} ${lk}: entre 0 e 100%.`);
-        }
-    }
+    };
+    if (usaStart) confere(p.start_config.regras_multinivel, 'Start');
+    if (p.tipo_recompensa !== 'start') confere(p.recorrente_config.regras_multinivel, 'Recorrência');
     return erros;
 };
 
@@ -172,24 +211,29 @@ export const ROTULO_ORIGEM = {
     padrao: 'Plano Padrão'
 };
 
-/** Resumo de uma linha para selects e listas, ex.: "Start nas faturas 1 e 2 · PPF 50%". */
+/** "L1 50% · L2 10% · L3 5%" para um cargo (só os níveis liberados). */
+export const niveisDoCargo = (matriz, cargo) => {
+    const linha = matriz?.[cargo];
+    if (!linha || !linha.max_niveis) return '0%';
+    return NIVEIS_TELA.slice(0, linha.max_niveis).map(lk => `${lk} ${linha.niveis[lk]}%`).join(' · ');
+};
+
+/**
+ * Resumo de uma linha para selects e listas, ex.:
+ * "Start nas 2 primeiras faturas (L1 50% · L2 10%) · depois recorrência (L1 4%)".
+ */
 export const resumoPlanoOriginador = (plano, cargo) => {
     if (!plano) return '—';
     const p = normalizarPlanoOriginador(plano);
+    const n = p.start_config.faturas_elegiveis.length;
     const partes = [];
-    if (p.tipo_recompensa !== 'recorrente' && p.start_config.faturas_elegiveis.length) {
-        const fats = p.start_config.faturas_elegiveis;
-        const lista = fats.length === 1 ? `fatura ${fats[0]}` : `faturas ${fats.slice(0, -1).join(', ')} e ${fats.at(-1)}`;
-        const pcts = cargo
-            ? fats.map(f => `${p.start_config.regras[String(f)]?.[cargo] ?? 0}%`).join(' / ')
-            : null;
-        partes.push(`Start na ${lista}${pcts ? ` (${pcts})` : ''}`);
+    if (p.tipo_recompensa !== 'recorrente' && n) {
+        const qtd = n === 1 ? 'na 1ª fatura' : `nas ${n} primeiras faturas`;
+        partes.push(`Start ${qtd}${cargo ? ` (${niveisDoCargo(p.start_config.regras_multinivel, cargo)})` : ''}`);
     }
     if (p.tipo_recompensa !== 'start') {
-        const linha = cargo ? p.recorrente_config.regras_multinivel[cargo] : null;
-        partes.push(linha
-            ? `Recorrência ${NIVEIS.slice(0, linha.max_niveis).map(lk => `${linha.niveis[lk]}%`).join('/') || '0%'}`
-            : 'Recorrência');
+        const prefixo = p.tipo_recompensa === 'ambos' ? 'depois recorrência' : 'Recorrência';
+        partes.push(`${prefixo}${cargo ? ` (${niveisDoCargo(p.recorrente_config.regras_multinivel, cargo)})` : ''}`);
     }
     return partes.join(' · ') || 'Sem remuneração';
 };
