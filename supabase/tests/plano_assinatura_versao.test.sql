@@ -286,23 +286,33 @@ BEGIN
     -- V14 -- aditivo: lead que ainda aponta para versao antiga cai na vigente
     INSERT INTO public.subscribers (status, short_url, name) VALUES ('ativo', 'sandbox://pv/14', 'SANDBOX PV14 nome') RETURNING id INTO v_sub13;
     INSERT INTO public.leads (solicitante_assinante_id, conta_lida, plano_id)
-    VALUES (v_sub13, '{"numeroUc":"SBX-PV-ADT-7771","titular":"SANDBOX PV14 nome","ligacao":"monofasico","concessionaria":"SANDBOX PV conc","mediaKwh":"300","endereco":{"cep":"59000000","logradouro":"Rua A, 10","bairro":"B","cidade":"C","uf":"rn"}}'::jsonb, v_plano)
+    VALUES (v_sub13, '{"numeroUc":"SBX-PV-ADT-7771","titular":"SANDBOX PV14 nome","ligacao":"monofasico","concessionaria":"SANDBOX PV conc","mediaKwh":"300","historico":[{"mes":"2026-09","kwh":310},{"mes":"2026-10","kwh":290},{"mes":"2025-10","kwh":9000}],"endereco":{"cep":"59000000","logradouro":"Rua A, 10","bairro":"B","cidade":"C","uf":"rn"}}'::jsonb, v_plano)
     RETURNING id INTO v_lead;
     v_r := public.fn_criar_uc_do_aditivo(v_lead);
     IF (v_r ->> 'ok')::boolean IS DISTINCT FROM true
        OR (SELECT plano_assinatura_id FROM public.consumer_units WHERE id = (v_r ->> 'uc_id')::uuid) IS DISTINCT FROM v_v3 THEN
         RAISE EXCEPTION 'FALHA V14: aditivo com plano antigo devia criar a UC na versao vigente %: %', v_v3, v_r;
     END IF;
+    -- 20261112b: o termo aditivo grava o historico do leitor (mediana 300 dos meses que ficam; 2025-10 sai)
+    IF (SELECT (consumo_mediano_kwh, start_base_kwh) FROM public.consumer_units WHERE id = (v_r ->> 'uc_id')::uuid) IS DISTINCT FROM (300::numeric, 300::numeric) THEN
+        RAISE EXCEPTION 'FALHA V14b: aditivo nao gravou o historico: %', (SELECT historico_consumo FROM public.consumer_units WHERE id = (v_r ->> 'uc_id')::uuid);
+    END IF;
 
     -- V15 -- adesao publica: plano escolhido numa tela velha cai na vigente
     v_r := public.fn_criar_assinante_publico('SANDBOX PV15 Fulano', '52998224725', 'sbx.pv15@teste.invalid', '84999990000',
         '59000000', 'Rua A', '10', NULL, 'Bairro', 'Natal', 'RN', '2408102', NULL, NULL,
         jsonb_build_array(jsonb_build_object('numero_uc', 'SBX-PV-PUB-7772', 'cpf_cnpj_fatura', '52998224725',
-            'tipo_ligacao', 'monofasico', 'concessionaria', 'SANDBOX PV conc', 'plano_assinatura_id', v_plano::text, 'uf', 'RN')),
+            'tipo_ligacao', 'monofasico', 'concessionaria', 'SANDBOX PV conc', 'plano_assinatura_id', v_plano::text, 'uf', 'RN',
+            'historico', '[{"mes":"2026-08","kwh":100},{"mes":"2026-09","kwh":0},{"mes":"2026-10","kwh":300}]'::jsonb)),
         10, NULL, NULL, 'v1', NULL);
     IF (v_r ->> 'ucs_criadas')::int IS DISTINCT FROM 1
        OR (SELECT plano_assinatura_id FROM public.consumer_units WHERE numero_uc = 'SBX-PV-PUB-7772') IS DISTINCT FROM v_v3 THEN
         RAISE EXCEPTION 'FALHA V15: adesao publica com plano antigo devia cair na versao vigente %: %', v_v3, v_r;
+    END IF;
+    -- 20261112b: a adesao publica grava o historico de cada UC (zero vira mediana)
+    IF (SELECT (consumo_mediano_kwh, start_base_kwh, historico_consumo #>> '{09,origem}') FROM public.consumer_units WHERE numero_uc = 'SBX-PV-PUB-7772')
+       IS DISTINCT FROM (200::numeric, 200::numeric, 'mediana'::text) THEN
+        RAISE EXCEPTION 'FALHA V15b: adesao publica nao gravou o historico: %', (SELECT historico_consumo FROM public.consumer_units WHERE numero_uc = 'SBX-PV-PUB-7772');
     END IF;
 
     -- V16 -- so admin cria versao (usuario logado que nao e admin)

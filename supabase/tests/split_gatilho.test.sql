@@ -148,6 +148,23 @@ DECLARE
     -- fix round 2
     v_residuo         numeric;
 BEGIN
+    -- 20261112b (dono, 12/11/2026, 2a revisao): os percentuais passaram a incidir
+    -- sobre a BASE BRUTA (kWh compensado x tarifa cheia) e o fornecedor fica com a
+    -- base liquida menos o deduzido. Este arquivo cobra caixa/residual/piso/corte
+    -- com os numeros da base liquida; a fixture iguala base_bruta = base para os
+    -- numeros esperados continuarem validos (fn_base_recompensa_fatura original
+    -- continua sendo chamada; so a chave base_bruta e sobrescrita). A diferenca
+    -- bruta x liquida e coberta por plano_originador_start_energia.test.sql.
+    -- Desfeito no rollback.
+    EXECUTE $bruta$
+      ALTER FUNCTION public.fn_base_recompensa_fatura(uuid) RENAME TO sbx_base_recompensa_original;
+      CREATE FUNCTION public.fn_base_recompensa_fatura(p_invoice uuid) RETURNS jsonb
+        LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $b$
+        SELECT b || CASE WHEN b ? 'base_bruta' THEN jsonb_build_object('base_bruta', b -> 'base') ELSE '{}'::jsonb END
+          FROM public.sbx_base_recompensa_original(p_invoice) b
+      $b$;
+    $bruta$;
+
     -- FIXTURE Plano do Originador (20261110a/b): a regra de parceiro saiu do
     -- plano de assinatura. Para os numeros deste arquivo nao mudarem, cada
     -- plano de assinatura que o teste grava ganha um planos_originador com as
@@ -165,9 +182,11 @@ BEGIN
         SELECT 'SANDBOX fixture ' || NEW.nome,
                CASE NEW.tipo_recompensa WHEN 'hibrido' THEN 'ambos' ELSE NEW.tipo_recompensa END,
                jsonb_build_object(
-                 'faturas_elegiveis', COALESCE((SELECT jsonb_agg(f::int) FROM jsonb_array_elements_text(
+                 -- 20261112b (dono, 12/11/2026): Start por ENERGIA; multiplicador = quantidade
+                 -- de faturas elegiveis do plano de assinatura (minimo 1)
+                 'multiplicador', GREATEST((SELECT count(*) FROM jsonb_array_elements_text(
                      CASE WHEN jsonb_typeof(NEW.start_config -> 'faturas_elegiveis') = 'array' THEN NEW.start_config -> 'faturas_elegiveis' ELSE '[]' END) f
-                   WHERE f ~ '^[1-9][0-9]*$'), '[]'),
+                   WHERE f ~ '^[1-9][0-9]*$'), 1),
                  -- revisao do dono 12/11/2026 (20261112a): UMA matriz de Start por
                  -- nivel; o L1 do cargo e o % da MENOR fatura elegivel (max_niveis 1)
                  'regras_multinivel', (SELECT jsonb_object_agg(cg, jsonb_build_object(
