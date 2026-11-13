@@ -9,8 +9,10 @@
 -- Regras conferidas aqui:
 --   * nivel do parceiro = 1 + saltos em indicado_por_uc_id; lider = mesmo nivel;
 --     assinante_conect = sempre 1 e e o dono da UC indicadora
---   * suspenso (o participante ENTRA, com suspenso:true): PPP com
---     licenca_vencimento < current_date (nunca licenca_status), originador /
+--   * licenca (20261113a): cargo com licenca pendente ou vencida ENTRA como
+--     PPF (nao suspenso); decide a DATA (licenca_paga_em + 1 ano), nunca o
+--     licenca_status gravado
+--   * suspenso (o participante ENTRA, com suspenso:true): originador /
 --     lider inativos (originators_v2.ativo = false), assinante do Conect que
 --     nao esta 'ativo'
 --   * UC geradora, UC sem assinante, UC inexistente: [] ; sem originador: sem
@@ -60,15 +62,18 @@ BEGIN
   -- ======================================================================
   -- Fixtures: originadores
   -- ======================================================================
+  -- 20261113a: o PPP paga licenca de 199,90 no plano padrao (sandbox);
+  -- vencimento = licenca_paga_em + 1 ano.
+  UPDATE public.planos_originador SET licenca_config = licenca_config || '{"ppp": 199.90}'::jsonb WHERE padrao;
   INSERT INTO public.originators_v2 (name, cargo) VALUES ('SBX Lider', 'lider') RETURNING id INTO v_lider;
   INSERT INTO public.originators_v2 (name, cargo, ativo) VALUES ('SBX Lider Inativo', 'lider', false) RETURNING id INTO v_lider_in;
   INSERT INTO public.originators_v2 (name, cargo, lider_id) VALUES ('SBX PPF', 'ppf', v_lider) RETURNING id INTO v_ppf;
-  INSERT INTO public.originators_v2 (name, cargo, lider_id, licenca_valor, licenca_vencimento)
-    VALUES ('SBX PPP em dia', 'ppp', v_lider, 199.90, current_date + 30) RETURNING id INTO v_ppp;
-  INSERT INTO public.originators_v2 (name, cargo, lider_id, licenca_valor, licenca_vencimento)
-    VALUES ('SBX PPP vencido', 'ppp', v_lider, 199.90, current_date - 1) RETURNING id INTO v_ppp_venc;
-  INSERT INTO public.originators_v2 (name, cargo, lider_id, licenca_valor, licenca_vencimento)
-    VALUES ('SBX PPP vence hoje', 'ppp', v_lider, 199.90, current_date) RETURNING id INTO v_ppp_hoje;
+  INSERT INTO public.originators_v2 (name, cargo, lider_id, licenca_paga_em)
+    VALUES ('SBX PPP em dia', 'ppp', v_lider, (current_date + 30 - interval '1 year')::date) RETURNING id INTO v_ppp;
+  INSERT INTO public.originators_v2 (name, cargo, lider_id, licenca_paga_em)
+    VALUES ('SBX PPP vencido', 'ppp', v_lider, (current_date - 1 - interval '1 year')::date) RETURNING id INTO v_ppp_venc;
+  INSERT INTO public.originators_v2 (name, cargo, lider_id, licenca_paga_em)
+    VALUES ('SBX PPP vence hoje', 'ppp', v_lider, (current_date - interval '1 year')::date) RETURNING id INTO v_ppp_hoje;
   INSERT INTO public.originators_v2 (name, cargo) VALUES ('SBX PPE', 'ppe') RETURNING id INTO v_ppe;
   INSERT INTO public.originators_v2 (name, cargo, lider_id, ativo) VALUES ('SBX PPF inativo', 'ppf', v_lider, false) RETURNING id INTO v_ppf_in;
   INSERT INTO public.originators_v2 (name, cargo, lider_id) VALUES ('SBX PPF lider inativo', 'ppf', v_lider_in) RETURNING id INTO v_ppf_lin;
@@ -262,18 +267,22 @@ BEGIN
   IF (v_p->>'suspenso')::boolean THEN RAISE EXCEPTION 'FALHOU 4f: ppf ativo nao deveria ser suspenso: %', v_out; END IF;
 
   -- ======================================================================
-  -- 5) PPP com licenca vencida: suspenso. Vence hoje ainda vale (< e nao <=).
+  -- 5) PPP com licenca vencida: entra como PPF (20261113a, "como Free ate
+  --    pagar"). Vence hoje ainda vale (< e nao <=).
   -- ======================================================================
   UPDATE public.subscribers SET originator_id = v_ppp_venc WHERE id = v_sa;
   v_out := public.fn_participantes_recompensa(v_ua);
-  SELECT e INTO v_p FROM jsonb_array_elements(v_out) e WHERE e->>'papel' = 'ppp';
-  IF v_p IS NULL OR NOT (v_p->>'suspenso')::boolean THEN RAISE EXCEPTION 'FALHOU 5a: ppp vencido ontem deveria vir suspenso: %', v_out; END IF;
+  SELECT e INTO v_p FROM jsonb_array_elements(v_out) e WHERE e->>'papel' = 'ppf';
+  IF v_p IS NULL OR (v_p->>'suspenso')::boolean OR (v_p->>'id')::uuid <> v_ppp_venc
+     OR EXISTS (SELECT 1 FROM jsonb_array_elements(v_out) e WHERE e->>'papel' = 'ppp') THEN
+    RAISE EXCEPTION 'FALHOU 5a: ppp vencido ontem deveria entrar como ppf: %', v_out;
+  END IF;
 
-  -- 5e) ponta a ponta: 4% do ppp vai para a B2W (14), lider 1, fornecedor 85
+  -- 5e) ponta a ponta: recebe os 2% do PPF; B2W 10, lider 1, fornecedor 87
   v_split := public.fn_calcular_split_recompensa(100, 50, v_regras, v_out);
-  IF (v_split #>> '{b2w,valor}')::numeric <> 14
-     OR (SELECT (b->>'valor')::numeric FROM jsonb_array_elements(v_split->'beneficiarios') b WHERE b->>'papel' = 'ppp') <> 0
-     OR (v_split->>'fornecedor')::numeric <> 85 THEN
+  IF (v_split #>> '{b2w,valor}')::numeric <> 10
+     OR (SELECT (b->>'valor')::numeric FROM jsonb_array_elements(v_split->'beneficiarios') b WHERE b->>'papel' = 'ppf') <> 2
+     OR (v_split->>'fornecedor')::numeric <> 87 THEN
     RAISE EXCEPTION 'FALHOU 5e: split com ppp vencido: %', v_split;
   END IF;
 
@@ -282,35 +291,35 @@ BEGIN
   SELECT e INTO v_p FROM jsonb_array_elements(v_out) e WHERE e->>'papel' = 'ppp';
   IF v_p IS NULL OR (v_p->>'suspenso')::boolean THEN RAISE EXCEPTION 'FALHOU 5b: ppp que vence hoje nao esta vencido: %', v_out; END IF;
 
-  -- 5c) a decisao vem de licenca_vencimento, NAO do licenca_status gravado:
-  --     status gravado 'ativa' com vencimento no passado (dado envelhecido)
-  --     continua suspenso; status gravado 'vencida' com vencimento futuro nao.
-  -- (o gatilho trg_originador_licenca_status re-deriva o status a cada escrita; para
-  -- simular o envelhecimento pelo passar do tempo ele e desligado so nesta transacao,
-  -- que termina em rollback)
-  ALTER TABLE public.originators_v2 DISABLE TRIGGER trg_originador_licenca_status;
+  -- 5c) a decisao vem da DATA, NAO do licenca_status gravado: status 'ativa'
+  --     com vencimento no passado (dado envelhecido) continua PPF; status
+  --     'vencida' com vencimento futuro continua PPP. (O gatilho de licenca
+  --     re-deriva o status a cada escrita; para simular o envelhecimento ele
+  --     e desligado so nesta transacao, que termina em rollback.)
+  ALTER TABLE public.originators_v2 DISABLE TRIGGER trg_originador_w_licenca;
   UPDATE public.originators_v2 SET licenca_status = 'ativa'   WHERE id = v_ppp_venc;
   UPDATE public.originators_v2 SET licenca_status = 'vencida' WHERE id = v_ppp;
-  ALTER TABLE public.originators_v2 ENABLE TRIGGER trg_originador_licenca_status;
+  ALTER TABLE public.originators_v2 ENABLE TRIGGER trg_originador_w_licenca;
   SELECT licenca_status INTO v_txt FROM public.originators_v2 WHERE id = v_ppp_venc;
   IF v_txt <> 'ativa' THEN RAISE EXCEPTION 'FALHOU 5c: fixture do status envelhecido nao pegou (%)', v_txt; END IF;
 
   UPDATE public.subscribers SET originator_id = v_ppp_venc WHERE id = v_sa;
   v_out := public.fn_participantes_recompensa(v_ua);
-  SELECT e INTO v_p FROM jsonb_array_elements(v_out) e WHERE e->>'papel' = 'ppp';
-  IF NOT (v_p->>'suspenso')::boolean THEN RAISE EXCEPTION 'FALHOU 5c: licenca_status ''ativa'' envelhecido mascarou o vencimento: %', v_out; END IF;
+  IF EXISTS (SELECT 1 FROM jsonb_array_elements(v_out) e WHERE e->>'papel' = 'ppp') THEN
+    RAISE EXCEPTION 'FALHOU 5c: licenca_status ''ativa'' envelhecido mascarou o vencimento: %', v_out;
+  END IF;
 
   UPDATE public.subscribers SET originator_id = v_ppp WHERE id = v_sa;
   v_out := public.fn_participantes_recompensa(v_ua);
   SELECT e INTO v_p FROM jsonb_array_elements(v_out) e WHERE e->>'papel' = 'ppp';
-  IF (v_p->>'suspenso')::boolean THEN RAISE EXCEPTION 'FALHOU 5c: licenca_status ''vencida'' gravado suspendeu PPP com vencimento futuro: %', v_out; END IF;
+  IF v_p IS NULL OR (v_p->>'suspenso')::boolean THEN RAISE EXCEPTION 'FALHOU 5c: licenca_status ''vencida'' gravado rebaixou PPP com vencimento futuro: %', v_out; END IF;
 
-  -- 5d) PPE/PPF nao dependem de licenca (ppf com licenca_vencimento no passado segue ativo)
-  UPDATE public.originators_v2 SET licenca_vencimento = current_date - 400 WHERE id = v_ppf;
+  -- 5d) cargo sem preco de licenca no plano (PPF aqui) nao depende de pagamento
+  UPDATE public.originators_v2 SET licenca_paga_em = current_date - 800 WHERE id = v_ppf;
   UPDATE public.subscribers SET originator_id = v_ppf WHERE id = v_sa;
   v_out := public.fn_participantes_recompensa(v_ua);
   SELECT e INTO v_p FROM jsonb_array_elements(v_out) e WHERE e->>'papel' = 'ppf';
-  IF (v_p->>'suspenso')::boolean THEN RAISE EXCEPTION 'FALHOU 5d: licenca so vale para PPP: %', v_out; END IF;
+  IF (v_p->>'suspenso')::boolean THEN RAISE EXCEPTION 'FALHOU 5d: licenca so vale para cargo com preco: %', v_out; END IF;
 
   -- ======================================================================
   -- 6) assinante do Conect inativo: ENTRA com suspenso:true.

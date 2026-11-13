@@ -6,7 +6,8 @@
 --      a coluna recompensas_aplicadas;
 --   1. venda direta PPE          -> B2W 10%, PPE 5% (L1), Lider 1% (L1);
 --   2. indicacao nivel 2 + Conect-> PPE 2% (L2), Conect 2% (L1), B2W 10%;
---   3. PPP com licenca vencida   -> parceiro 0 e a B2W absorve (10% + 4% = 14%);
+--   3. PPP com licenca vencida   -> recebe como PPF (2%), B2W 10% (20261113a:
+--                                   "como Free ate pagar"; antes a B2W absorvia os 4%);
 --   4. UC sem plano              -> nenhum lancamento de recompensa, fornecedor
 --                                   fica com o residual inteiro, motivo gravado;
 --   5. corte PARCIAL (piso 73%)  -> teto 124; corte na ordem assinante_conect
@@ -364,9 +365,11 @@ BEGIN
     INSERT INTO public.originators_v2 (name, cargo, ativo, lider_id)
     VALUES ('SANDBOX Task6 PPE sem lider', 'ppe', true, NULL) RETURNING id INTO v_ppe2;
 
-    -- PPP com licenca vencida ONTEM: recorrencia suspensa, valor vai para a B2W
-    INSERT INTO public.originators_v2 (name, cargo, ativo, licenca_vencimento)
-    VALUES ('SANDBOX Task6 PPP vencido', 'ppp', true, CURRENT_DATE - 1) RETURNING id INTO v_ppp;
+    -- PPP com licenca vencida ONTEM (20261113a: preco do PPP no plano padrao e
+    -- pago ha 1 ano e 1 dia): recebe como PPF ate renovar
+    UPDATE public.planos_originador SET licenca_config = licenca_config || '{"ppp": 199.90}'::jsonb WHERE padrao;
+    INSERT INTO public.originators_v2 (name, cargo, ativo, licenca_paga_em)
+    VALUES ('SANDBOX Task6 PPP vencido', 'ppp', true, (CURRENT_DATE - 1 - interval '1 year')::date) RETURNING id INTO v_ppp;
 
     INSERT INTO public.usinas (plano_usina_id) VALUES (pg_temp.pu(v_plano))       RETURNING id INTO v_usina;
     INSERT INTO public.usinas (plano_usina_id) VALUES (pg_temp.pu(v_plano_p73))   RETURNING id INTO v_usina_p73;
@@ -540,8 +543,8 @@ BEGIN
     END IF;
 
     -- ==================================================================
-    -- CASO 3 -- PPP com licenca vencida: parceiro 0 e a B2W absorve os 4%
-    --   3.1.1 = -140 | 2.1.2 = 0 | 2.1.6 = 0 | 2.1.1 = -860
+    -- CASO 3 -- PPP com licenca vencida: recebe como PPF (L1 2%)
+    --   3.1.1 = -100 | 2.1.2 = -20 | 2.1.6 = 0 | 2.1.1 = -880
     -- ==================================================================
     INSERT INTO public.subscribers (originator_id, status, short_url)
     VALUES (v_ppp, 'ativo', 'sandbox://task6/c3') RETURNING id INTO v_sub;
@@ -565,8 +568,8 @@ BEGIN
       INTO v_gestao, v_com, v_conect, v_forn, v_total
       FROM public.ledger_entries WHERE transaction_id = v_txn;
 
-    IF (v_gestao, v_com, v_conect, v_forn) IS DISTINCT FROM (-140::numeric, 0::numeric, 0::numeric, -860::numeric) THEN
-        RAISE EXCEPTION 'FALHA caso 3 (PPP licenca vencida): 3.1.1=% 2.1.2=% 2.1.6=% 2.1.1=% (esperado -140 / 0 / 0 / -860)',
+    IF (v_gestao, v_com, v_conect, v_forn) IS DISTINCT FROM (-100::numeric, -20::numeric, 0::numeric, -880::numeric) THEN
+        RAISE EXCEPTION 'FALHA caso 3 (PPP licenca vencida): 3.1.1=% 2.1.2=% 2.1.6=% 2.1.1=% (esperado -100 / -20 / 0 / -880)',
             v_gestao, v_com, v_conect, v_forn;
     END IF;
     IF v_total <> 0 THEN
@@ -574,8 +577,8 @@ BEGIN
     END IF;
 
     SELECT recompensas_aplicadas INTO v_rec FROM public.invoices WHERE id = v_inv;
-    IF (v_rec->'resultado'->'b2w'->>'valor_absorvido')::numeric <> 40 THEN
-        RAISE EXCEPTION 'FALHA caso 3: valor_absorvido congelado = %, esperado 40', v_rec->'resultado'->'b2w'->>'valor_absorvido';
+    IF COALESCE((v_rec->'resultado'->'b2w'->>'valor_absorvido')::numeric, 0) <> 0 THEN
+        RAISE EXCEPTION 'FALHA caso 3: valor_absorvido congelado = %, esperado 0', v_rec->'resultado'->'b2w'->>'valor_absorvido';
     END IF;
 
     -- ==================================================================

@@ -21,6 +21,7 @@ import {
     TEXTO_TETO_START,
     mensagemErroPlanoOriginador
 } from '../../../lib/planoOriginador';
+import VouchersPlanoOriginador from './VouchersPlanoOriginador';
 
 const kwhBr = (v) => Number(v || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 });
 const reais = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -390,6 +391,35 @@ export default function PlanoOriginadorModal({ isOpen, plano, onClose, onSave, s
                             </p>
                         </div>
                     )}
+
+                    <div style={secao}>
+                        <h4 style={tituloSecao}>Licença anual por cargo</h4>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '0.75rem' }}>
+                            {CARGOS_ORIGINADOR.map(c => (
+                                <div key={c}>
+                                    <label style={rotulo}>{ROTULO_CARGO[c]} (R$/ano)</label>
+                                    <input
+                                        type="number" min="0" step="0.01"
+                                        value={dados.licenca_config?.[c] ?? 0}
+                                        onChange={e => setDados(prev => ({ ...prev, licenca_config: { ...prev.licenca_config, [c]: e.target.value } }))}
+                                        style={{ ...campo(false), textAlign: 'right' }}
+                                    />
+                                </div>
+                            ))}
+                        </div>
+                        <p style={{ ...ajuda, margin: 0 }}>
+                            0 = cargo isento neste plano. A licença vale 1 ano a partir do pagamento. Sem pagamento, ou vencida,
+                            o parceiro recebe como PPF — Free até pagar. Trocar o preço recalcula os parceiros deste plano.
+                        </p>
+                    </div>
+
+                    <div style={secao}>
+                        <h4 style={tituloSecao}>Vouchers da licença</h4>
+                        <p style={{ ...ajuda, margin: 0 }}>
+                            Isentam ou dão desconto na licença anual. No modal do originador a equipe só digita o código; vale só para parceiros deste plano.
+                        </p>
+                        <VouchersPlanoOriginador planoId={plano?.id || null} showAlert={showAlert} />
+                    </div>
 
                     {dados.tipo_recompensa === 'ambos' && (
                         <div style={{ display: 'flex', gap: '0.5rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '0.75rem 1rem', fontSize: '0.82rem', color: '#334155', lineHeight: 1.45 }}>

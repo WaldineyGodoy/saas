@@ -93,8 +93,16 @@ export const PLANO_ORIGINADOR_VAZIO = {
     tipo_recompensa: 'start',
     // Start: X × o consumo médio da UC, em kWh compensados + matriz cargo x nível.
     start_config: { multiplicador: 1, regras_multinivel: matrizZeradaOriginador() },
-    recorrente_config: { regras_multinivel: matrizPadraoOriginador() }
+    recorrente_config: { regras_multinivel: matrizPadraoOriginador() },
+    // Licença anual por cargo, em R$ (0 = isento). Dono, 13/11/2026.
+    licenca_config: { lider: 0, ppe: 0, ppp: 0, ppf: 0 }
 };
+
+/** Preço da licença por cargo: número >= 0, ausente ou inválido vira 0. */
+const normalizarLicenca = (cfg) => Object.fromEntries(CARGOS_ORIGINADOR.map(c => {
+    const n = Number(String(cfg?.[c] ?? '').replace(',', '.'));
+    return [c, Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : 0];
+}));
 
 /** Normaliza uma matriz cargo x nível: 4 cargos, teto L3, nível acima do máximo vira 0. */
 const normalizarMatriz = (salva, padraoDoCargo) => {
@@ -216,7 +224,8 @@ export const normalizarPlanoOriginador = (plano) => {
         },
         recorrente_config: {
             regras_multinivel: normalizarMatriz(p.recorrente_config?.regras_multinivel, (c, lk) => MATRIZ_PADRAO[c]?.[lk] ?? 0)
-        }
+        },
+        licenca_config: normalizarLicenca(p.licenca_config)
     };
 };
 
@@ -241,6 +250,12 @@ export const validarPlanoOriginador = (dados) => {
     };
     if (usaStart) confere(p.start_config.regras_multinivel, 'Start');
     if (p.tipo_recompensa !== 'start') confere(p.recorrente_config.regras_multinivel, 'Recorrência');
+    for (const c of CARGOS_ORIGINADOR) {
+        const bruto = dados?.licenca_config?.[c];
+        if (bruto === '' || bruto === null || bruto === undefined) continue;
+        const n = Number(String(bruto).replace(',', '.'));
+        if (!Number.isFinite(n) || n < 0) erros.push(`Licença de ${ROTULO_CARGO[c]}: informe um valor em R$ (0 = isento).`);
+    }
     return erros;
 };
 
@@ -253,7 +268,8 @@ export const payloadPlanoOriginador = (dados) => {
         status: p.status,
         tipo_recompensa: p.tipo_recompensa,
         start_config: p.start_config,
-        recorrente_config: p.recorrente_config
+        recorrente_config: p.recorrente_config,
+        licenca_config: p.licenca_config
     };
 };
 
