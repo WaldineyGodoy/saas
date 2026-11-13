@@ -156,6 +156,29 @@ BEGIN
       END $f$
     $h$;
 
+    -- 20261112b (dono, 12/11/2026): o Start do parceiro e por ENERGIA e exige o
+    -- consumo-base da UC (start_base_kwh, a mediana congelada no cadastro). Para a
+    -- fatura de Start (O6) a UC nasce com base 833,333333333 kWh: com a tarifa de
+    -- 1,20 do cadastro, kWh do Start x tarifa = 1000 = a base que a fixture $bruta$
+    -- iguala a base liquida, e o numero esperado (PPE 200, Lider 100) continua valendo.
+    -- (A tarifa da fixture nao pode ser mexida: o piso dos casos O2+ usa kWh x tarifa.)
+    EXECUTE $h$
+      CREATE FUNCTION pg_temp.fatura_paga_com_base(p_usina uuid, p_ppe uuid, p_plano_uc uuid)
+      RETURNS uuid LANGUAGE plpgsql AS $f$
+      DECLARE v_sub uuid; v_uc uuid; v_inv uuid;
+      BEGIN
+        INSERT INTO public.subscribers (originator_id, status, short_url)
+        VALUES (p_ppe, 'ativo', 'sandbox://pu/' || gen_random_uuid()) RETURNING id INTO v_sub;
+        INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address, plano_assinatura_id, start_base_kwh)
+        VALUES (v_sub, p_usina, 'consumidora', 'ativo', 'SANDBOX PU conc', '{"uf": "RN"}'::jsonb, p_plano_uc, 833.333333333)
+        RETURNING id INTO v_uc;
+        INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento, consumo_compensado)
+        VALUES (v_uc, 'a_vencer', 1000, 0, CURRENT_DATE + 5, 1000) RETURNING id INTO v_inv;
+        UPDATE public.invoices SET status = 'pago' WHERE id = v_inv;
+        RETURN v_inv;
+      END $f$
+    $h$;
+
     EXECUTE $h$
       CREATE FUNCTION pg_temp.contas(p_inv uuid) RETURNS numeric[] LANGUAGE sql AS $f$
         SELECT ARRAY[
@@ -593,7 +616,7 @@ BEGIN
     VALUES ('SANDBOX PU start 1', 12, 3) RETURNING id INTO v_pu_start1;
     INSERT INTO public.usinas (plano_usina_id, supplier_id) VALUES (v_pu_start1, v_forn_orig) RETURNING id INTO v_usina_start1;
 
-    v_inv    := pg_temp.fatura_paga(v_usina_start1, v_ppe, v_rec_start1);
+    v_inv    := pg_temp.fatura_paga_com_base(v_usina_start1, v_ppe, v_rec_start1);
     v_contas := pg_temp.contas(v_inv);
     IF v_contas IS DISTINCT FROM ARRAY[0, -330, -670, 0]::numeric[] THEN
         RAISE EXCEPTION 'FALHA O6: [3.1.1, 2.1.2, 2.1.1, soma] = %, esperado {0,-330,-670,0}', v_contas;
