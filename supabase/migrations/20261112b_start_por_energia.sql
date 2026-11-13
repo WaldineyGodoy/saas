@@ -1005,20 +1005,22 @@ $de$,
 $para$])
     ) AS t(fn, pares)
     LOOP
-        d := pg_get_functiondef(v_fn.fn);
+        -- chr(13) fora: o texto colado no SQL Editor pode chegar com CRLF, e as
+        -- ancoras tem de casar com a definicao viva (LF).
+        d := replace(pg_get_functiondef(v_fn.fn), chr(13), '');
         FOR v_n IN 1 .. array_length(v_fn.pares, 1) / 2 LOOP
-            IF (length(d) - length(replace(d, v_fn.pares[2 * v_n - 1], ''))) / length(v_fn.pares[2 * v_n - 1]) <> 1 THEN
+            IF (length(d) - length(replace(d, replace(v_fn.pares[2 * v_n - 1], chr(13), ''), ''))) / length(replace(v_fn.pares[2 * v_n - 1], chr(13), '')) <> 1 THEN
                 RAISE EXCEPTION '%: ancora achada % vezes (esperado 1): %', v_fn.fn,
-                    (length(d) - length(replace(d, v_fn.pares[2 * v_n - 1], ''))) / length(v_fn.pares[2 * v_n - 1]),
+                    (length(d) - length(replace(d, replace(v_fn.pares[2 * v_n - 1], chr(13), ''), ''))) / length(replace(v_fn.pares[2 * v_n - 1], chr(13), '')),
                     left(v_fn.pares[2 * v_n - 1], 80);
             END IF;
-            d := replace(d, v_fn.pares[2 * v_n - 1], v_fn.pares[2 * v_n]);
+            d := replace(d, replace(v_fn.pares[2 * v_n - 1], chr(13), ''), replace(v_fn.pares[2 * v_n], chr(13), ''));
         END LOOP;
         EXECUTE d;
     END LOOP;
 
     -- 4c. motor
-    d := pg_get_functiondef('public.handle_invoice_paid_ledger()'::regprocedure);
+    d := replace(pg_get_functiondef('public.handle_invoice_paid_ledger()'::regprocedure), chr(13), '');
 
     FOR v_par IN SELECT * FROM (VALUES
         -- 1. variaveis
@@ -1304,11 +1306,11 @@ $de$,
 $para$)
     ) AS t(de, para)
     LOOP
-        v_n := (length(d) - length(replace(d, v_par.de, ''))) / length(v_par.de);
+        v_n := (length(d) - length(replace(d, replace(v_par.de, chr(13), ''), ''))) / length(replace(v_par.de, chr(13), ''));
         IF v_n <> 1 THEN
             RAISE EXCEPTION 'handle_invoice_paid_ledger: ancora achada % vezes (esperado 1): %', v_n, left(v_par.de, 80);
         END IF;
-        d := replace(d, v_par.de, v_par.para);
+        d := replace(d, replace(v_par.de, chr(13), ''), replace(v_par.para, chr(13), ''));
     END LOOP;
 
     v_n := (length(d) - length(replace(d, '''20261110_plano_originador''', '')))
