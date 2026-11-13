@@ -143,13 +143,16 @@ describe('montarCoberturaAssinatura', () => {
 })
 
 describe('FAQ da Assinatura', () => {
-    it('tem as 20 perguntas aprovadas e respeita as proibições', () => {
+    it('tem as 21 perguntas aprovadas e respeita as proibições', () => {
         const pares = lerFaq(FAQ_ASSINATURA)
-        expect(pares).toHaveLength(20)
+        expect(pares).toHaveLength(21)
         const tudo = FAQ_ASSINATURA.toLowerCase()
         // respostas do dono em 28/10/2026: indicação na mesma distribuidora e localização das usinas
         expect(tudo).toContain('mesma distribuidora (concessionária)')
         expect(tudo).toContain('taxa de ocupação das usinas')
+        // resposta do dono em 13/11/2026: adesão não tem custo; é a formalização do contrato
+        expect(tudo).toContain('a adesão não tem custo nenhum')
+        expect(tudo).toContain('informada à distribuidora')
         expect(tudo).not.toContain('30%')
         expect(tudo).not.toContain('fidelidade de')
         expect(tudo).toContain('não há fidelidade nem multa')

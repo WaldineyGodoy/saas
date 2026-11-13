@@ -50,6 +50,9 @@ export const FAQ_ASSINATURA = `## Pergunta: Como funciona a energia por assinatu
 ## Pergunta: Como faço a adesão?
 ## Resposta: Pelo link: CEP e consumo, documento com foto e a conta de energia de cada unidade; se for empresa, também o contrato social. A assinatura é eletrônica e o link vale 30 dias. Dá para aderir com várias unidades.
 
+## Pergunta: A adesão tem custo? Pago algo ao aderir? O que é a adesão?
+## Resposta: A adesão não tem custo nenhum. Ela é a formalização e a assinatura do contrato, em que você autoriza a B2W a incluir o seu imóvel para receber o desconto. Como a adesão precisa ser informada à distribuidora, é preciso ter o contrato assinado com essa autorização. A cobrança da Energia por Assinatura é só a mensal, em um único boleto ou PIX da B2W, e não vem na conta de luz.
+
 ## Pergunta: Como funciona a indicação?
 ## Resposta: Depois de assinar você ganha link e QR code próprios. Cada indicado que assina gera um cashback mensal abatido na sua fatura (percentual e valor em "Assinatura: cobertura, desconto e indicação"), enquanto vocês dois estiverem ativos e em dia. O crédito abate primeiro a fatura mais próxima; o que sobrar no ciclo é descartado. A campanha vale para indicados atendidos pela mesma distribuidora (concessionária) que a sua.
 
