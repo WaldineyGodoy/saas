@@ -69,14 +69,31 @@ BEGIN
     END;
     IF NOT v_pegou THEN RAISE EXCEPTION 'FALHA V2: piso de plano com UC devia ser recusado'; END IF;
 
+    -- 20261110a (Plano do Originador): o que trava na matriz do plano de
+    -- assinatura e o que AINDA mora nele -- b2w e assinante_conect. Os cargos
+    -- de parceiro (lider/ppe/ppp/ppf) sairam para planos_originador; mexer
+    -- neles no plano de assinatura nao muda pagamento e a trava os ignora.
     v_pegou := false;
     BEGIN
         UPDATE public.planos_assinatura_energia
-           SET recorrente_config = jsonb_set(recorrente_config, '{regras_multinivel,ppe,niveis,L1}', '"6"')
+           SET recorrente_config = jsonb_set(recorrente_config, '{regras_multinivel,b2w,niveis,L1}', '"11"')
          WHERE id = v_plano;
     EXCEPTION WHEN check_violation THEN v_pegou := true;
     END;
-    IF NOT v_pegou THEN RAISE EXCEPTION 'FALHA V2: matriz de plano com UC devia ser recusada'; END IF;
+    IF NOT v_pegou THEN RAISE EXCEPTION 'FALHA V2: matriz (b2w) de plano com UC devia ser recusada'; END IF;
+
+    BEGIN
+        UPDATE public.planos_assinatura_energia
+           SET recorrente_config = jsonb_set(recorrente_config, '{regras_multinivel,ppe}',
+                                             '{"niveis":{"L1":"6","L2":"2","L3":"0","L4":"0"},"max_niveis":2}')
+         WHERE id = v_plano;
+    EXCEPTION WHEN check_violation THEN
+        RAISE EXCEPTION 'FALHA V2: cargo de parceiro no plano de assinatura nao deveria travar mais (saiu para o Plano do Originador)';
+    END;
+    -- desfaz, para os casos seguintes compararem com c_matriz intacta
+    UPDATE public.planos_assinatura_energia
+       SET recorrente_config = jsonb_set(recorrente_config, '{regras_multinivel,ppe}', c_matriz -> 'ppe')
+     WHERE id = v_plano;
 
     v_pegou := false;
     BEGIN
@@ -174,12 +191,14 @@ BEGIN
         UPDATE public.planos_assinatura_energia
            SET start_config = '{"faturas_elegiveis": [2], "regras": {
               "1": {"b2w": 0, "lider": 50, "ppe": 50, "ppp": 40, "ppf": 20, "assinante_conect": 0, "embaixador": 50},
-              "2": {"b2w": 60, "lider": 20, "ppe": 21, "ppp": 0, "ppf": 0, "assinante_conect": 0, "embaixador": 21},
+              "2": {"b2w": 61, "lider": 20, "ppe": 20, "ppp": 0, "ppf": 0, "assinante_conect": 0, "embaixador": 20},
               "3": {"b2w": 0, "lider": 0, "ppe": 0, "ppp": 0, "ppf": 0, "assinante_conect": 0}}}'::jsonb
          WHERE id = v_p8;
     EXCEPTION WHEN check_violation THEN v_pegou := true;
     END;
-    IF NOT v_pegou THEN RAISE EXCEPTION 'FALHA V8: mudar um dos 6 valores do Start (ppe 20 -> 21) devia ser recusado'; END IF;
+    -- 20261110a: no Start do plano de assinatura so b2w e assinante_conect
+    -- contam para a trava; os cargos de parceiro sairam para o Plano do Originador.
+    IF NOT v_pegou THEN RAISE EXCEPTION 'FALHA V8: mudar um valor do Start que fica no plano (b2w 60 -> 61) devia ser recusado'; END IF;
 
     v_pegou := false;
     BEGIN
@@ -267,23 +286,33 @@ BEGIN
     -- V14 -- aditivo: lead que ainda aponta para versao antiga cai na vigente
     INSERT INTO public.subscribers (status, short_url, name) VALUES ('ativo', 'sandbox://pv/14', 'SANDBOX PV14 nome') RETURNING id INTO v_sub13;
     INSERT INTO public.leads (solicitante_assinante_id, conta_lida, plano_id)
-    VALUES (v_sub13, '{"numeroUc":"SBX-PV-ADT-7771","titular":"SANDBOX PV14 nome","ligacao":"monofasico","concessionaria":"SANDBOX PV conc","mediaKwh":"300","endereco":{"cep":"59000000","logradouro":"Rua A, 10","bairro":"B","cidade":"C","uf":"rn"}}'::jsonb, v_plano)
+    VALUES (v_sub13, '{"numeroUc":"SBX-PV-ADT-7771","titular":"SANDBOX PV14 nome","ligacao":"monofasico","concessionaria":"SANDBOX PV conc","mediaKwh":"300","historico":[{"mes":"2026-09","kwh":310},{"mes":"2026-10","kwh":290},{"mes":"2025-10","kwh":9000}],"endereco":{"cep":"59000000","logradouro":"Rua A, 10","bairro":"B","cidade":"C","uf":"rn"}}'::jsonb, v_plano)
     RETURNING id INTO v_lead;
     v_r := public.fn_criar_uc_do_aditivo(v_lead);
     IF (v_r ->> 'ok')::boolean IS DISTINCT FROM true
        OR (SELECT plano_assinatura_id FROM public.consumer_units WHERE id = (v_r ->> 'uc_id')::uuid) IS DISTINCT FROM v_v3 THEN
         RAISE EXCEPTION 'FALHA V14: aditivo com plano antigo devia criar a UC na versao vigente %: %', v_v3, v_r;
     END IF;
+    -- 20261112b: o termo aditivo grava o historico do leitor (mediana 300 dos meses que ficam; 2025-10 sai)
+    IF (SELECT (consumo_mediano_kwh, start_base_kwh) FROM public.consumer_units WHERE id = (v_r ->> 'uc_id')::uuid) IS DISTINCT FROM (300::numeric, 300::numeric) THEN
+        RAISE EXCEPTION 'FALHA V14b: aditivo nao gravou o historico: %', (SELECT historico_consumo FROM public.consumer_units WHERE id = (v_r ->> 'uc_id')::uuid);
+    END IF;
 
     -- V15 -- adesao publica: plano escolhido numa tela velha cai na vigente
     v_r := public.fn_criar_assinante_publico('SANDBOX PV15 Fulano', '52998224725', 'sbx.pv15@teste.invalid', '84999990000',
         '59000000', 'Rua A', '10', NULL, 'Bairro', 'Natal', 'RN', '2408102', NULL, NULL,
         jsonb_build_array(jsonb_build_object('numero_uc', 'SBX-PV-PUB-7772', 'cpf_cnpj_fatura', '52998224725',
-            'tipo_ligacao', 'monofasico', 'concessionaria', 'SANDBOX PV conc', 'plano_assinatura_id', v_plano::text, 'uf', 'RN')),
+            'tipo_ligacao', 'monofasico', 'concessionaria', 'SANDBOX PV conc', 'plano_assinatura_id', v_plano::text, 'uf', 'RN',
+            'historico', '[{"mes":"2026-08","kwh":100},{"mes":"2026-09","kwh":0},{"mes":"2026-10","kwh":300}]'::jsonb)),
         10, NULL, NULL, 'v1', NULL);
     IF (v_r ->> 'ucs_criadas')::int IS DISTINCT FROM 1
        OR (SELECT plano_assinatura_id FROM public.consumer_units WHERE numero_uc = 'SBX-PV-PUB-7772') IS DISTINCT FROM v_v3 THEN
         RAISE EXCEPTION 'FALHA V15: adesao publica com plano antigo devia cair na versao vigente %: %', v_v3, v_r;
+    END IF;
+    -- 20261112b: a adesao publica grava o historico de cada UC (zero vira mediana)
+    IF (SELECT (consumo_mediano_kwh, start_base_kwh, historico_consumo #>> '{09,origem}') FROM public.consumer_units WHERE numero_uc = 'SBX-PV-PUB-7772')
+       IS DISTINCT FROM (200::numeric, 200::numeric, 'mediana'::text) THEN
+        RAISE EXCEPTION 'FALHA V15b: adesao publica nao gravou o historico: %', (SELECT historico_consumo FROM public.consumer_units WHERE numero_uc = 'SBX-PV-PUB-7772');
     END IF;
 
     -- V16 -- so admin cria versao (usuario logado que nao e admin)
@@ -329,11 +358,12 @@ BEGIN
     v_pegou := false;
     BEGIN
         UPDATE public.planos_assinatura_energia
-           SET start_config = jsonb_set(start_config, '{regras,3,ppf}', 'null'::jsonb)
+           SET start_config = jsonb_set(start_config, '{regras,3,assinante_conect}', 'null'::jsonb)
          WHERE id = v_p8;
     EXCEPTION WHEN check_violation THEN v_pegou := true;
     END;
-    IF NOT v_pegou THEN RAISE EXCEPTION 'FALHA V18: ppf 0 -> null devia ser recusado'; END IF;
+    -- 20261110a: era ppf; cargo de parceiro nao trava mais o plano de assinatura.
+    IF NOT v_pegou THEN RAISE EXCEPTION 'FALHA V18: assinante_conect 0 -> null devia ser recusado'; END IF;
 
     -- V19 -- o shape numerico da tela passa: mesmos numeros (texto com espacos, ".5",
     --        20.0), chaves legadas extras e novo nome. (O V8 acima cobre o mesmo

@@ -14,7 +14,11 @@ import {
     Clock,
     RefreshCw,
     Link2,
-    Building2
+    Building2,
+    Handshake,
+    Star,
+    Lock,
+    AlertTriangle
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useUI } from '../../contexts/UIContext';
@@ -23,10 +27,20 @@ import EletropostoPlanModal, { extractSubscriptionPlanLastro } from './component
 import UsinasPlanosTab from './components/UsinasPlanosTab';
 import PlanosUsinaLista from './components/PlanosUsinaLista';
 import { versaoSucessora } from '../../lib/planoAssinaturaVersao';
+import PlanoOriginadorModal from './components/PlanoOriginadorModal';
+import {
+    listarPlanosOriginador,
+    resumoPlanoOriginador,
+    tabelaPlanoOriginadorAusente,
+    mensagemErroPlanoOriginador,
+    CARGOS_ORIGINADOR,
+    ROTULO_CARGO,
+    TIPOS_RECOMPENSA
+} from '../../lib/planoOriginador';
 
 export default function PlansServicesSettings() {
     const { showAlert } = useUI();
-    const [activeTab, setActiveTab] = useState('assinatura'); // 'assinatura' | 'eletropostos' | 'usinas'
+    const [activeTab, setActiveTab] = useState('assinatura'); // 'assinatura' | 'eletropostos' | 'usinas' | 'originador'
 
     // Todos os registros carregados de planos_assinatura_energia
     const [planos, setPlanos] = useState([]);
@@ -90,6 +104,78 @@ export default function PlansServicesSettings() {
     useEffect(() => {
         fetchPlanosUsina();
     }, [fetchPlanosUsina]);
+
+    // Planos do Originador (spec 2026-11-10), com quantos originadores e planos
+    // de assinatura usam cada um. A tabela pode ainda não existir no banco.
+    const [planosOriginador, setPlanosOriginador] = useState([]);
+    const [usoOriginador, setUsoOriginador] = useState({}); // id -> { originadores, planos } (null = não deu para contar)
+    const [loadingOriginador, setLoadingOriginador] = useState(false);
+    const [tabelaOriginadorAusente, setTabelaOriginadorAusente] = useState(false);
+    const [modalOriginador, setModalOriginador] = useState(null); // { plano }
+
+    const fetchPlanosOriginador = useCallback(async () => {
+        setLoadingOriginador(true);
+        try {
+            const lista = await listarPlanosOriginador(supabase);
+            setTabelaOriginadorAusente(false);
+            setPlanosOriginador(lista);
+            const contagens = await Promise.all(lista.map(async (p) => {
+                const [porOriginador, porPlano] = await Promise.all([
+                    supabase.from('originators_v2').select('id', { count: 'exact', head: true }).eq('plano_originador_id', p.id),
+                    supabase.from('planos_assinatura_energia').select('id', { count: 'exact', head: true }).eq('plano_originador_id', p.id)
+                ]);
+                return [p.id, {
+                    originadores: porOriginador.error ? null : (porOriginador.count ?? 0),
+                    planos: porPlano.error ? null : (porPlano.count ?? 0)
+                }];
+            }));
+            setUsoOriginador(Object.fromEntries(contagens));
+        } catch (err) {
+            if (tabelaPlanoOriginadorAusente(err)) {
+                setTabelaOriginadorAusente(true);
+                setPlanosOriginador([]);
+                setUsoOriginador({});
+            } else {
+                console.error('Erro ao buscar Planos do Originador:', err);
+                showAlert('Erro ao carregar Planos do Originador: ' + mensagemErroPlanoOriginador(err), 'error');
+            }
+        } finally {
+            setLoadingOriginador(false);
+        }
+    }, [showAlert]);
+
+    useEffect(() => {
+        fetchPlanosOriginador();
+    }, [fetchPlanosOriginador]);
+
+    // Motivo que impede excluir um Plano do Originador; null = pode tentar.
+    const motivoBloqueioOriginador = (plano) => {
+        if (plano.padrao) return 'O Plano Padrão não pode ser excluído.';
+        const uso = usoOriginador[plano.id] || {};
+        const partes = [];
+        if (uso.originadores > 0) partes.push(`${uso.originadores} originador(es)`);
+        if (uso.planos > 0) partes.push(`${uso.planos} plano(s) de assinatura`);
+        return partes.length ? `Em uso por ${partes.join(' e ')}.` : null;
+    };
+
+    const handleDeleteOriginador = async (plano) => {
+        const motivo = motivoBloqueioOriginador(plano);
+        if (motivo) {
+            showAlert(`Não dá para excluir "${plano.nome}". ${motivo}`, 'warning');
+            return;
+        }
+        if (!window.confirm(`Excluir o Plano do Originador "${plano.nome}"? Esta ação não pode ser desfeita.`)) return;
+        const { error } = await supabase.from('planos_originador').delete().eq('id', plano.id);
+        if (error) {
+            console.error('Erro ao excluir Plano do Originador:', error);
+            showAlert('Erro ao excluir: ' + mensagemErroPlanoOriginador(error), 'error');
+            return;
+        }
+        showAlert(`Plano "${plano.nome}" excluído.`, 'success');
+        fetchPlanosOriginador();
+    };
+
+    const rotuloTipoOriginador = (tipo) => TIPOS_RECOMPENSA.find(t => t.valor === tipo)?.rotulo || tipo || '-';
 
     // Separação por categoria (Assinatura vs Eletropostos)
     const planosAssinatura = useMemo(
@@ -376,6 +462,21 @@ export default function PlansServicesSettings() {
                 >
                     <SunMedium size={16} />
                     Usinas
+                </button>
+
+                <button
+                    onClick={() => setActiveTab('originador')}
+                    style={{
+                        padding: '0.65rem 1.25rem', borderRadius: '10px', border: 'none',
+                        background: activeTab === 'originador' ? '#7c3aed' : 'transparent',
+                        color: activeTab === 'originador' ? 'white' : '#64748b',
+                        fontWeight: 700, fontSize: '0.86rem', cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', gap: '0.5rem',
+                        transition: 'all 0.15s'
+                    }}
+                >
+                    <Handshake size={16} />
+                    Plano do Originador{tabelaOriginadorAusente ? '' : ` (${planosOriginador.length})`}
                 </button>
             </div>
 
@@ -803,6 +904,185 @@ export default function PlansServicesSettings() {
                     />
                 </div>
             )}
+
+            {/* CONTEÚDO DA ABA 4: PLANO DO ORIGINADOR — remuneração de Líder, PPE, PPP e PPF */}
+            {activeTab === 'originador' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                    <div style={{
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                        flexWrap: 'wrap', gap: '1rem', background: 'white', padding: '1rem 1.25rem',
+                        borderRadius: '14px', border: '1px solid #e2e8f0'
+                    }}>
+                        <div style={{ maxWidth: '620px' }}>
+                            <div style={{ fontWeight: 800, color: '#0f172a' }}>Planos do Originador</div>
+                            <div style={{ fontSize: '0.8rem', color: '#64748b', lineHeight: 1.45 }}>
+                                Bônus Start e recorrência de Líder, PPE, PPP e PPF. Vale o plano do cadastro do originador, se for diferente do Padrão.
+                                Senão, vale o plano ligado ao plano de assinatura da UC.
+                                <span style={{ display: 'block', marginTop: '0.25rem' }}>
+                                    Start = X × o consumo médio da UC (mediana do histórico fixada no cadastro), pago sobre os kWh compensados de cada fatura, no máximo 1 × o consumo médio por fatura, até esse total.
+                                    Os percentuais incidem sobre kWh compensado × tarifa da concessionária, sem descontos.
+                                </span>
+                            </div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                            <button
+                                onClick={fetchPlanosOriginador}
+                                title="Atualizar lista"
+                                style={{
+                                    padding: '0.6rem', borderRadius: '10px', border: '1px solid #e2e8f0',
+                                    background: 'white', color: '#64748b', cursor: 'pointer', display: 'flex'
+                                }}
+                            >
+                                <RefreshCw size={16} className={loadingOriginador ? 'animate-spin' : ''} />
+                            </button>
+                            <button
+                                onClick={() => setModalOriginador({ plano: null })}
+                                disabled={tabelaOriginadorAusente}
+                                title={tabelaOriginadorAusente ? 'A tabela ainda não existe no banco' : undefined}
+                                style={{
+                                    padding: '0.65rem 1.25rem', borderRadius: '10px', border: 'none',
+                                    background: tabelaOriginadorAusente ? '#cbd5e1' : '#7c3aed', color: 'white', fontWeight: 700, fontSize: '0.86rem',
+                                    cursor: tabelaOriginadorAusente ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem'
+                                }}
+                            >
+                                <Plus size={18} />
+                                Criar Plano do Originador
+                            </button>
+                        </div>
+                    </div>
+
+                    <div style={{
+                        background: 'white', borderRadius: '16px', border: '1px solid #e2e8f0',
+                        overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
+                    }}>
+                        {tabelaOriginadorAusente ? (
+                            <div style={{ padding: '2.5rem 2rem', textAlign: 'center' }}>
+                                <div style={{
+                                    width: '56px', height: '56px', borderRadius: '50%', background: '#fffbeb',
+                                    color: '#d97706', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    margin: '0 auto 1rem auto'
+                                }}>
+                                    <AlertTriangle size={28} />
+                                </div>
+                                <h4 style={{ margin: '0 0 0.4rem 0', fontSize: '1.05rem', color: '#1e293b' }}>
+                                    A tabela de Planos do Originador ainda não foi criada no banco
+                                </h4>
+                                <p style={{ margin: 0, fontSize: '0.84rem', color: '#64748b', maxWidth: '460px', marginLeft: 'auto', marginRight: 'auto', lineHeight: 1.5 }}>
+                                    Esta seção funciona assim que a migração for aplicada.
+                                </p>
+                            </div>
+                        ) : planosOriginador.length === 0 ? (
+                            <div style={{ padding: '2.5rem', textAlign: 'center', color: '#64748b', fontSize: '0.9rem' }}>
+                                {loadingOriginador ? 'Carregando Planos do Originador...' : 'Nenhum Plano do Originador cadastrado.'}
+                            </div>
+                        ) : (
+                            <div style={{ overflowX: 'auto' }}>
+                                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.86rem' }}>
+                                    <thead>
+                                        <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569', fontSize: '0.76rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                            <th style={{ padding: '0.85rem 1rem' }}>Plano</th>
+                                            <th style={{ padding: '0.85rem 1rem' }}>Tipo de recompensa</th>
+                                            <th style={{ padding: '0.85rem 1rem' }}>Resumo</th>
+                                            <th style={{ padding: '0.85rem 1rem' }}>Status</th>
+                                            <th style={{ padding: '0.85rem 1rem' }}>Originadores</th>
+                                            <th style={{ padding: '0.85rem 1rem' }}>Planos de assinatura</th>
+                                            <th style={{ padding: '0.85rem 1rem', textAlign: 'right' }}>Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {planosOriginador.map(p => {
+                                            const uso = usoOriginador[p.id] || {};
+                                            const bloqueio = motivoBloqueioOriginador(p);
+                                            return (
+                                                <tr key={p.id} style={{ borderBottom: '1px solid #f1f5f9', verticalAlign: 'top' }}>
+                                                    <td style={{ padding: '0.85rem 1rem' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                                                            <span style={{ fontWeight: 700, color: '#0f172a' }}>{p.nome}</span>
+                                                            {p.padrao && (
+                                                                <span style={{
+                                                                    display: 'inline-flex', alignItems: 'center', gap: '0.2rem',
+                                                                    fontSize: '0.7rem', fontWeight: 700, padding: '0.1rem 0.5rem',
+                                                                    borderRadius: '20px', background: '#fef3c7', color: '#92400e'
+                                                                }}>
+                                                                    <Star size={11} /> Padrão
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        {p.descricao && <div style={{ fontSize: '0.74rem', color: '#94a3b8', marginTop: '2px' }}>{p.descricao}</div>}
+                                                    </td>
+                                                    <td style={{ padding: '0.85rem 1rem', whiteSpace: 'nowrap' }}>{rotuloTipoOriginador(p.tipo_recompensa)}</td>
+                                                    <td style={{ padding: '0.85rem 1rem' }}>
+                                                        <div style={{ fontWeight: 600, color: '#334155' }}>{resumoPlanoOriginador(p)}</div>
+                                                        <div style={{ marginTop: '0.25rem', display: 'flex', flexDirection: 'column', gap: '1px' }}>
+                                                            {CARGOS_ORIGINADOR.map(c => (
+                                                                <div key={c} style={{ fontSize: '0.74rem', color: '#64748b' }}>
+                                                                    {ROTULO_CARGO[c]}: {resumoPlanoOriginador(p, c)}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </td>
+                                                    <td style={{ padding: '0.85rem 1rem', whiteSpace: 'nowrap' }}>
+                                                        {p.status === 'ativo' ? (
+                                                            <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: '#16a34a', fontWeight: 600, fontSize: '0.8rem' }}>
+                                                                <CheckCircle2 size={16} /> Ativo
+                                                            </span>
+                                                        ) : (
+                                                            <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: '#94a3b8', fontWeight: 600, fontSize: '0.8rem' }}>
+                                                                <XCircle size={16} /> Inativo
+                                                            </span>
+                                                        )}
+                                                    </td>
+                                                    <td style={{ padding: '0.85rem 1rem' }}>{uso.originadores ?? '—'}</td>
+                                                    <td style={{ padding: '0.85rem 1rem' }}>{uso.planos ?? '—'}</td>
+                                                    <td style={{ padding: '0.85rem 1rem' }}>
+                                                        <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'flex-end' }}>
+                                                            <button
+                                                                title="Editar plano"
+                                                                onClick={() => setModalOriginador({ plano: p })}
+                                                                style={{
+                                                                    background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px',
+                                                                    padding: '0.45rem', cursor: 'pointer', color: '#7c3aed', display: 'flex'
+                                                                }}
+                                                            >
+                                                                <Edit size={16} />
+                                                            </button>
+                                                            <button
+                                                                title={bloqueio ? `Exclusão bloqueada: ${bloqueio}` : 'Excluir plano'}
+                                                                onClick={() => handleDeleteOriginador(p)}
+                                                                style={{
+                                                                    background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px',
+                                                                    padding: '0.45rem', cursor: bloqueio ? 'not-allowed' : 'pointer',
+                                                                    color: bloqueio ? '#cbd5e1' : '#ef4444', display: 'flex'
+                                                                }}
+                                                            >
+                                                                {bloqueio ? <Lock size={16} /> : <Trash2 size={16} />}
+                                                            </button>
+                                                        </div>
+                                                        {bloqueio && (
+                                                            <div style={{ marginTop: '0.35rem', fontSize: '0.72rem', color: '#94a3b8', textAlign: 'right', maxWidth: '180px', marginLeft: 'auto', lineHeight: 1.35 }}>
+                                                                Não pode ser excluído. {bloqueio}
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de Criação / Edição — Planos do Originador */}
+            <PlanoOriginadorModal
+                isOpen={!!modalOriginador}
+                plano={modalOriginador?.plano}
+                onClose={() => setModalOriginador(null)}
+                onSave={fetchPlanosOriginador}
+                showAlert={showAlert}
+            />
 
             {/* Modal de Criação / Edição — Planos de Assinatura (Lastro Concessionária) */}
             <PlanModal

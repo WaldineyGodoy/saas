@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { Plus, Edit, Trash, Search, Copy } from 'lucide-react';
 import OriginatorModal from '../../components/OriginatorModal';
 import { buildReferralUrl } from '../../lib/originador';
+import { listarPlanosOriginador, planoOriginadorAusente, planoPadraoDe, resumoPlanoOriginador } from '../../lib/planoOriginador';
 
 export default function OriginatorList() {
     const [originators, setOriginators] = useState([]);
@@ -11,10 +12,38 @@ export default function OriginatorList() {
     const [searchTerm, setSearchTerm] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedOriginator, setSelectedOriginator] = useState(null);
+    // null = Planos do Originador ainda não existem no banco (migração não aplicada).
+    const [planos, setPlanos] = useState([]);
 
     useEffect(() => {
         fetchOriginators();
+        listarPlanosOriginador(supabase)
+            .then(setPlanos)
+            .catch(error => {
+                if (!planoOriginadorAusente(error)) console.error('Erro ao carregar Planos do Originador:', error);
+                setPlanos(null);
+            });
     }, []);
+
+    const planoPadrao = planoPadraoDe(planos || []);
+    // Padrão: a regra muda conforme o plano de assinatura de cada UC, então
+    // a lista não promete número. Exceção: o resumo vale para todas as UCs.
+    const celulaPlano = (item) => {
+        if (planos === null) {
+            return <span style={{ fontSize: '0.8rem', color: 'var(--color-text-light)' }} title="Planos do Originador ainda não disponíveis neste ambiente">—</span>;
+        }
+        const plano = (planos.find(p => p.id === item.plano_originador_id)) || planoPadrao;
+        if (!plano) return <span style={{ fontSize: '0.8rem', color: 'var(--color-text-light)' }}>—</span>;
+        const cargo = (item.cargo || 'ppf').toLowerCase();
+        return (
+            <div>
+                <span className="badge badge-success">{plano.nome}</span>
+                <div style={{ fontSize: '0.75rem', color: 'var(--color-text-medium)', marginTop: '0.25rem' }}>
+                    {plano.padrao ? 'segue o plano de assinatura de cada UC' : resumoPlanoOriginador(plano, cargo)}
+                </div>
+            </div>
+        );
+    };
 
     const fetchOriginators = async () => {
         setLoading(true);
@@ -32,7 +61,8 @@ export default function OriginatorList() {
     //
     // Ele chamava a RPC `generate_monthly_commissions`, que calcula por
     // `profiles.commission_split` + `superior_id` — não é a fonte oficial.
-    // A comissão que vale é `originators_v2.split_commission`, aplicada pelo
+    // A comissão que vale é a do Plano do Originador (`planos_originador`,
+    // pela precedência de `fn_plano_originador_efetivo`), aplicada pelo
     // gatilho `handle_invoice_paid_ledger` a cada fatura paga, direto no
     // razão (conta 2.1.2). Ou seja: já é lançada sozinha, não há o que
     // "processar" no fim do mês.
@@ -107,7 +137,7 @@ export default function OriginatorList() {
                                 <tr>
                                     <th>Nome</th>
                                     <th>Contato</th>
-                                    <th>Comissão (Start/Rec.)</th>
+                                    <th>Plano</th>
                                     <th>Chave PIX</th>
                                     <th>Link</th>
                                     <th style={{ textAlign: 'right' }}>Ações</th>
@@ -127,11 +157,7 @@ export default function OriginatorList() {
                                                 <div style={{ fontSize: '0.9rem' }}>{item.email}</div>
                                                 <div style={{ fontSize: '0.9rem' }}>{item.phone}</div>
                                             </td>
-                                            <td>
-                                                <span className="badge badge-success">
-                                                    {item.split_commission?.start || 0}% / {item.split_commission?.recurrent || 0}%
-                                                </span>
-                                            </td>
+                                            <td>{celulaPlano(item)}</td>
                                             <td style={{ fontSize: '0.9rem' }}>{item.pix_key || '-'}</td>
                                             <td>
                                                 <button onClick={() => copyLink(item)} title="Copiar Link de Indicação" className="btn btn-secondary" style={{ padding: '0.3rem', border: 'none' }}>

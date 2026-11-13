@@ -71,6 +71,71 @@ DECLARE
     v_msg    text;
     v_pegou  boolean;
 BEGIN
+    -- 20261112b (dono, 12/11/2026, 2a revisao): os percentuais passaram a incidir
+    -- sobre a BASE BRUTA (kWh compensado x tarifa cheia) e o fornecedor fica com a
+    -- base liquida menos o deduzido. Este arquivo cobra gestao do plano de usina,
+    -- originador da usina, corte e piso com os numeros da base liquida; a fixture
+    -- iguala base_bruta = base para os numeros esperados continuarem validos
+    -- (mesmo padrao de split_gatilho/split_base_compensada). A diferenca bruta x
+    -- liquida e coberta por plano_originador_start_energia.test.sql.
+    -- Desfeito no rollback.
+    EXECUTE $bruta$
+      ALTER FUNCTION public.fn_base_recompensa_fatura(uuid) RENAME TO sbx_base_recompensa_original;
+      CREATE FUNCTION public.fn_base_recompensa_fatura(p_invoice uuid) RETURNS jsonb
+        LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $b$
+        SELECT b || CASE WHEN b ? 'base_bruta' THEN jsonb_build_object('base_bruta', b -> 'base') ELSE '{}'::jsonb END
+          FROM public.sbx_base_recompensa_original(p_invoice) b
+      $b$;
+    $bruta$;
+
+    -- FIXTURE Plano do Originador (20261110a/b): a regra de parceiro saiu do
+    -- plano de assinatura. Para os numeros deste arquivo nao mudarem, cada
+    -- plano de assinatura que o teste grava ganha um planos_originador com as
+    -- MESMAS chaves de parceiro (lider/ppe/ppp/ppf) que ele traz -- inclusive
+    -- nenhuma -- e passa a apontar para ele. Some no rollback.
+    EXECUTE $shim$
+      CREATE OR REPLACE FUNCTION public.sbx_plano_originador_do_plano() RETURNS trigger LANGUAGE plpgsql AS $b$
+      DECLARE c text[] := ARRAY['lider', 'ppe', 'ppp', 'ppf']; v_id uuid;
+      BEGIN
+        IF TG_OP = 'UPDATE' AND (NEW.start_config, NEW.recorrente_config, NEW.tipo_recompensa)
+           IS NOT DISTINCT FROM (OLD.start_config, OLD.recorrente_config, OLD.tipo_recompensa) THEN
+          RETURN NEW;
+        END IF;
+        INSERT INTO public.planos_originador (nome, tipo_recompensa, start_config, recorrente_config)
+        SELECT 'SANDBOX fixture ' || NEW.nome,
+               CASE NEW.tipo_recompensa WHEN 'hibrido' THEN 'ambos' ELSE NEW.tipo_recompensa END,
+               jsonb_build_object(
+                 -- 20261112b (dono, 12/11/2026): Start por ENERGIA; multiplicador = quantidade
+                 -- de faturas elegiveis do plano de assinatura (minimo 1)
+                 'multiplicador', GREATEST((SELECT count(*) FROM jsonb_array_elements_text(
+                     CASE WHEN jsonb_typeof(NEW.start_config -> 'faturas_elegiveis') = 'array' THEN NEW.start_config -> 'faturas_elegiveis' ELSE '[]' END) f
+                   WHERE f ~ '^[1-9][0-9]*$'), 1),
+                 -- revisao do dono 12/11/2026 (20261112a): UMA matriz de Start por
+                 -- nivel; o L1 do cargo e o % da MENOR fatura elegivel (max_niveis 1)
+                 'regras_multinivel', (SELECT jsonb_object_agg(cg, jsonb_build_object(
+                       'niveis', jsonb_build_object('L1', COALESCE((
+                           SELECT CASE WHEN (s.x ->> cg) ~ '^[0-9]+(\.[0-9]+)?$' AND (s.x ->> cg)::numeric <= 100 THEN s.x ->> cg END
+                             FROM (SELECT NEW.start_config -> 'regras' -> f AS x
+                                     FROM jsonb_array_elements_text(CASE WHEN jsonb_typeof(NEW.start_config -> 'faturas_elegiveis') = 'array' THEN NEW.start_config -> 'faturas_elegiveis' ELSE '[]' END) f
+                                    WHERE f ~ '^[1-9][0-9]*$' AND jsonb_typeof(NEW.start_config -> 'regras' -> f) = 'object'
+                                    ORDER BY f::int LIMIT 1) s), '0'),
+                         'L2', '0', 'L3', '0', 'L4', '0'),
+                       'max_niveis', 1)) FROM unnest(c) cg)),
+               jsonb_build_object('regras_multinivel', COALESCE((SELECT jsonb_object_agg(m.key, jsonb_build_object(
+                     'niveis', COALESCE((SELECT jsonb_object_agg(l.key, l.value) FROM jsonb_each(m.value -> 'niveis') l
+                                          WHERE l.key IN ('L1', 'L2', 'L3', 'L4') AND (l.value #>> '{}') ~ '^[0-9]+(\.[0-9]+)?$'
+                                            AND (l.value #>> '{}')::numeric <= 100), '{}'),
+                     'max_niveis', CASE WHEN (m.value ->> 'max_niveis') ~ '^[0-4]$' THEN LEAST((m.value ->> 'max_niveis')::int, 3) ELSE 0 END))
+                   FROM jsonb_each(CASE WHEN jsonb_typeof(NEW.recorrente_config -> 'regras_multinivel') = 'object' THEN NEW.recorrente_config -> 'regras_multinivel' ELSE '{}' END) m
+                  WHERE m.key = ANY (c) AND jsonb_typeof(m.value -> 'niveis') = 'object'), '{}'))
+        RETURNING id INTO v_id;
+        NEW.plano_originador_id := v_id;
+        RETURN NEW;
+      END $b$;
+      CREATE TRIGGER sbx_plano_originador_do_plano BEFORE INSERT OR UPDATE ON public.planos_assinatura_energia
+        FOR EACH ROW EXECUTE FUNCTION public.sbx_plano_originador_do_plano();
+    $shim$;
+
     -- ------------------------------------------------------------------
     -- helpers (somem no rollback do SANDBOX_OK)
     -- ------------------------------------------------------------------
@@ -83,6 +148,29 @@ BEGIN
         VALUES (p_ppe, 'ativo', 'sandbox://pu/' || gen_random_uuid()) RETURNING id INTO v_sub;
         INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address, plano_assinatura_id)
         VALUES (v_sub, p_usina, 'consumidora', 'ativo', 'SANDBOX PU conc', '{"uf": "RN"}'::jsonb, p_plano_uc)
+        RETURNING id INTO v_uc;
+        INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento, consumo_compensado)
+        VALUES (v_uc, 'a_vencer', 1000, 0, CURRENT_DATE + 5, 1000) RETURNING id INTO v_inv;
+        UPDATE public.invoices SET status = 'pago' WHERE id = v_inv;
+        RETURN v_inv;
+      END $f$
+    $h$;
+
+    -- 20261112b (dono, 12/11/2026): o Start do parceiro e por ENERGIA e exige o
+    -- consumo-base da UC (start_base_kwh, a mediana congelada no cadastro). Para a
+    -- fatura de Start (O6) a UC nasce com base 833,333333333 kWh: com a tarifa de
+    -- 1,20 do cadastro, kWh do Start x tarifa = 1000 = a base que a fixture $bruta$
+    -- iguala a base liquida, e o numero esperado (PPE 200, Lider 100) continua valendo.
+    -- (A tarifa da fixture nao pode ser mexida: o piso dos casos O2+ usa kWh x tarifa.)
+    EXECUTE $h$
+      CREATE FUNCTION pg_temp.fatura_paga_com_base(p_usina uuid, p_ppe uuid, p_plano_uc uuid)
+      RETURNS uuid LANGUAGE plpgsql AS $f$
+      DECLARE v_sub uuid; v_uc uuid; v_inv uuid;
+      BEGIN
+        INSERT INTO public.subscribers (originator_id, status, short_url)
+        VALUES (p_ppe, 'ativo', 'sandbox://pu/' || gen_random_uuid()) RETURNING id INTO v_sub;
+        INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address, plano_assinatura_id, start_base_kwh)
+        VALUES (v_sub, p_usina, 'consumidora', 'ativo', 'SANDBOX PU conc', '{"uf": "RN"}'::jsonb, p_plano_uc, 833.333333333)
         RETURNING id INTO v_uc;
         INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento, consumo_compensado)
         VALUES (v_uc, 'a_vencer', 1000, 0, CURRENT_DATE + 5, 1000) RETURNING id INTO v_inv;
@@ -528,7 +616,7 @@ BEGIN
     VALUES ('SANDBOX PU start 1', 12, 3) RETURNING id INTO v_pu_start1;
     INSERT INTO public.usinas (plano_usina_id, supplier_id) VALUES (v_pu_start1, v_forn_orig) RETURNING id INTO v_usina_start1;
 
-    v_inv    := pg_temp.fatura_paga(v_usina_start1, v_ppe, v_rec_start1);
+    v_inv    := pg_temp.fatura_paga_com_base(v_usina_start1, v_ppe, v_rec_start1);
     v_contas := pg_temp.contas(v_inv);
     IF v_contas IS DISTINCT FROM ARRAY[0, -330, -670, 0]::numeric[] THEN
         RAISE EXCEPTION 'FALHA O6: [3.1.1, 2.1.2, 2.1.1, soma] = %, esperado {0,-330,-670,0}', v_contas;

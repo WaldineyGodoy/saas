@@ -22,7 +22,7 @@ import { baixarPdfContrato, dataPorExtenso, gerarPdfBase64, numeroBr, paginarTex
 
 export const DEFAULTS_FORNECEDOR = {
     desconto: 20,
-    percentualRecorrente: 10,
+    percentualRecorrente: 6,
     taxaAdmin: 10,
     diaCorte: 5,
     diaRepasse: 15,
@@ -128,12 +128,15 @@ ${itemRetidas}.2. Substituído o CONSUMIDOR por outro, a retenção recomeça em
 13.5.5. Cumprido o Período de Fidelidade, vigora a Cláusula 13.1, sem multa rescisória.` : '';
 
     // A Cláusula 7.2.1 afirma que a fatura recuperada rende mais ao
-    // CONTRATANTE do que a paga em dia. Isso é verdade enquanto o desconto
-    // perdido pelo consumidor superar a taxa de recuperação, líquida da
-    // recorrente — com 20% e 10% sobra folga, mas num desconto de 5% a
+    // CONTRATANTE do que a paga em dia. Desde 12/11/2026 a Remuneração
+    // Recorrente incide sobre a Tarifa de Aplicação SEM desconto (item 5.4),
+    // então é a mesma nas duas faturas e se cancela na comparação: em dia o
+    // CONTRATANTE fica com T(1 - d) - rT; recuperada, com T - rT - recT.
+    // A frase é verdadeira enquanto o desconto perdido (d) for >= a taxa de
+    // recuperação (rec) — com 20% e 8% sobra folga, mas num desconto de 5% a
     // frase viraria uma declaração falsa dentro do contrato. Por isso é
     // calculada, não escrita à mão.
-    const recuperadaRendeMais = desconto * (1 - recorrente / 100) >= recuperacao;
+    const recuperadaRendeMais = desconto >= recuperacao;
     const comparativoRecuperacao = recuperadaRendeMais
         ? ' Cumulada com a Remuneração Recorrente, o CONTRATANTE ainda assim recebe, na fatura recuperada, montante superior ao que receberia caso a mesma fatura tivesse sido paga pontualmente.'
         : '';
@@ -184,11 +187,11 @@ CAPÍTULO III — DA REMUNERAÇÃO
 CLÁUSULA 5 – DA REMUNERAÇÃO DA GESTORA
 5.1. A GESTORA fará jus a:
 (a) Remuneração Inicial — 100% (cem por cento) do ${varias ? `Valor Integral de cada uma das ${faturasRetidasExtenso} primeiras faturas da Associação de cada CONSUMIDOR (as Faturas Retidas, item ${itemRetidas})` : 'Valor Integral da Primeira Fatura da Associação'}, devida apenas quanto a CONSUMIDORES captados pela GESTORA ou por seus corretores;
-(b) Remuneração Recorrente — ${numeroBr(recorrente)}% (${percentualExtenso(recorrente)} por cento) sobre as faturas da Associação pagas pelo CONSUMIDOR;
+(b) Remuneração Recorrente — ${numeroBr(recorrente)}% (${percentualExtenso(recorrente)} por cento) sobre o valor, à Tarifa de Aplicação e sem o Desconto, da energia efetivamente compensada nas faturas da Associação pagas pelo CONSUMIDOR, na forma do item 5.4;
 (c) Taxa de Administração — ${valorEmReais(taxaAdmin)} por CONSUMIDOR ativo, incluindo emissão e envio de boleto.
 5.2. Definição de "captado pela GESTORA". Considera-se captado pela GESTORA o CONSUMIDOR cujo cadastro tenha sido originado por canal, link de indicação ou corretor da GESTORA, conforme registro do sistema de CRM da GESTORA na data da adesão.
 5.3. Cálculo do Valor Integral ${varias ? 'de cada Fatura Retida' : 'da Primeira Fatura'}: Tarifa de Aplicação x (1 – Desconto %) x Volume de Energia Gerada x % Efetivamente Compensado.
-5.4. Cálculo da Remuneração Recorrente: [Tarifa de Aplicação x (1 – Desconto %) x Volume de Energia Gerada x % Efetivamente Compensado, no período de apuração] x Percentual Recorrente.
+5.4. Cálculo da Remuneração Recorrente: [Tarifa de Aplicação x Volume de Energia Gerada x % Efetivamente Compensado, no período de apuração] x Percentual Recorrente, sem dedução do Desconto concedido ao CONSUMIDOR.
 5.5. Definições:
 (a) Tarifa de Aplicação — todas as componentes da tarifa de energia elétrica, incluindo impostos e tributos cobrados pela distribuidora na área de concessão;
 (b) Desconto — ${numeroBr(desconto)}% (${percentualExtenso(desconto)} por cento) aplicado sobre a Tarifa de Aplicação, praticado para a área de concessão, conforme Anexo I;
@@ -216,7 +219,7 @@ CLÁUSULA 7 – DA COBRANÇA E DA TAXA DE RECUPERAÇÃO DE CRÉDITO
 7.2.1. A Taxa de Recuperação de Crédito não onera o CONTRATANTE: incide sobre o valor cheio recebido em razão da perda, pelo CONSUMIDOR, do desconto por pagamento pontual previsto no Termo de Adesão, e não sobre a remuneração devida ao CONTRATANTE.${comparativoRecuperacao}
 7.3. A Taxa de Recuperação de Crédito incide exclusivamente sobre valores efetivamente recuperados, não gerando crédito da GESTORA contra o CONTRATANTE em caso de não recuperação.
 7.4. Encargos moratórios. A multa moratória de 2% (dois por cento), os juros de 1% (um por cento) ao mês e a correção monetária cobrados dos CONSUMIDORES são, uma vez recebidos, repassados integralmente ao CONTRATANTE.
-7.5. Diferencial de desconto. Perdido pelo CONSUMIDOR o desconto por pagamento pontual previsto no Termo de Adesão, a diferença entre o valor cheio e o valor com desconto, quando efetivamente recebida, é repassada integralmente ao CONTRATANTE, sobre ela incidindo a Remuneração Recorrente.
+7.5. Diferencial de desconto. Perdido pelo CONSUMIDOR o desconto por pagamento pontual previsto no Termo de Adesão, a diferença entre o valor cheio e o valor com desconto, quando efetivamente recebida, é repassada integralmente ao CONTRATANTE, sem nova incidência da Remuneração Recorrente, que já é calculada sobre a Tarifa de Aplicação sem o Desconto (item 5.4).
 7.6. Negativação em órgãos de proteção ao crédito, protesto de título e cobrança judicial dependem de prévia autorização escrita do CONTRATANTE.
 7.7. As despesas de cobrança que excedam a via administrativa — custas, emolumentos de protesto, taxas de negativação, honorários advocatícios contratuais e sucumbenciais — correrão por conta exclusiva do CONTRATANTE, podendo ser deduzidas dos repasses mediante comprovação.
 7.8. A execução da cobrança pela GESTORA não implica assunção da dívida, novação, sub-rogação ou garantia do crédito, permanecendo íntegra a Cláusula 2.3.

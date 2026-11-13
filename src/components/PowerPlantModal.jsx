@@ -2,7 +2,9 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { addMonths, subMonths, endOfMonth, format, parseISO } from 'date-fns';
 import { supabase } from '../lib/supabase';
 import { ucEncerrada } from '../lib/ucStatus';
-import { calcularCapacidade, ocupacaoDaGeracao } from '../lib/capacidade';
+import { calcularCapacidade, ocupacaoDaGeracao, resumoCapacidadeMensal } from '../lib/capacidade';
+import OcupacaoMensalUsina from './OcupacaoMensalUsina';
+import { useGeracaoMensal } from '../hooks/useGeracaoMensal';
 import CronogramaObraUsina from './CronogramaObraUsina';
 import AlertasWhatsappUsina from './AlertasWhatsappUsina';
 import { alertasParaGravar, inversoresParaGravar, ehSnDatalogger } from '../lib/alertasUsina';
@@ -968,7 +970,13 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
     const capacidadeUsina = calcularCapacidade({ ucs: selectedUCs, geracao: formData.geracao_estimada_kwh });
     // Ocupado = consumo da UG + franquias das beneficiarias: fecha com o Disponivel.
     const totalFranquiaVinculada = ocupacaoDaGeracao(capacidadeUsina).ocupado;
-    
+    // Mesma regra mes a mes: perfil de 12 meses da UC x geracao estimada do mes
+    // (fn_geracao_estimada_mensal; sem a RPC, geracao plana). Destaca pior mes e mes atual.
+    const geracaoMensalUsina = useGeracaoMensal(usina?.id);
+    const capacidadeMensalUsina = resumoCapacidadeMensal(
+        { geracao_estimada_kwh: formData.geracao_estimada_kwh }, selectedUCs, geracaoMensalUsina
+    );
+
     const ucStats = {
         total: selectedUCs.length,
         ativos: selectedUCs.filter(u => u.status === 'ativo').length,
@@ -5424,6 +5432,13 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                                 </div>
                                             </div>
                                         </div>
+
+                                        {/* Card 3: ocupacao mes a mes (geracao do mes x franquia ocupada no mes) */}
+                                        {formData.geracao_estimada_kwh > 0 && (
+                                            <div style={{ gridColumn: '1 / -1' }}>
+                                                <OcupacaoMensalUsina resumo={capacidadeMensalUsina} />
+                                            </div>
+                                        )}
                                     </div>
                                     
                                     {/* Regra de Rateio Premium Selector */}

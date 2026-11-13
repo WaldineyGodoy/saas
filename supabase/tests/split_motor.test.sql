@@ -306,5 +306,21 @@ BEGIN
     RAISE EXCEPTION 'FALHOU 14: soma das partes nao fechou com a base 12.50, veio %', (v_result#>>'{b2w,valor}')::numeric + (v_result#>>'{beneficiarios,0,valor}')::numeric + (v_result->>'fornecedor')::numeric;
   END IF;
 
+  -- 15/16 (20261112b): base propria do participante (Start de parceiro por
+  -- energia: so os kWh dentro do teto). 5% de 40 = 2, B2W segue sobre a base.
+  v_result := public.fn_calcular_split_recompensa(100.00, 1000.00, v_regras, jsonb_build_array(
+    jsonb_build_object('papel','ppe','id',v_ppe,'nivel',1,'suspenso',false,'base',40.00)));
+  IF (v_result#>>'{beneficiarios,0,valor}')::numeric IS DISTINCT FROM 2
+     OR (v_result#>>'{b2w,valor}')::numeric IS DISTINCT FROM 10 THEN
+    RAISE EXCEPTION 'FALHOU 15: base propria do participante: %', v_result;
+  END IF;
+  BEGIN
+    PERFORM public.fn_calcular_split_recompensa(100.00, 1000.00, v_regras, jsonb_build_array(
+      jsonb_build_object('papel','ppe','id',v_ppe,'nivel',1,'suspenso',false,'base',100.01)));
+    RAISE EXCEPTION 'FALHOU 16: base do participante acima de p_base aceita';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM NOT LIKE '%fora de 0..p_base%' THEN RAISE; END IF;
+  END;
+
   RAISE EXCEPTION 'SANDBOX_OK';
 END $$;

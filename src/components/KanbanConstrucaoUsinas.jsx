@@ -1,4 +1,7 @@
 import { ETAPAS_OBRA, resumoCronograma, textoItem, diasAte, formatarData } from '../lib/cronogramaObra';
+import { ocupaFranquia, resumoCapacidadeMensal } from '../lib/capacidade';
+import OcupacaoMensalUsina from './OcupacaoMensalUsina';
+import { useGeracaoMensal } from '../hooks/useGeracaoMensal';
 
 // Kanban "Construção" da lista de usinas: só usinas em Pré-Operação, em colunas
 // pelas macroetapas do cronograma da obra (aba Planta). A coluna vem da fase
@@ -29,6 +32,13 @@ function CardConstrucao({ usina, onClick }) {
     const proxima = proximaEntrega(etapa);
     const inicio = resumo.inicioGeracao;
     const diasInicio = diasAte(inicio.previsto_para);
+    // Franquia ocupa desde o vinculo: usina em obra ja pode estar em overbook em
+    // algum mes. Geracao do mes x franquia do mes (src/lib/capacidade.js).
+    const temFranquia = (usina.consumer_units || []).some(ocupaFranquia);
+    const geracaoMensal = useGeracaoMensal(temFranquia && usina.geracao_estimada_kwh > 0 ? usina.id : null);
+    const capMensal = temFranquia && usina.geracao_estimada_kwh > 0
+        ? resumoCapacidadeMensal(usina, usina.consumer_units, geracaoMensal)
+        : null;
 
     return (
         <div className="kanban-card" style={{ cursor: 'pointer' }} onClick={() => onClick(usina)}>
@@ -79,6 +89,13 @@ function CardConstrucao({ usina, onClick }) {
                     <div style={{ color: '#b45309', fontWeight: 600 }}>Obra concluída: atualize o status da usina.</div>
                 )}
             </div>
+
+            {capMensal && (
+                <div style={{ marginTop: '0.6rem' }}>
+                    <div style={{ fontSize: '0.65rem', color: '#64748b' }}>Lotação mês a mês</div>
+                    <OcupacaoMensalUsina resumo={capMensal} compacto />
+                </div>
+            )}
 
             <div style={{ fontSize: '0.8rem', color: 'var(--color-text-light)', marginTop: '0.6rem' }}>
                 {usina.address?.cidade}/{usina.address?.uf}

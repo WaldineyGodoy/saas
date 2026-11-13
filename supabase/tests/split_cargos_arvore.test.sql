@@ -217,8 +217,10 @@ BEGIN
   SELECT count(*) INTO v_n
     FROM public.originators_v2
    WHERE id NOT IN (v_orig, v_emb);
-  IF v_n <> 8 THEN
-    RAISE EXCEPTION 'FALHOU: esperava 8 originadores pre-existentes, achou %', v_n;
+  -- Eram 8 no backfill de 28/09/2026; a base cresce com novos cadastros
+  -- (13 em 10/11/2026). O que o teste garante e que os do backfill seguem la.
+  IF v_n < 8 THEN
+    RAISE EXCEPTION 'FALHOU: esperava ao menos 8 originadores pre-existentes, achou %', v_n;
   END IF;
 
   RAISE EXCEPTION 'SANDBOX_OK';

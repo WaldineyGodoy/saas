@@ -13,6 +13,7 @@ import {
     gerarPdfContratoOriginadorBase64, MODALIDADES_ORIGINACAO, montarContratoOriginador
 } from '../lib/contratoOriginador';
 import { numeroBr, paraNumero } from '../lib/contratoBase';
+import { listarPlanosOriginador, planoOriginadorAusente, planoPadraoDe, resumoPlanoOriginador, ROTULO_CARGO } from '../lib/planoOriginador';
 
 /**
  * Contrato de Originação e Indicação de Negócios, na aba Contrato do
@@ -23,9 +24,9 @@ import { numeroBr, paraNumero } from '../lib/contratoBase';
  * `contract_terms.minutas`, mesmo envio pela Autentique com entrega do
  * link por WhatsApp e e-mail feita por nós.
  *
- * O que muda é de onde vêm os números: os percentuais do Start e da
- * Recorrência são os do cadastro do originador (aba Financeiro), e não
- * campos deste painel. Duplicá-los aqui criaria uma terceira fonte de
+ * O que muda é de onde vêm os números: o Start (X × o consumo médio da
+ * UC, em kWh compensados) e a Recorrência saem do Plano do Originador
+ * escolhido no cadastro (aba Indicação), e não de campos deste painel. Duplicá-los aqui criaria uma terceira fonte de
  * verdade sobre comissão — e a primeira a divergir das outras duas. Ver
  * a memória crm-comissao-duas-fontes.
  */
@@ -60,6 +61,8 @@ export default function ContratoOriginacao({ originadorId, registrarHistorico })
 
     const [originador, setOriginador] = useState(null);
     const [lider, setLider] = useState(null);
+    // undefined = carregando; null = tabela ainda não existe no banco.
+    const [planoOriginador, setPlanoOriginador] = useState(undefined);
     const [signatures, setSignatures] = useState([]);
     const [carregando, setCarregando] = useState(false);
     const [opts, setOpts] = useState(DEFAULTS_ORIGINADOR);
@@ -85,6 +88,17 @@ export default function ContratoOriginacao({ originadorId, registrarHistorico })
             chefe = l || null;
         }
         setLider(chefe);
+
+        // O Anexo I descreve o Plano do Originador: o de exceção, se houver;
+        // senão o Padrão. Sem a tabela no banco, o Anexo sai sem número.
+        let plano = null;
+        try {
+            const planos = await listarPlanosOriginador(supabase);
+            plano = planos.find(p => p.id === data?.plano_originador_id) || planoPadraoDe(planos);
+        } catch (e) {
+            if (!planoOriginadorAusente(e)) throw e;
+        }
+        setPlanoOriginador(plano);
         return { originador: data, lider: chefe };
     }, [originadorId]);
 
@@ -102,7 +116,7 @@ export default function ContratoOriginacao({ originadorId, registrarHistorico })
 
     useEffect(() => {
         if (!originadorId) {
-            setOriginador(null); setLider(null); setSignatures([]);
+            setOriginador(null); setLider(null); setSignatures([]); setPlanoOriginador(undefined);
             return undefined;
         }
         let cancelado = false;
@@ -125,8 +139,8 @@ export default function ContratoOriginacao({ originadorId, registrarHistorico })
     }, [originadorId]);
 
     const textoGerado = useMemo(
-        () => (originador ? montarContratoOriginador(originador, lider, opts) : ''),
-        [originador, lider, opts]
+        () => (originador ? montarContratoOriginador(originador, lider, opts, planoOriginador || null) : ''),
+        [originador, lider, opts, planoOriginador]
     );
 
     // Ordem de precedência: o que está sendo digitado agora, depois a minuta
@@ -435,7 +449,7 @@ export default function ContratoOriginacao({ originadorId, registrarHistorico })
     }
 
     const ocupado = gerandoMinuta || enviando;
-    const split = originador.split_commission || {};
+    const cargoChave = (originador.cargo || 'ppf').toLowerCase();
 
     return (
         <>
@@ -497,9 +511,14 @@ export default function ContratoOriginacao({ originadorId, registrarHistorico })
                 </div>
 
                 <div style={{ marginTop: '1rem', padding: '0.85rem 1rem', background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '10px', fontSize: '0.83rem', color: '#0369a1' }}>
-                    O Anexo I do contrato sai do cadastro: Start de {numeroBr(paraNumero(split.start) || 0)}% e Recorrência de {numeroBr(paraNumero(split.recurrent) || 0)}% (aba Financeiro),
-                    cargo {originador.cargo || 'ppf'}{lider ? `, Líder ${lider.name}` : ', sem Líder vinculado'}.
-                    Para mudar os percentuais, mude no cadastro — o contrato não os edita, porque é o cadastro que o motor do split lê na hora de pagar.
+                    O Anexo I do contrato sai do cadastro (aba Financeiro), cargo {ROTULO_CARGO[cargoChave] || cargoChave}{lider ? `, Líder ${lider.name}` : ', sem Líder vinculado'}.{' '}
+                    {planoOriginador === null
+                        ? 'Planos do Originador ainda não disponíveis neste ambiente: o Anexo remete à Tabela de Recompensas vigente, sem percentual.'
+                        : !planoOriginador || planoOriginador.padrao
+                            ? `${planoOriginador?.nome || 'Plano Padrão'}: a regra segue o plano de assinatura de cada UC, e o Anexo remete à tabela vigente sem fixar percentual.`
+                            : `${planoOriginador.nome} (exceção, vale em todas as UCs): ${resumoPlanoOriginador(planoOriginador, cargoChave)}.`}
+                    {' '}O contrato descreve o Start como X × o consumo médio da UC (mediana do histórico da conta de energia, fixada no cadastro), pago sobre os kWh compensados de cada fatura limitados ao consumo médio, até esse total, e os percentuais sobre kWh compensado × tarifa da concessionária, sem descontos.
+                    {' '}Para mudar, troque o Plano do Originador no cadastro — o contrato não edita a remuneração, porque é o plano que o motor do split lê na hora de pagar.
                 </div>
             </div>
 

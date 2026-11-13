@@ -48,9 +48,10 @@ describe('campos do plano de usina', () => {
         ]);
     });
 
-    test('o vazio tem os mesmos defaults da migracao 20261006e', () => {
+    // percentual_recorrente: 10 -> 6 pela 20261112b (gestao B2W sobre a tarifa cheia, dono 12/11/2026)
+    test('o vazio tem os mesmos defaults da migracao 20261006e (e 20261112b)', () => {
         expect(PLANO_USINA_VAZIO).toMatchObject({
-            percentual_recorrente: 10, taxa_admin_reais: 10, taxa_recuperacao_pct: 8,
+            percentual_recorrente: 6, taxa_admin_reais: 10, taxa_recuperacao_pct: 8,
             retencao_rescisao_pct: 10, multa_atraso_mes_pct: 0.5, multa_atraso_teto_pct: 10,
             garantia_instalacao_meses: 12,
             desconto_pct: 20, dia_corte: 5, dia_repasse: 15, prazo_transferencia_dias: 90, prazo_honorarios_dias: 180,
