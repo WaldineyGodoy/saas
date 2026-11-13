@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import HistoryTimeline, { CollapsibleSection } from './HistoryTimeline';
 import ContratoOriginacao from './ContratoOriginacao';
+import LicencaOriginador from './LicencaOriginador';
 
 export default function OriginatorModal({ originator, onClose, onSave, onDelete }) {
     const { profile } = useAuth();
@@ -30,6 +31,12 @@ export default function OriginatorModal({ originator, onClose, onSave, onDelete 
         // `split_commission` (que o motor nunca leu): vem do Plano do
         // Originador, e a exceção escolhida aqui vence o plano de cada UC.
         plano_originador_id: '',
+        // Cargo, Líder e licença anual (dono, 13/11/2026): o preço vem do
+        // plano; aqui entram só o voucher e a data do pagamento.
+        cargo: 'ppf',
+        lider_id: null,
+        licenca_paga_em: '',
+        licenca_voucher_id: null,
         cep: '',
         rua: '',
         numero: '',
@@ -53,6 +60,10 @@ export default function OriginatorModal({ originator, onClose, onSave, onDelete 
                 pix_key: originator.pix_key || '',
                 pix_key_type: normalizarPixKeyType(originator.pix_key_type),
                 plano_originador_id: originator.plano_originador_id || '',
+                cargo: (originator.cargo || 'ppf').toLowerCase(),
+                lider_id: originator.lider_id || null,
+                licenca_paga_em: originator.licenca_paga_em || '',
+                licenca_voucher_id: originator.licenca_voucher_id || null,
                 ...endereco
             });
         }
@@ -80,7 +91,7 @@ export default function OriginatorModal({ originator, onClose, onSave, onDelete 
     // Ativos, mais o atual mesmo que tenha sido inativado — senão o select
     // mostraria outro plano e o save trocaria o originador sem ninguém pedir.
     const planosNoSelect = planos.filter(p => p.status === 'ativo' || p.id === formData.plano_originador_id);
-    const cargo = (originator?.cargo || 'ppf').toLowerCase();
+    const cargo = formData.cargo || 'ppf';
 
     const handleCepBlur = async () => {
         const rawCep = formData.cep.replace(/\D/g, '');
@@ -157,6 +168,10 @@ export default function OriginatorModal({ originator, onClose, onSave, onDelete 
             phone: formData.phone.replace(/\D/g, ''),
             pix_key: formData.pix_key,
             pix_key_type: formData.pix_key_type,
+            cargo: formData.cargo,
+            lider_id: formData.cargo === 'lider' ? null : (formData.lider_id || null),
+            licenca_paga_em: formData.licenca_paga_em || null,
+            licenca_voucher_id: formData.licenca_voucher_id || null,
             address: {
                 cep: formData.cep,
                 rua: formData.rua,
@@ -553,6 +568,15 @@ export default function OriginatorModal({ originator, onClose, onSave, onDelete 
                                             </div>
                                         )}
                                     </div>
+                                    <LicencaOriginador
+                                        value={formData}
+                                        onChange={parcial => setFormData(prev => ({ ...prev, ...parcial }))}
+                                        plano={planoSelecionado}
+                                        originatorId={originator?.id || null}
+                                        cargoSalvo={originator ? (originator.cargo || 'ppf').toLowerCase() : null}
+                                        labelStyle={labelStyle}
+                                        inputStyle={inputStyle}
+                                    />
                                     <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '12px', border: '1px solid #eff6ff', display: 'flex', alignItems: 'center', gap: '1rem' }}>
                                         <div style={{ padding: '0.75rem', background: 'white', borderRadius: '10px', color: '#3b82f6', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
                                             <LinkIcon size={24} />

@@ -97,7 +97,8 @@ BEGIN
   SELECT * INTO r FROM public.originators_v2 WHERE id = v_pub2;
   IF r.cargo <> 'ppf' THEN RAISE EXCEPTION 'FALHOU 3: anon gravou cargo=%', r.cargo; END IF;
   IF r.lider_id IS NOT NULL THEN RAISE EXCEPTION 'FALHOU 3: anon gravou lider_id=%', r.lider_id; END IF;
-  IF r.licenca_valor IS NOT NULL OR r.licenca_vencimento IS NOT NULL THEN
+  -- 20261113a: valor/vencimento derivados do plano (preco 0 aqui) -> 0 / NULL
+  IF r.licenca_valor IS DISTINCT FROM 0 OR r.licenca_vencimento IS NOT NULL OR r.licenca_paga_em IS NOT NULL THEN
     RAISE EXCEPTION 'FALHOU 3: anon gravou licenca (valor=% venc=%)', r.licenca_valor, r.licenca_vencimento;
   END IF;
   IF r.licenca_status <> 'isenta' THEN RAISE EXCEPTION 'FALHOU 3: licenca_status=%', r.licenca_status; END IF;
@@ -116,7 +117,7 @@ BEGIN
   PERFORM set_config('request.jwt.claims', '', true);
 
   SELECT * INTO r FROM public.originators_v2 WHERE id = v_pub3;
-  IF r.cargo <> 'ppf' OR r.lider_id IS NOT NULL OR r.licenca_valor IS NOT NULL THEN
+  IF r.cargo <> 'ppf' OR r.lider_id IS NOT NULL OR r.licenca_valor IS DISTINCT FROM 0 THEN
     RAISE EXCEPTION 'FALHOU 4: claim role=anon escolheu cargo=% lider=% licenca=%', r.cargo, r.lider_id, r.licenca_valor;
   END IF;
 
@@ -135,8 +136,8 @@ BEGIN
   PERFORM set_config('request.jwt.claims', '', true);
 
   SELECT * INTO r FROM public.originators_v2 WHERE id = v_svc;
-  IF r.cargo <> 'ppe' OR r.lider_id IS DISTINCT FROM v_lider OR r.licenca_valor IS DISTINCT FROM 500
-     OR r.licenca_vencimento IS NULL OR r.ativo IS NOT FALSE
+  -- licenca_valor/vencimento: derivados do plano desde 20261113a (nao conferidos aqui)
+  IF r.cargo <> 'ppe' OR r.lider_id IS DISTINCT FROM v_lider OR r.ativo IS NOT FALSE
      OR r.split_commission <> '{"start": 7, "recurrent": 7}'::jsonb THEN
     RAISE EXCEPTION 'FALHOU 5: service_role perdeu controle: cargo=% lider=% licenca=% ativo=% split=%',
       r.cargo, r.lider_id, r.licenca_valor, r.ativo, r.split_commission;
@@ -149,7 +150,7 @@ BEGIN
   VALUES (v_pg, 'Postgres T10', 'ppp', v_lider, 800, false);
 
   SELECT * INTO r FROM public.originators_v2 WHERE id = v_pg;
-  IF r.cargo <> 'ppp' OR r.lider_id IS DISTINCT FROM v_lider OR r.licenca_valor IS DISTINCT FROM 800 OR r.ativo IS NOT FALSE THEN
+  IF r.cargo <> 'ppp' OR r.lider_id IS DISTINCT FROM v_lider OR r.ativo IS NOT FALSE THEN
     RAISE EXCEPTION 'FALHOU 6: postgres/migracao perdeu controle: cargo=% lider=% ativo=%', r.cargo, r.lider_id, r.ativo;
   END IF;
 
@@ -166,7 +167,7 @@ BEGIN
   PERFORM set_config('request.jwt.claims', '', true);
 
   SELECT * INTO r FROM public.originators_v2 WHERE id = v_int;
-  IF r.cargo <> 'ppe' OR r.lider_id IS DISTINCT FROM v_lider OR r.licenca_valor IS DISTINCT FROM 300 THEN
+  IF r.cargo <> 'ppe' OR r.lider_id IS DISTINCT FROM v_lider THEN
     RAISE EXCEPTION 'FALHOU 7: admin perdeu controle: cargo=% lider=% licenca=%', r.cargo, r.lider_id, r.licenca_valor;
   END IF;
 
@@ -183,7 +184,7 @@ BEGIN
   PERFORM set_config('request.jwt.claims', '', true);
 
   SELECT * INTO r FROM public.originators_v2 WHERE id = v_auth;
-  IF r.cargo <> 'ppf' OR r.lider_id IS NOT NULL OR r.licenca_valor IS NOT NULL OR r.ativo IS NOT TRUE THEN
+  IF r.cargo <> 'ppf' OR r.lider_id IS NOT NULL OR r.licenca_valor IS DISTINCT FROM 0 OR r.ativo IS NOT TRUE THEN
     RAISE EXCEPTION 'FALHOU 8: authenticated comum escolheu cargo=% lider=% licenca=% ativo=%',
       r.cargo, r.lider_id, r.licenca_valor, r.ativo;
   END IF;

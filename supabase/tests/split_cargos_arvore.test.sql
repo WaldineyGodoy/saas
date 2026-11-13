@@ -54,26 +54,32 @@ BEGIN
   END IF;
 
   -- ======================================================================
-  -- 3) licenca_status derivado do vencimento
+  -- 3) licenca_status derivado do plano e do pagamento (20261113a)
   -- ======================================================================
-  -- 3a) sem vencimento => isenta
+  -- 3a) cargo sem preco no plano => isenta
   SELECT licenca_status INTO v_txt FROM public.originators_v2 WHERE id = v_orig;
   IF v_txt <> 'isenta' THEN
-    RAISE EXCEPTION 'FALHOU: licenca_status sem vencimento veio "%", esperado isenta', v_txt;
+    RAISE EXCEPTION 'FALHOU: licenca_status sem preco veio "%", esperado isenta', v_txt;
   END IF;
 
-  -- 3b) vencimento futuro => ativa
+  -- 3b) preco no plano e pago ha menos de 1 ano => ativa
+  UPDATE public.planos_originador SET licenca_config = licenca_config || '{"ppf": 199.90}'::jsonb
+   WHERE id = (SELECT plano_originador_id FROM public.originators_v2 WHERE id = v_orig);
+  SELECT licenca_status INTO v_txt FROM public.originators_v2 WHERE id = v_orig;
+  IF v_txt <> 'pendente' THEN
+    RAISE EXCEPTION 'FALHOU: licenca_status com preco e sem pagamento veio "%", esperado pendente', v_txt;
+  END IF;
   UPDATE public.originators_v2
-     SET licenca_valor = 199.90, licenca_vencimento = current_date + 30
+     SET licenca_paga_em = (current_date + 30 - interval '1 year')::date
    WHERE id = v_orig;
   SELECT licenca_status INTO v_txt FROM public.originators_v2 WHERE id = v_orig;
   IF v_txt <> 'ativa' THEN
     RAISE EXCEPTION 'FALHOU: licenca_status com vencimento futuro veio "%", esperado ativa', v_txt;
   END IF;
 
-  -- 3c) vencimento passado => vencida
+  -- 3c) pago ha mais de 1 ano => vencida
   UPDATE public.originators_v2
-     SET licenca_vencimento = current_date - 1
+     SET licenca_paga_em = (current_date - 1 - interval '1 year')::date
    WHERE id = v_orig;
   SELECT licenca_status INTO v_txt FROM public.originators_v2 WHERE id = v_orig;
   IF v_txt <> 'vencida' THEN
