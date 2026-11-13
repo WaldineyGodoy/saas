@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Edit, Trash2, GitBranch, RefreshCw } from 'lucide-react';
+import { Plus, Edit, Trash2, GitBranch, RefreshCw, CheckCircle2, XCircle } from 'lucide-react';
 import { supabase } from '../../../lib/supabase';
 import PlanoUsinaModal from './PlanoUsinaModal';
 
@@ -25,6 +25,26 @@ export default function PlanosUsinaLista({ planosUsina, loading, onRefresh, show
             return;
         }
         showAlert(`Plano "${plano.nome}" excluído.`, 'success');
+        onRefresh();
+    };
+
+    // Ativo = aparece para usina nova; somente contratos = fica só com as usinas
+    // que já estão nele. Criar uma versão nova passa o plano antigo para
+    // somente contratos; aqui o dono pode trazê-lo de volta. Trocar o status
+    // não mexe nas usinas vinculadas nem nos percentuais (a trava do banco só
+    // protege os valores).
+    const alternarStatus = async (plano) => {
+        const novo = plano.status === 'ativo' ? 'somente_contratos' : 'ativo';
+        const pergunta = novo === 'ativo'
+            ? `Reativar o plano "${plano.nome}"? Ele volta a aparecer para vincular a usinas.`
+            : `Passar o plano "${plano.nome}" para somente contratos? As usinas que já estão nele continuam, mas ele deixa de aparecer para vincular a usinas novas.`;
+        if (!window.confirm(pergunta)) return;
+        const { error } = await supabase.from('planos_usina').update({ status: novo }).eq('id', plano.id);
+        if (error) {
+            showAlert('Erro ao alterar o status do plano: ' + error.message, 'error');
+            return;
+        }
+        showAlert(`Plano "${plano.nome}" ${novo === 'ativo' ? 'reativado' : 'passou para somente contratos'}.`, 'success');
         onRefresh();
     };
 
@@ -88,8 +108,20 @@ export default function PlanosUsinaLista({ planosUsina, loading, onRefresh, show
                                             Originador {Number(p.originador_recorrente_pct)}% · Líder {Number(p.originador_lider_recorrente_pct ?? 0)}%
                                             {(p.originador_bonus_fechamentos || []).length > 0 && ` + bônus ${p.originador_bonus_fechamentos.join(', ')}º fech.`}
                                         </td>
-                                        <td style={{ padding: '0.85rem 1rem', color: p.status === 'ativo' ? '#16a34a' : '#64748b', fontWeight: 600 }}>
-                                            {p.status === 'ativo' ? 'Ativo' : 'Somente contratos'}
+                                        <td style={{ padding: '0.85rem 1rem' }}>
+                                            <button
+                                                onClick={() => alternarStatus(p)}
+                                                title={p.status === 'ativo' ? 'Clique para passar a somente contratos' : 'Clique para reativar'}
+                                                style={{
+                                                    background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                                                    display: 'flex', alignItems: 'center', gap: '0.35rem', fontWeight: 600, fontSize: '0.8rem',
+                                                    color: p.status === 'ativo' ? '#16a34a' : '#64748b'
+                                                }}
+                                            >
+                                                {p.status === 'ativo'
+                                                    ? <><CheckCircle2 size={16} /> Ativo</>
+                                                    : <><XCircle size={16} /> Somente contratos</>}
+                                            </button>
                                         </td>
                                         <td style={{ padding: '0.85rem 1rem' }}>{nUsinas(p)}</td>
                                         <td style={{ padding: '0.85rem 1rem' }}>
