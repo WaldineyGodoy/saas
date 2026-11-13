@@ -21,6 +21,10 @@ type AuthValue = {
   criarConta: (dados: { nome: string; celular: string; email: string; senha: string }) => Promise<string | null>;
   confirmarCadastro: (email: string, codigo: string) => Promise<string | null>;
   reenviarCodigoCadastro: (email: string) => Promise<string | null>;
+  /** O e-mail traz link e código: quem clica no link confirma a conta fora do
+   *  app, e o código passa a dar "vencido". Tenta entrar com a senha recém-criada;
+   *  true = conta confirmada e sessão aberta. */
+  entrarSeConfirmado: (email: string, senha: string) => Promise<boolean>;
 };
 
 const AuthContext = createContext<AuthValue | null>(null);
@@ -127,6 +131,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (DEMO) return null;
         const { error } = await supabase.auth.resend({ type: 'signup', email: email.trim().toLowerCase() });
         return error ? traduzErro(error.message) : null;
+      },
+      async entrarSeConfirmado(email, senha) {
+        if (DEMO) return false;
+        if (!senha) return false;
+        const { data, error } = await supabase.auth
+          .signInWithPassword({ email: email.trim().toLowerCase(), password: senha })
+          .catch(() => ({ data: { session: null }, error: true as const }));
+        return !error && !!data.session;
       },
       async signOut() {
         if (DEMO) return;
