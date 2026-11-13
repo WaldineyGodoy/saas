@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
-import { useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { AppState, KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Campo } from '../../components/Campo';
@@ -20,7 +20,7 @@ const SENHA_MINIMA = 8;
  * app leva para a pergunta da indicação (login sem produto).
  */
 export default function CriarConta() {
-  const { criarConta, confirmarCadastro, reenviarCodigoCadastro } = useAuth();
+  const { criarConta, confirmarCadastro, reenviarCodigoCadastro, entrarSeConfirmado } = useAuth();
   const insets = useSafeAreaInsets();
   const [etapa, setEtapa] = useState<'dados' | 'codigo'>('dados');
   const [nome, setNome] = useState('');
@@ -32,6 +32,21 @@ export default function CriarConta() {
   const [aviso, setAviso] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [indicadoPor, setIndicadoPor] = useState<string | null>(null);
+  const conferindo = useRef(false);
+
+  // Quem toca no link do e-mail confirma a conta no navegador, fora do app, e o
+  // código passa a dar "vencido" (13/11/2026). Ao voltar para o app, tenta
+  // entrar com a senha que acabou de criar: se a conta já está confirmada, a
+  // sessão abre e o app segue sozinho.
+  useEffect(() => {
+    if (etapa !== 'codigo') return;
+    const sub = AppState.addEventListener('change', async (estado) => {
+      if (estado !== 'active' || conferindo.current) return;
+      conferindo.current = true;
+      try { await entrarSeConfirmado(email, senha); } finally { conferindo.current = false; }
+    });
+    return () => sub.remove();
+  }, [etapa, email, senha, entrarSeConfirmado]);
 
   // Veio por um link de indicação: mostra de quem, para a pessoa reconhecer.
   useEffect(() => {
@@ -55,7 +70,7 @@ export default function CriarConta() {
     const e = await criarConta({ nome, celular: cel, email, senha });
     setEnviando(false);
     if (e) return setErro(e);
-    setAviso(`Enviamos um código para ${email.trim().toLowerCase()}. Confira também o spam.`);
+    setAviso(`Enviamos um e-mail para ${email.trim().toLowerCase()}. Digite o código ou toque no link do e-mail e volte para cá. Confira também o spam.`);
     setEtapa('codigo');
   };
 
@@ -64,14 +79,26 @@ export default function CriarConta() {
     if (!/^\d{6,10}$/.test(codigo.trim())) return setErro('Digite o código numérico que chegou no e-mail.');
     setEnviando(true);
     const e = await confirmarCadastro(email, codigo);
+    if (e && (await entrarSeConfirmado(email, senha))) return setEnviando(false); // já confirmada pelo link
     setEnviando(false);
     if (e) setErro(e);
     // Sem erro a sessão abre e o app segue sozinho.
   };
 
+  const jaConfirmei = async () => {
+    setErro(null);
+    setEnviando(true);
+    const ok = await entrarSeConfirmado(email, senha);
+    setEnviando(false);
+    if (!ok) setErro('Ainda não recebemos a confirmação. Toque no link do e-mail ou digite o código.');
+  };
+
   const reenviar = async () => {
     setErro(null);
     setEnviando(true);
+    // Conta já confirmada (pelo link): o Supabase aceita o reenvio mas não manda
+    // nada, e a pessoa fica esperando um e-mail que nunca chega.
+    if (await entrarSeConfirmado(email, senha)) return setEnviando(false);
     const e = await reenviarCodigoCadastro(email);
     setEnviando(false);
     if (e) setErro(e);
@@ -87,7 +114,7 @@ export default function CriarConta() {
           <Text style={[type.body, { color: colors.inkSecondary }]}>
             {etapa === 'dados'
               ? 'Crie sua conta para simular e assinar a energia com desconto.'
-              : 'Digite o código que chegou no seu e-mail.'}
+              : 'Digite o código que chegou no seu e-mail ou toque no link dele.'}
           </Text>
         </View>
 
@@ -118,6 +145,7 @@ export default function CriarConta() {
               <Campo label="Código" value={codigo} onChangeText={(t) => setCodigo(t.replace(/\D/g, ''))} keyboardType="number-pad" autoComplete="one-time-code" textContentType="oneTimeCode" maxLength={10} onSubmitEditing={confirmar} />
               {erro ? <Text style={[type.bodySm, { color: colors.error }]}>{erro}</Text> : null}
               <Button label="Confirmar" icon="check" onPress={confirmar} loading={enviando} />
+              <Button label="Já confirmei pelo link" icon="mark-email-read" variant="ghost" onPress={jaConfirmei} disabled={enviando} />
               <Button label="Reenviar código" variant="ghost" onPress={reenviar} disabled={enviando} />
               <Button label="Corrigir e-mail" variant="ghost" onPress={() => { setEtapa('dados'); setCodigo(''); setErro(null); }} />
             </>
