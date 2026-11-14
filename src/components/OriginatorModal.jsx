@@ -574,6 +574,7 @@ export default function OriginatorModal({ originator, onClose, onSave, onDelete 
                                         plano={planoSelecionado}
                                         originatorId={originator?.id || null}
                                         cargoSalvo={originator ? (originator.cargo || 'ppf').toLowerCase() : null}
+                                        originatorSalvo={originator || null}
                                         labelStyle={labelStyle}
                                         inputStyle={inputStyle}
                                     />

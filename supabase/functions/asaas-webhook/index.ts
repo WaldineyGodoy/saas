@@ -84,6 +84,41 @@ serve(async (req) => {
             return new Response(JSON.stringify({ received: true, status: 'no_payment' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
+        // 1.4 Boleto da licenca anual do originador (20261114a)
+        const { data: licenca } = await supabase
+            .from('originador_licenca_cobrancas')
+            .select('id, status')
+            .eq('asaas_payment_id', payment.id)
+            .maybeSingle();
+
+        if (licenca) {
+            if (['PAYMENT_CONFIRMED', 'PAYMENT_RECEIVED'].includes(event)) {
+                const dataPagamento = payment.paymentDate || payment.clientPaymentDate || payment.confirmedDate || null;
+                const { data: baixa, error: baixaErr } = await supabase.rpc('fn_licenca_registrar_pagamento', {
+                    p_asaas_payment_id: payment.id,
+                    p_data: dataPagamento
+                });
+                if (baixaErr) {
+                    console.error('[Asaas Webhook] Falha na baixa da licenca:', baixaErr.message);
+                    throw new Error('Falha na baixa da licenca: ' + baixaErr.message);
+                }
+                console.log('[Asaas Webhook] Licenca baixada:', JSON.stringify(baixa));
+            } else if (event === 'PAYMENT_OVERDUE' && licenca.status === 'pendente') {
+                await supabase.from('originador_licenca_cobrancas').update({ status: 'vencido' }).eq('id', licenca.id);
+            } else if (event === 'PAYMENT_DELETED' && licenca.status !== 'pago') {
+                await supabase.from('originador_licenca_cobrancas').update({ status: 'cancelado' }).eq('id', licenca.id);
+            } else if (['PAYMENT_REFUNDED', 'PAYMENT_CHARGEBACK_REQUESTED'].includes(event)) {
+                // Estorno: nao desfaz a licenca sozinho; registra para a equipe.
+                await supabase.from('crm_history').insert({
+                    entity_type: 'originator_licenca_cobranca',
+                    entity_id: licenca.id,
+                    content: `Asaas informou ${event} no boleto da licenca. Revisar a licenca do originador.`,
+                    metadata: { asaas_payment_id: payment.id, event }
+                });
+            }
+            return new Response(JSON.stringify({ received: true, status: 'licenca_processed' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+
         // 1.5 Check if it's a Token Recharge Transaction
         const { data: tokenTx } = await supabase
             .from('token_transactions')

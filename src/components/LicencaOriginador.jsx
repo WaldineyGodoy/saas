@@ -10,6 +10,7 @@ import {
     dataBr,
     ROTULO_STATUS_LICENCA
 } from '../lib/licencaOriginador';
+import BoletoLicencaOriginador from './BoletoLicencaOriginador';
 
 const reais = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -25,14 +26,14 @@ const COR_STATUS = {
  *
  * O preço vem do Plano do Originador (por cargo). Aqui a equipe escolhe o
  * cargo e o Líder, digita um voucher (isenção ou desconto) e informa a data
- * do pagamento -- provisório até a cobrança pelo Asaas. O vencimento é
+ * do pagamento à mão; o boleto do Asaas (14/11/2026) dá a baixa sozinho. O vencimento é
  * 1 ano depois do pagamento. Tudo vai no Salvar do modal; o banco recalcula
  * e confere o voucher por gatilho.
  *
  * Props: value { cargo, lider_id, licenca_paga_em, licenca_voucher_id },
  * onChange(parcial), plano (o plano do originador), originatorId.
  */
-export default function LicencaOriginador({ value, onChange, plano, originatorId, cargoSalvo, labelStyle, inputStyle }) {
+export default function LicencaOriginador({ value, onChange, plano, originatorId, cargoSalvo, originatorSalvo, labelStyle, inputStyle }) {
     const [lideres, setLideres] = useState([]);
     const [voucher, setVoucher] = useState(null);
     const [codigo, setCodigo] = useState('');
@@ -176,6 +177,15 @@ export default function LicencaOriginador({ value, onChange, plano, originatorId
                     </p>
                 )}
             </div>
+
+            {originatorSalvo && (r.preco > 0 || Number(originatorSalvo.licenca_preco) > 0) && (
+                <BoletoLicencaOriginador
+                    originator={originatorSalvo}
+                    alterado={value.cargo !== (originatorSalvo.cargo || 'ppf')
+                        || (value.licenca_voucher_id || null) !== (originatorSalvo.licenca_voucher_id || null)
+                        || (plano?.id && originatorSalvo.plano_originador_id && plano.id !== originatorSalvo.plano_originador_id)}
+                />
+            )}
 
             {r.preco > 0 && (
                 <div style={caixa}>
