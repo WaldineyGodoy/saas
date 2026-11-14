@@ -14,6 +14,9 @@ verify_jwt = true
 [functions.manage-asaas-customer]
 verify_jwt = true
 
+[functions.licenca-originador-cobranca]
+verify_jwt = true
+
 [functions.parse-invoice]
 verify_jwt = false
 
