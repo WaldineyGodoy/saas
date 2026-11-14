@@ -372,12 +372,24 @@ describe('FAQ da Gestora (Helena)', () => {
         expect(r).toContain('proposta especial para construir')
     })
 
-    it('setup, carência e prazo são tratados como assunto obrigatório e nunca estimados', () => {
+    it('setup é opcional e dá prioridade na captação; quem não paga fica em segunda prioridade', () => {
         const r = pares.find((p) => /setup/i.test(p.question))!.answer
-        expect(r).toContain('custo de setup')
+        expect(r).toContain('O setup é opcional')
+        expect(r).toContain('prioridade na captação')
+        expect(r).toContain('campanhas de marketing e tráfego pago exclusivos')
+        expect(r).toContain('segunda prioridade')
+        expect(r).toContain('o excedente da captação vai para a segunda')
+        expect(r).toContain('nunca estimo')
+    })
+
+    it('o prazo até o primeiro repasse é a carência dos pagamentos ao dono', () => {
+        const r = pares.find((p) => /quando o dono recebe|começar a receber/i.test(p.question))!.answer
         expect(r).toContain('carência')
         expect(r).toContain('primeiro repasse')
-        expect(r).toContain('nunca estimo')
+    })
+
+    it('o FAQ continua sem nenhum número (o valor do setup e o prazo vêm do plano)', () => {
+        expect(FAQ_GESTORA.replace(/B2W/g, '')).not.toMatch(/\d/)
     })
 
     it('não afirma o que é do especialista: nada de multa, retenção, recuperação ou exclusividade', () => {
@@ -386,17 +398,16 @@ describe('FAQ da Gestora (Helena)', () => {
 })
 
 const planoAtivo: PlanoGestora = {
-    nome: 'Plano Usina - Recorrencia Corretor', taxa_gestao_pct: 12, desconto_assinante_pct: 15,
-    dia_corte: 5, dia_repasse: 10, setup_pct: null, setup_base: null,
-    carencia_dias: null, prazo_primeiro_repasse_dias: null,
+    nome: 'Plano Usina - Ultra Connect', taxa_gestao_pct: 14, desconto_assinante_pct: 15,
+    dia_corte: 5, dia_repasse: 10, setup_reais: null, prazo_primeiro_repasse_dias: null,
 }
 
 describe('montarGestoraPlanos', () => {
     it('monta o plano vigente com taxa de gestão, desconto, dia de repasse e dia de corte', () => {
         const md = montarGestoraPlanos([planoAtivo])
         expect(md).toContain('# Gestora: planos vigentes')
-        expect(md).toContain('## Plano Usina - Recorrencia Corretor')
-        expect(md).toContain('Taxa de gestão: 12%')
+        expect(md).toContain('## Plano Usina - Ultra Connect')
+        expect(md).toContain('Taxa de gestão: 14%')
         expect(md).toContain('Desconto do assinante: 15%')
         expect(md).toContain('Repasse ao dono: todo dia 10')
         expect(md).toContain('Dia de corte: dia 5 (fechamento da apuração das faturas pagas pelo assinante que entram no repasse do dia 10)')
@@ -404,30 +415,27 @@ describe('montarGestoraPlanos', () => {
 
     it('campos novos vazios saem como a confirmar e não inventam número', () => {
         const md = montarGestoraPlanos([planoAtivo])
-        expect(md).toContain('Custo de setup: existe, mas o valor ainda não está definido; o especialista confirma')
-        expect(md).toContain('Carência: ainda não definida; o especialista confirma')
-        expect(md).toContain('Prazo até o primeiro repasse: ainda não definido; o especialista confirma')
+        expect(md).toContain('Custo de setup (opcional): existe, mas o valor ainda não está definido; o especialista confirma')
+        expect(md).toContain('Prazo até o primeiro repasse (carência dos pagamentos ao dono): ainda não definido; o especialista confirma')
     })
 
-    it('com os campos novos preenchidos, cita setup (com a base), carência e prazo', () => {
-        const md = montarGestoraPlanos([{
-            ...planoAtivo, setup_pct: 3.5, setup_base: 'o valor do projeto', carencia_dias: 60, prazo_primeiro_repasse_dias: 90,
-        }])
-        expect(md).toContain('Custo de setup: 3,5% sobre o valor do projeto')
-        expect(md).toContain('Carência: 60 dias')
-        expect(md).toContain('Prazo até o primeiro repasse: 90 dias')
+    it('com setup e prazo preenchidos, cita o setup em reais como opcional e o prazo em dias', () => {
+        const md = montarGestoraPlanos([{ ...planoAtivo, setup_reais: 3000, prazo_primeiro_repasse_dias: 120 }])
+        expect(md).toContain('Custo de setup (opcional): R$ 3.000,00')
+        expect(md).toContain('dá prioridade na captação de assinantes')
+        expect(md).toContain('Prazo até o primeiro repasse (carência dos pagamentos ao dono): 120 dias')
     })
 
-    it('setup em percentual sem a base de cálculo não é citado como número', () => {
-        const md = montarGestoraPlanos([{ ...planoAtivo, setup_pct: 3, setup_base: null }])
-        expect(md).not.toContain('3%')
-        expect(md).toContain('Custo de setup: existe, mas o valor ainda não está definido')
+    it('setup zerado ou negativo não vira número', () => {
+        expect(montarGestoraPlanos([{ ...planoAtivo, setup_reais: 0 }])).toContain('existe, mas o valor ainda não está definido')
     })
 
-    it('regra de uso: só cita taxa e desconto se perguntarem, com a ressalva do especialista', () => {
+    it('regra de uso: apresenta as condições com os dados básicos, com a ressalva do especialista, e nunca estima', () => {
         const md = montarGestoraPlanos([planoAtivo])
-        expect(md).toContain('só cite a taxa de gestão e o desconto se o fornecedor perguntar')
+        expect(md).toContain('apresente as condições')
         expect(md).toContain('o especialista confirma')
+        expect(md).toContain('nunca é estimado')
+        expect(md).not.toContain('só cite a taxa de gestão e o desconto se o fornecedor perguntar')
     })
 
     it('sem plano ativo devolve o aviso', () => {

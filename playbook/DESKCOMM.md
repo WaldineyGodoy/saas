@@ -312,7 +312,7 @@ Spec `docs/superpowers/specs/2026-10-25-base-helena-gestora-design.md`, plano `d
 - **Modelo.** A B2W gerencia a usina em nome do dono (operação, rateio, cobrança dos assinantes) e repassa o resultado. Não compra nem aluga a energia. Só usina solar, de qualquer potência, operando ou em construção com prazo de entrega. Projeto no papel: a Helena oferece o **Leo** (Usinas de Investimento), com a proposta especial de construção.
 - **Repasse.** Sobre a energia **compensada** (não a injetada; são grandezas distintas). Valor por kWh = tarifa da concessionária − desconto do assinante − Fio B − taxa de gestão. Pago todo dia 10.
 - **Duas fontes.** "Gestora — Perguntas e respostas" (14 itens, `bases/gestora-faq.ts`, nenhum número) e "Gestora: planos vigentes" (documento gerado de `planos_usina` com status `ativo`: taxa de gestão = `percentual_recorrente`, desconto do assinante = `desconto_pct`, `dia_repasse`, `dia_corte`, e os campos novos). `dia_corte` = fechamento da apuração das faturas pagas pelo assinante que entram no repasse do dia 10. Mudou o plano no CRM, o documento se regera (`trg_ponte_planos_usina_base`).
-- **Campos novos no plano:** `setup_pct` + `setup_base`, `carencia_dias`, `prazo_primeiro_repasse_dias`. Vazios até o dono definir; a Helena diz "o especialista confirma" e nunca estima. O setup só vira número com `setup_pct` e `setup_base` preenchidos. Essas colunas não estão na trava `fn_planos_usina_trava`.
+- **Campos novos no plano:** `setup_pct` + `setup_base`, `carencia_dias`, `prazo_primeiro_repasse_dias`. Substituídos em 05/11/2026 por `setup_reais` (opcional) e pelo prazo de 120 dias como carência (§8.8).
 - **Helena v7** (`scripts/deskcomm/base_helena.sql`, cirúrgico: persona preservada). Só cita taxa e desconto se o fornecedor perguntar. Passa ao especialista com os dados básicos. Intenções do roteador: a da Helena fala de usina solar em operação/construção; a do Leo inclui projeto de usina ainda no papel.
 - **Não afirma:** taxa de recuperação, retenção na rescisão, multas, valor do Fio B, documentos, prazo de implantação, exclusividade.
 - **Pendências:** preencher setup, carência e prazo no plano; **o Leo precisa ter a proposta de construção na base dele**; teste real com um fornecedor.
@@ -339,3 +339,12 @@ Spec: `docs/superpowers/specs/2026-10-26-adesao-whatsapp-design.md` · Plano: `d
 - **Leitor de conta:** `_shared/leitura-conta.ts`, usado por `parse-invoice-image` e `adesao-whatsapp`.
 - **Checklist pós-atualização do Deskcomm:** mídia ainda em `messages.media_storage_path`, bucket `whatsapp-media`.
 - **Pendência:** regra de retenção para limpar `adesao_cpf` e afins do card depois da adesão fechada.
+
+### 8.8 Helena: condições comerciais, setup opcional e aceite (05/11/2026)
+
+Spec `docs/superpowers/specs/2026-11-05-helena-v8-condicoes-design.md`. Em produção a Helena passou da v16 para a **v17**.
+
+- **Plano de oferta:** Plano Usina – Ultra Connect (taxa de gestão 14%, desconto do assinante 15%, repasse dia 10, corte dia 5, primeiro repasse em 120 dias, que também é a carência). Os valores vêm de `planos_usina` (Configurações > Planos e serviços) e o documento "Gestora: planos vigentes" se regera quando o plano muda.
+- **Setup:** R$ 3.000,00 opcional (`planos_usina.setup_reais`). Quem paga tem prioridade na captação (campanhas e tráfego pago exclusivos); quem não paga fica em segunda prioridade; os assinantes vão primeiro para a usina prioritária e o excedente para a segunda.
+- **Fluxo da Helena:** apresenta as condições com os dados básicos e pergunta se o fornecedor aceita; confirma cada dado em uma frase (entra no resumo da IA e no histórico do lead); só depois do aceite grava no negócio os dados da usina, a opção de setup e o aceite, e passa para a equipe com o motivo `cadastro de fornecedor`. O fornecedor recebe o link do contrato para a adesão.
+- **Pendente:** automatizar o cadastro de fornecedor (hoje é manual nas telas do CRM) e avisar a Helena quando terminar.
