@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
-import { fetchAddressByCep, fetchCpfCnpjData } from '../../lib/api';
+import { fetchAddressByCep, fetchCpfCnpjData, consultarCpf } from '../../lib/api';
 import { maskCpfCnpj, maskPhone, validateCpf, validateDocument, validatePhone } from '../../lib/validators';
+import { avaliarCpfDigitado, aplicarConsulta } from '../../lib/consultaCpf';
 import { useUI } from '../../contexts/UIContext';
 import { useBranding } from '../../contexts/BrandingContext';
 import PublicConsumerUnitForm from '../../components/PublicConsumerUnitForm';
@@ -179,6 +180,13 @@ export default function SubscriberSignup() {
     // Address & Doc Search States
     const [searchingCep, setSearchingCep] = useState(false);
     const [searchingDoc, setSearchingDoc] = useState(false);
+    // Consulta de CPF: so o erro de validacao aparece sob o campo. Falha ou
+    // "nao encontrado" da consulta NAO avisam o visitante: o nome esta logo
+    // abaixo e e preenchivel de qualquer forma, e "consulta indisponivel"
+    // numa tela de venda so assusta (e apareceria para todos enquanto a chave
+    // da CPFHub nao estiver configurada).
+    const [erroDocumento, setErroDocumento] = useState('');
+    const ultimoCpfConsultado = useRef('');
 
     // Initial Address Fetch if CEP provided
     useEffect(() => {
@@ -315,7 +323,9 @@ export default function SubscriberSignup() {
 
     const handleDocBlur = async () => {
         const doc = formData.cpf_cnpj.replace(/\D/g, '');
-        if (doc.length >= 11) {
+        setErroDocumento('');
+
+        if (doc.length === 14) { // CNPJ: razao social pelo cnpj.ws
             setSearchingDoc(true);
             try {
                 const data = await fetchCpfCnpjData(doc);
@@ -327,6 +337,31 @@ export default function SubscriberSignup() {
             } finally {
                 setSearchingDoc(false);
             }
+            return;
+        }
+
+        // CPF: a validacao interna decide ANTES de qualquer consulta paga.
+        // Rejeitado -> avisa e para; so CPF valido e novo vai ao servidor.
+        const decisao = avaliarCpfDigitado(formData.cpf_cnpj, { ultimoConsultado: ultimoCpfConsultado.current });
+        if (decisao.acao === 'avisar') {
+            setErroDocumento(decisao.mensagem);
+            return;
+        }
+        if (decisao.acao !== 'consultar') return;
+
+        setSearchingDoc(true);
+        try {
+            const resposta = await consultarCpf(decisao.cpf);
+            // Aqui so o nome volta: a data de nascimento fica no servidor e vai
+            // para o cadastro sozinha quando a adesao e criada.
+            setFormData(prev => {
+                if (prev.cpf_cnpj.replace(/\D/g, '') !== decisao.cpf) return prev;
+                const { patch } = aplicarConsulta(prev, resposta);
+                return patch.name ? { ...prev, name: patch.name } : prev;
+            });
+            if (resposta?.ok) ultimoCpfConsultado.current = decisao.cpf;
+        } finally {
+            setSearchingDoc(false);
         }
     };
 
@@ -684,6 +719,7 @@ export default function SubscriberSignup() {
                                 />
                                 {searchingDoc && <span className="absolute right-3 top-4 text-xs text-orange-500 font-bold">Buscando...</span>}
                             </div>
+                            {erroDocumento && <p role="alert" className="mt-2 text-sm font-semibold text-red-600">{erroDocumento}</p>}
                         </div>
 
                         {/* Name */}

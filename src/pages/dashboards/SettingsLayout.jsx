@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Users, Code, CreditCard, Palette, Mail, Zap, Bell, Wrench, Layers } from 'lucide-react';
+import { Users, Code, CreditCard, Palette, Mail, Zap, Bell, Wrench, Layers, IdCard } from 'lucide-react';
 
 import PlansServicesSettings from '../settings/PlansServicesSettings';
 import UserProfilesSettings from '../settings/UserProfilesSettings';
@@ -22,6 +22,7 @@ export default function SettingsLayout() {
         { id: 'servicos', label: 'Serviços', icon: Wrench, desc: 'Valores padrão de O&M' },
         { id: 'branding', label: 'Padronização', icon: Palette, desc: 'Identidade Visual e Marca' },
         { id: 'autentique', label: 'Assinatura Eletrônica', icon: Code, desc: 'Configuração Autentique' },
+        { id: 'cpfhub', label: 'Consulta de CPF', icon: IdCard, desc: 'Nome e nascimento pelo CPF (CPFHub)' },
     ];
 
     const renderContent = () => {
@@ -43,6 +44,11 @@ export default function SettingsLayout() {
                 return <CustomizationSettings />;
             case 'autentique':
                 return <IntegrationSettings serviceName="autentique_api" title="Assinatura Eletrônica" description="Configuração da API Autentique (GraphQL)" />;
+            case 'cpfhub':
+                // A chave vai em "API Key". Limites do uso publico (IP/hora,
+                // teto diario de creditos, liga/desliga) ficam em "Variáveis":
+                // publico_ativo, limite_ip_hora, limite_publico_dia, validade_cache_dias.
+                return <IntegrationSettings serviceName="cpfhub" title="Consulta de CPF" description="CPFHub: preenche nome e data de nascimento a partir do CPF. Cada CPF encontrado consome 1 crédito da sua conta." />;
             default:
                 return null;
         }

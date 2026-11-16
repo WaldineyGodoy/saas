@@ -4,11 +4,12 @@ import { useAuth } from '../contexts/AuthContext';
 import { useUI } from '../contexts/UIContext';
 import ConvidarAppButton from './ConvidarAppButton';
 import { useBranding } from '../contexts/BrandingContext';
-import { fetchAddressByCep, fetchCpfCnpjData, createAsaasCharge, manageAsaasCustomer, mergePdf, sendCombinedNotification, sendWhatsapp, createAutentiqueDocument, cancelAutentiqueDocument, shortenLink, cancelAsaasCharge, salvarSenhaPortal, semSenha } from '../lib/api';
+import { fetchAddressByCep, fetchCpfCnpjData, consultarCpf, createAsaasCharge, manageAsaasCustomer, mergePdf, sendCombinedNotification, sendWhatsapp, createAutentiqueDocument, cancelAutentiqueDocument, shortenLink, cancelAsaasCharge, salvarSenhaPortal, semSenha } from '../lib/api';
 import { getSecurePdfUrl } from '../lib/pdfHelper';
 import { maskCpfCnpj, maskPhone, validateDocument, validatePhone } from '../lib/validators';
 import { ehDiaUtil, proximoDiaUtil, proximaOcorrenciaDoDia } from '../lib/diasUteis';
 import { ehPapelInterno, ehPapelAdmin } from '../lib/papeis';
+import { avaliarCpfDigitado, aplicarConsulta } from '../lib/consultaCpf';
 import { CreditCard, Plus, Trash2, History, User, Home, Zap, X, Eye, EyeOff, Key, DollarSign, Calendar, FileText, CheckCircle, Clock, AlertCircle, Ban, TicketCheck, TicketMinus, Download, Loader2, ArrowLeft, Info, RefreshCw, Send, MessageSquare, Paperclip, MessageCircle, Copy, Pencil, Printer, Share2 } from 'lucide-react';
 import ConsumerUnitModal from './ConsumerUnitModal';
 import ContratoAdesao from './ContratoAdesao';
@@ -145,6 +146,7 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
     const [formData, setFormData] = useState({
         name: '',
         cpf_cnpj: '',
+        data_nascimento: '',
         status: 'ativacao',
         phone: '',
         email: '',
@@ -168,6 +170,12 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
     const [loading, setLoading] = useState(false);
     const [searchingCep, setSearchingCep] = useState(false);
     const [searchingDoc, setSearchingDoc] = useState(false);
+    // Consulta de CPF: erro de validacao (vermelho) e aviso da consulta (ambar)
+    // ficam sob o campo, sem janela, porque o campo perde o foco ao clicar em
+    // Cancelar e um alerta modal nessa hora atrapalharia fechar a tela.
+    const [erroDocumento, setErroDocumento] = useState('');
+    const [avisoConsulta, setAvisoConsulta] = useState('');
+    const ultimoCpfConsultado = useRef('');
 
     const fetchOriginators = useCallback(async () => {
         const { data } = await supabase
@@ -647,6 +655,7 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
             setFormData({
                 name: subscriber.name || '',
                 cpf_cnpj: subscriber.cpf_cnpj || '',
+                data_nascimento: subscriber.data_nascimento || '',
                 status: subscriber.status || 'ativacao',
                 phone: subscriber.phone || '',
                 email: subscriber.email || '',
@@ -1754,7 +1763,10 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
 
     const handleDocBlur = async () => {
         const doc = formData.cpf_cnpj.replace(/\D/g, '');
-        if (doc.length > 11) { // CNPJ
+        setErroDocumento('');
+        setAvisoConsulta('');
+
+        if (doc.length === 14) { // CNPJ
             setSearchingDoc(true);
             try {
                 const data = await fetchCpfCnpjData(doc);
@@ -1778,18 +1790,37 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
             } finally {
                 setSearchingDoc(false);
             }
-        } else if (doc.length === 11) { // CPF
-            setSearchingDoc(true);
-            try {
-                const data = await fetchCpfCnpjData(doc);
-                if (data.nome) {
-                    setFormData(prev => ({ ...prev, name: data.nome }));
-                }
-            } catch (error) {
-                console.error('Erro buscar doc', error);
-            } finally {
-                setSearchingDoc(false);
-            }
+            return;
+        }
+
+        // CPF: a validacao interna decide ANTES de qualquer consulta paga.
+        // Rejeitado -> avisa e para; so CPF valido e novo vai ao servidor.
+        const decisao = avaliarCpfDigitado(formData.cpf_cnpj, {
+            ultimoConsultado: ultimoCpfConsultado.current,
+            cpfOriginal: subscriber?.cpf_cnpj
+        });
+        if (decisao.acao === 'avisar') {
+            setErroDocumento(decisao.mensagem);
+            return;
+        }
+        if (decisao.acao !== 'consultar') return;
+
+        setSearchingDoc(true);
+        try {
+            const resposta = await consultarCpf(decisao.cpf);
+            // Resultado de uma consulta de CPF que a pessoa ja trocou nao vale:
+            // so aplica se o campo ainda tem o CPF consultado.
+            setFormData(prev => {
+                if (prev.cpf_cnpj.replace(/\D/g, '') !== decisao.cpf) return prev;
+                const { patch, aviso } = aplicarConsulta(prev, resposta);
+                setAvisoConsulta(aviso || '');
+                return { ...prev, ...patch };
+            });
+            // So "lembra" o CPF quando a consulta respondeu; se a rede falhou, o
+            // proximo blur pode tentar de novo.
+            if (resposta?.ok) ultimoCpfConsultado.current = decisao.cpf;
+        } finally {
+            setSearchingDoc(false);
         }
     };
 
@@ -1862,6 +1893,20 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
             };
             if (asaasId) dataToSave.asaas_customer_id = asaasId;
             if (dataToSave.originator_id === '') dataToSave.originator_id = null;
+
+            // Data de nascimento: so existe para CPF (CNPJ grava vazio) e o campo
+            // em branco vira NULL (coluna `date` recusa texto vazio). Se o
+            // assinante foi aberto por uma tela que nao carregou a coluna, nao a
+            // incluimos no UPDATE: gravar vazio apagaria um valor que existe.
+            const ehPF = formData.cpf_cnpj.replace(/\D/g, '').length <= 11;
+            const nascimentoCarregado = !subscriber?.id || 'data_nascimento' in subscriber;
+            if (!ehPF) {
+                dataToSave.data_nascimento = null;
+            } else if (formData.data_nascimento || nascimentoCarregado) {
+                dataToSave.data_nascimento = formData.data_nascimento || null;
+            } else {
+                delete dataToSave.data_nascimento;
+            }
 
             const eraCriacao = !subscriber?.id;
             let result;
@@ -2458,6 +2503,16 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
                                                 style={{ ...subInputStyle, fontVariantNumeric: 'tabular-nums', background: searchingDoc ? '#eff6ff' : '#f8fafc' }}
                                                 required
                                             />
+                                            {erroDocumento && (
+                                                <div role="alert" style={{ marginTop: '0.3rem', fontSize: '0.74rem', fontWeight: 600, color: '#b91c1c' }}>
+                                                    {erroDocumento}
+                                                </div>
+                                            )}
+                                            {!erroDocumento && avisoConsulta && (
+                                                <div style={{ marginTop: '0.3rem', fontSize: '0.74rem', color: '#92400e' }}>
+                                                    {avisoConsulta}
+                                                </div>
+                                            )}
                                         </div>
 
                                         <div>
@@ -2510,7 +2565,21 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
                                             />
                                         </div>
 
-                                        <div style={{ gridColumn: '1 / -1' }}>
+                                        {formData.cpf_cnpj.replace(/\D/g, '').length <= 11 && (
+                                            <div>
+                                                <label style={subLabelStyle}>Data de Nascimento</label>
+                                                <input
+                                                    className="sub-modal-input"
+                                                    type="date"
+                                                    max={new Date().toISOString().slice(0, 10)}
+                                                    value={formData.data_nascimento}
+                                                    onChange={e => setFormData({ ...formData, data_nascimento: e.target.value })}
+                                                    style={{ ...subInputStyle, fontVariantNumeric: 'tabular-nums' }}
+                                                />
+                                            </div>
+                                        )}
+
+                                        <div style={{ gridColumn: formData.cpf_cnpj.replace(/\D/g, '').length <= 11 ? 'auto' : '1 / -1' }}>
                                             <label style={subLabelStyle}>Originador Comercial</label>
                                             <select
                                                 className="sub-modal-input"

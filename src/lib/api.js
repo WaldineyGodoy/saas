@@ -90,6 +90,32 @@ export const fetchCpfCnpjData = async (doc) => {
 }
 
 /**
+ * Consulta nome e data de nascimento pelo CPF (Edge Function `consulta-cpf`,
+ * CPFHub). Cada consulta paga custa credito e devolve dado pessoal, entao a
+ * chave fica no servidor e quem chama deve validar o CPF ANTES (ver
+ * `avaliarCpfDigitado` em ./consultaCpf).
+ *
+ * Nunca lanca: falha de rede ou da funcao volta como `{ ok: false }` e o
+ * formulario segue utilizavel com preenchimento manual. Quem nao e da equipe
+ * recebe so o nome; a data de nascimento fica no servidor.
+ */
+export const consultarCpf = async (cpf) => {
+    const indisponivel = {
+        ok: false,
+        motivo: 'indisponivel',
+        mensagem: 'A consulta do CPF está indisponível agora. Preencha os dados manualmente.'
+    };
+    try {
+        const { data, error } = await supabase.functions.invoke('consulta-cpf', { body: { cpf } });
+        if (error || !data) return indisponivel;
+        return data;
+    } catch (e) {
+        console.error('Erro ao consultar CPF:', e?.message);
+        return indisponivel;
+    }
+};
+
+/**
  * Helper unificado para chamadas de Edge Functions com tratamento de erro detalhado
  */
 const callFunction = async (name, payload) => {
