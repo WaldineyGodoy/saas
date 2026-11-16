@@ -11,6 +11,8 @@ import TagInput from './TagInput';
 import ContaEnergiaLead from './ContaEnergiaLead';
 import LeadVisitas from './LeadVisitas';
 import { SeloJev, PainelJev } from './TermometroJev';
+import ConsultaCredito from './subscriber/ConsultaCredito';
+import { ehPapelAdmin } from '../lib/papeis';
 import { separarNumero } from '../lib/energyBillParser';
 
 export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }) {
@@ -887,6 +889,15 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
                                 </div>
 
                                 <PainelJev lead={lead} />
+
+                                {lead?.id && (
+                                    <div style={{ gridColumn: '1 / -1' }}>
+                                        <ConsultaCredito
+                                            cpfCnpj={formData.cpf_cnpj}
+                                            podeConsultar={ehPapelAdmin(profile?.role)}
+                                        />
+                                    </div>
+                                )}
 
                                 {lead?.qualificacao?.investimento && (
                                     <QualificacaoInvestimento q={lead.qualificacao.investimento} />

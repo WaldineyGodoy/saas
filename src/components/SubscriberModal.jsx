@@ -13,6 +13,7 @@ import { CreditCard, Plus, Trash2, History, User, Home, Zap, X, Eye, EyeOff, Key
 import ConsumerUnitModal from './ConsumerUnitModal';
 import ContratoAdesao from './ContratoAdesao';
 import DocumentosAssinante from './subscriber/DocumentosAssinante';
+import ConsultaCredito from './subscriber/ConsultaCredito';
 import AssinanteConnect from './subscriber/AssinanteConnect';
 import { montarTextoContrato, gerarPdfContratoBase64, paginasTermoAdesao } from '../lib/contrato';
 import HistoryTimeline, { CollapsibleSection } from './HistoryTimeline';
@@ -3475,6 +3476,12 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
                                         <p style={{ color: '#64748b', fontSize: '0.9rem', margin: 0 }}>
                                             Salve os dados cadastrais do assinante primeiro para visualizar ou anexar documentos.
                                         </p>
+                                    )}
+                                    {subscriber?.id && (
+                                        <ConsultaCredito
+                                            cpfCnpj={formData.cpf_cnpj}
+                                            podeConsultar={ehPapelAdmin(profile?.role)}
+                                        />
                                     )}
                                 </div>
                             </div>
