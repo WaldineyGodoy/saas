@@ -885,30 +885,31 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
     return (
         <div style={{
             position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-            background: 'rgba(15, 23, 42, 0.72)', display: 'flex', alignItems: 'center',
-            justifyContent: 'center', zIndex: 10000, backdropFilter: 'blur(8px)', padding: '1rem'
+            background: 'rgba(15, 23, 42, 0.68)', display: 'flex', alignItems: 'center',
+            justifyContent: 'center', zIndex: 10000, backdropFilter: 'blur(6px)', padding: '1rem'
         }}>
             <div style={{
-                background: '#ffffff', width: '100%', maxWidth: '1060px', borderRadius: '30px',
-                maxHeight: '94vh', overflow: 'hidden', display: 'flex', flexDirection: 'column',
-                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35)',
-                animation: 'crmModalFadeIn 0.28s cubic-bezier(0.16, 1, 0.3, 1)',
-                border: '1px solid #e2e8f0'
+                background: '#f8fafc', width: '96vw', maxWidth: '1340px', borderRadius: '16px',
+                height: '92vh', maxHeight: '92vh', overflow: 'hidden', display: 'flex', flexDirection: 'column',
+                boxShadow: '0 25px 50px -12px rgba(15, 23, 42, 0.38)',
+                animation: 'crmModalFadeIn 0.22s cubic-bezier(0.16, 1, 0.3, 1)',
+                border: '1px solid rgba(255, 255, 255, 0.14)'
             }}>
                 <style>{`
                     @keyframes crmModalFadeIn {
-                        from { opacity: 0; transform: translateY(12px) scale(0.985); }
-                        to { opacity: 1; transform: translateY(0) scale(1); }
+                        from { opacity: 0; transform: translateY(8px); }
+                        to { opacity: 1; transform: translateY(0); }
                     }
                     .crm-scrollbar::-webkit-scrollbar { width: 7px; }
                     .crm-scrollbar::-webkit-scrollbar-track { background: #f8fafc; }
                     .crm-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 6px; }
                     .crm-input {
-                        transition: all 0.2s ease;
+                        transition: all 0.15s ease;
+                        font-variant-numeric: tabular-nums;
                     }
                     .crm-input:focus {
-                        border-color: #3b82f6 !important;
-                        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12) !important;
+                        border-color: #2563eb !important;
+                        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12) !important;
                         outline: none;
                     }
                     .ledger-row {
@@ -919,57 +920,103 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                         padding: 0.7rem 1.25rem;
                         border-bottom: 1px solid #f1f5f9;
                         transition: background 0.15s ease;
+                        font-variant-numeric: tabular-nums;
                     }
                     .ledger-row:hover {
                         background: #f8fafc;
+                    }
+                    .plan-top-grid {
+                        display: grid;
+                        grid-template-columns: 1.25fr 1fr;
+                        gap: 1.15rem;
+                        align-items: start;
+                    }
+                    @media (max-width: 1080px) {
+                        .plan-top-grid {
+                            grid-template-columns: 1fr;
+                        }
                     }
                 `}</style>
 
                 {/* HEADER PREMIUM (Padrão UI/UX CRM) */}
                 <div style={{
-                    padding: '1.35rem 2rem',
-                    background: 'linear-gradient(135deg, #1e293b 0%, #334155 100%)',
+                    padding: '1.15rem 1.75rem',
+                    background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+                    borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
                     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    color: '#ffffff'
+                    gap: '1rem', flexWrap: 'wrap',
+                    color: '#ffffff', flexShrink: 0
                 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                         <div style={{
-                            width: '48px', height: '48px', borderRadius: '14px',
-                            background: 'rgba(59, 130, 246, 0.2)', border: '1px solid rgba(96, 165, 250, 0.35)',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#60a5fa'
+                            width: '44px', height: '44px', borderRadius: '12px',
+                            background: 'rgba(59, 130, 246, 0.18)', border: '1px solid rgba(96, 165, 250, 0.35)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#60a5fa',
+                            flexShrink: 0
                         }}>
-                            <Zap size={24} />
+                            <Zap size={22} />
                         </div>
                         <div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                                <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: '#f8fafc', letterSpacing: '-0.01em' }}>
-                                    {planToEdit ? 'Editar Plano de Assinatura & Recompensas' : 'Novo Plano de Assinatura & Recompensas'}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+                                <h3 style={{ margin: 0, fontSize: '1.22rem', fontWeight: 800, color: '#ffffff', letterSpacing: '-0.02em' }}>
+                                    {planToEdit ? (nome || 'Editar Plano de Assinatura & Recompensas') : 'Novo Plano de Assinatura & Recompensas'}
                                 </h3>
                                 <span style={{
-                                    fontSize: '0.7rem', fontWeight: 700, padding: '0.2rem 0.6rem',
-                                    borderRadius: '20px', background: 'rgba(16, 185, 129, 0.2)',
+                                    fontSize: '0.7rem', fontWeight: 700, padding: '0.18rem 0.6rem',
+                                    borderRadius: '999px', background: 'rgba(16, 185, 129, 0.2)',
                                     color: '#34d399', border: '1px solid rgba(52, 211, 153, 0.3)'
                                 }}>
                                     Multinível L1 a L4+
                                 </span>
+                                <span style={{
+                                    fontSize: '0.7rem', fontWeight: 700, padding: '0.18rem 0.6rem',
+                                    borderRadius: '999px',
+                                    background: ativo ? 'rgba(34, 197, 94, 0.18)' : 'rgba(148, 163, 184, 0.2)',
+                                    color: ativo ? '#86efac' : '#cbd5e1'
+                                }}>
+                                    {ativo ? 'Ativo' : 'Inativo'}
+                                </span>
                             </div>
-                            <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.82rem', color: '#94a3b8' }}>
-                                Lastro oficial na Concessionária, cálculo de Superávit por nível de rede e vigência por Status Ativo
+                            <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.8rem', color: '#94a3b8' }}>
+                                Lastro oficial na Concessionária ({concessionariaNome} • {subgrupoTarifario}), cálculo de Superávit por nível e vigência por Status Ativo
                             </p>
                         </div>
                     </div>
 
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        style={{
-                            background: 'rgba(255, 255, 255, 0.1)', border: '1px solid rgba(255, 255, 255, 0.15)',
-                            cursor: 'pointer', color: '#f8fafc', padding: '0.55rem', borderRadius: '12px',
-                            display: 'flex', transition: 'all 0.2s'
-                        }}
-                    >
-                        <X size={18} />
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
+                        <div style={{
+                            display: 'flex', alignItems: 'center', gap: '0.85rem',
+                            background: 'rgba(255, 255, 255, 0.06)', border: '1px solid rgba(255, 255, 255, 0.12)',
+                            borderRadius: '10px', padding: '0.38rem 0.85rem', fontVariantNumeric: 'tabular-nums'
+                        }}>
+                            <div>
+                                <div style={{ fontSize: '0.62rem', textTransform: 'uppercase', color: '#94a3b8', fontWeight: 700 }}>Tarifa Bruta</div>
+                                <div style={{ fontSize: '0.84rem', fontWeight: 800, color: '#f8fafc' }}>R$ {formatCurrencyUnit(calc.tBruta, 4)}</div>
+                            </div>
+                            <div style={{ width: '1px', height: '24px', background: 'rgba(255,255,255,0.12)' }} />
+                            <div>
+                                <div style={{ fontSize: '0.62rem', textTransform: 'uppercase', color: '#94a3b8', fontWeight: 700 }}>Desconto</div>
+                                <div style={{ fontSize: '0.84rem', fontWeight: 800, color: '#38bdf8' }}>{formatPct(calc.pctDescAssinante)}%</div>
+                            </div>
+                            <div style={{ width: '1px', height: '24px', background: 'rgba(255,255,255,0.12)' }} />
+                            <div>
+                                <div style={{ fontSize: '0.62rem', textTransform: 'uppercase', color: '#94a3b8', fontWeight: 700 }}>Base Líquida</div>
+                                <div style={{ fontSize: '0.84rem', fontWeight: 800, color: '#4ade80' }}>R$ {formatCurrencyUnit(calc.baseLiquida, 4)}</div>
+                            </div>
+                        </div>
+
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            style={{
+                                background: 'rgba(255, 255, 255, 0.08)', border: '1px solid rgba(255, 255, 255, 0.12)',
+                                cursor: 'pointer', color: '#e2e8f0', width: '38px', height: '38px', borderRadius: '10px',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center'
+                            }}
+                        >
+                            <X size={20} />
+                        </button>
+                    </div>
                 </div>
 
                 {planToEdit?.status === 'somente_contratos' && (
@@ -984,16 +1031,17 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                 {/* BODY SCROLLABLE */}
                 <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
                     <div className="crm-scrollbar" style={{
-                        padding: '1.65rem 2rem', overflowY: 'auto', flex: 1,
-                        background: '#f8fafc', display: 'flex', flexDirection: 'column', gap: '1.4rem'
+                        padding: '1.35rem 1.75rem', overflowY: 'auto', flex: 1,
+                        background: '#f8fafc', display: 'flex', flexDirection: 'column', gap: '1.15rem'
                     }}>
 
                         {/* =========================================================================
-                            BLOCO 1: IDENTIFICAÇÃO DO PLANO E CONCESSIONÁRIA (ALINHAMENTO HORIZONTAL)
+                            BLOCO 1 + DISTRIBUIDORAS (GRID DUPLO NO TOPO)
                            ========================================================================= */}
+                        <div className="plan-top-grid">
                         <div style={{
-                            background: '#ffffff', padding: '1.4rem 1.5rem', borderRadius: '20px',
-                            border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
+                            background: '#ffffff', padding: '1.25rem 1.5rem', borderRadius: '14px',
+                            border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04)'
                         }}>
                             <div style={{
                                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -1132,13 +1180,14 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                             selecionadas={distribuidoras}
                             onChange={setDistribuidoras}
                         />
+                        </div>
 
                         {/* =========================================================================
                             BLOCO 2: DEMONSTRATIVO DINÂMICO E MATRIZ DE NÍVEIS (L1, L2, L3 e L4+)
                            ========================================================================= */}
                         <div style={{
-                            background: '#ffffff', padding: '1.4rem 1.5rem', borderRadius: '20px',
-                            border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
+                            background: '#ffffff', padding: '1.35rem 1.5rem', borderRadius: '14px',
+                            border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04)'
                         }}>
                             <div style={{
                                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -2009,26 +2058,25 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
 
                     {/* FOOTER DE AÇÕES */}
                     <div style={{
-                        padding: '1.15rem 2rem', background: '#ffffff', borderTop: '1px solid #e2e8f0',
-                        display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                        padding: '1rem 1.75rem', background: '#ffffff', borderTop: '1px solid #e2e8f0',
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                        flexWrap: 'wrap', gap: '0.85rem', flexShrink: 0
                     }}>
-                        <div style={{ fontSize: '0.8rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.85rem', flexWrap: 'wrap' }}>
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
-                                <Percent size={15} color="#3b82f6" />
-                                Superávit L1: <strong style={{ color: '#16a34a' }}>+R$ {formatCurrencyUnit(calc.byLevel.L1.margemLivre, 5)}</strong>
-                            </span>
-                            <span>•</span>
-                            <span>
-                                Superávit L2: <strong style={{ color: '#16a34a' }}>+R$ {formatCurrencyUnit(calc.byLevel.L2.margemLivre, 5)}</strong>
-                            </span>
-                            <span>•</span>
-                            <span>
-                                Superávit L3: <strong style={{ color: '#16a34a' }}>+R$ {formatCurrencyUnit(calc.byLevel.L3.margemLivre, 5)}</strong>
-                            </span>
-                            <span>•</span>
-                            <span>
-                                Superávit L4+: <strong style={{ color: '#16a34a' }}>+R$ {formatCurrencyUnit(calc.byLevel.L4.margemLivre, 5)}</strong>
-                            </span>
+                        <div style={{ fontSize: '0.78rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap', fontVariantNumeric: 'tabular-nums' }}>
+                            {LEVEL_KEYS.map((lk, idx) => {
+                                const lv = calc.byLevel[lk];
+                                const neg = lv.margemLivre < 0;
+                                return (
+                                    <span key={lk} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                                        {idx === 0 && <Percent size={14} color="#2563eb" />}
+                                        {idx > 0 && <span style={{ color: '#cbd5e1', marginRight: '0.25rem' }}>•</span>}
+                                        <span>{lk === 'L4' ? 'L4+' : lk}:</span>
+                                        <strong style={{ color: neg ? '#dc2626' : '#15803d' }}>
+                                            {neg ? '-' : '+'}R$ {formatCurrencyUnit(Math.abs(lv.margemLivre), 5)}
+                                        </strong>
+                                    </span>
+                                );
+                            })}
                         </div>
 
                         <div style={{ display: 'flex', gap: '0.75rem' }}>
@@ -2036,8 +2084,8 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                 type="button"
                                 onClick={onClose}
                                 style={{
-                                    padding: '0.75rem 1.4rem', borderRadius: '14px', border: '1px solid #cbd5e1',
-                                    background: '#ffffff', color: '#475569', fontWeight: 700, fontSize: '0.88rem',
+                                    padding: '0.62rem 1.25rem', borderRadius: '10px', border: '1px solid #cbd5e1',
+                                    background: '#ffffff', color: '#475569', fontWeight: 700, fontSize: '0.84rem',
                                     cursor: 'pointer'
                                 }}
                             >
@@ -2047,17 +2095,17 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                 type="submit"
                                 disabled={loading || bloqueadoPorDeficit}
                                 style={{
-                                    padding: '0.75rem 2rem', borderRadius: '14px', border: 'none',
+                                    padding: '0.62rem 1.5rem', borderRadius: '10px', border: 'none',
                                     background: bloqueadoPorDeficit
                                         ? '#94a3b8'
-                                        : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
-                                    color: '#ffffff', fontWeight: 800, fontSize: '0.88rem',
+                                        : 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+                                    color: '#ffffff', fontWeight: 700, fontSize: '0.86rem',
                                     cursor: (loading || bloqueadoPorDeficit) ? 'not-allowed' : 'pointer',
-                                    display: 'flex', alignItems: 'center', gap: '0.5rem',
-                                    boxShadow: bloqueadoPorDeficit ? 'none' : '0 10px 15px -3px rgba(37, 99, 235, 0.3)'
+                                    display: 'flex', alignItems: 'center', gap: '0.45rem',
+                                    boxShadow: bloqueadoPorDeficit ? 'none' : '0 4px 12px rgba(37, 99, 235, 0.25)'
                                 }}
                             >
-                                <Save size={18} />
+                                <Save size={16} />
                                 {loading ? 'Salvando...' : (planToEdit ? 'Salvar Alterações' : 'Criar Plano de Assinatura')}
                             </button>
                         </div>
