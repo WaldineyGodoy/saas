@@ -11,6 +11,7 @@ import TagInput from './TagInput';
 import ContaEnergiaLead from './ContaEnergiaLead';
 import GeradorNda from './GeradorNda';
 import LeadVisitas from './LeadVisitas';
+import LeadDuplicados from './LeadDuplicados';
 import { SeloJev, PainelJev } from './TermometroJev';
 import ConsultaCredito from './subscriber/ConsultaCredito';
 import { ehPapelAdmin } from '../lib/papeis';
@@ -811,6 +812,17 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
                 </div>
 
                 <div style={{ flex: 1, overflowY: 'auto', padding: '1.75rem 2rem', background: '#f8fafc' }}>
+                    <LeadDuplicados
+                        lead={lead}
+                        formData={formData}
+                        contaLida={contaLida}
+                        originators={originators}
+                        onMesclado={(mesclado) => {
+                            showAlert('Leads mesclados.', 'success');
+                            onSave(mesclado);
+                            onClose();
+                        }}
+                    />
                     {activeTab === 'dados' && (
                         <form id="lead-form-dados" onSubmit={handleSubmit}>
                             <div style={{ background: 'white', padding: '1.5rem', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
