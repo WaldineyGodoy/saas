@@ -9,6 +9,7 @@ import { Clock, User, Home, Zap, CreditCard, History, X, MessageSquare, FileText
 import HistoryTimeline, { CollapsibleSection } from './HistoryTimeline';
 import TagInput from './TagInput';
 import ContaEnergiaLead from './ContaEnergiaLead';
+import GeradorNda from './GeradorNda';
 import LeadVisitas from './LeadVisitas';
 import { SeloJev, PainelJev } from './TermometroJev';
 import ConsultaCredito from './subscriber/ConsultaCredito';
@@ -1147,7 +1148,9 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
 
                     {activeTab === 'comunicacao' && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', animate: 'fadeIn 0.3s ease' }}>
-                            <div style={{ background: 'white', padding: '1.5rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                            {/* Envio à esquerda, histórico à direita; empilha em tela estreita. */}
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '1.5rem', alignItems: 'start' }}>
+                            <div style={{ background: 'white', padding: '1.5rem', borderRadius: '12px', border: '1px solid #e2e8f0', minWidth: 0 }}>
                                 <h4 style={{ margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b' }}>
                                     <MessageSquare size={18} style={{ color: '#25D366' }} />
                                     Enviar Novo Comunicado para {formData.name}
@@ -1245,8 +1248,8 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
                                 )}
                             </div>
 
-                            <div style={{ background: 'white', padding: '1.5rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                                <h4 style={{ fontSize: '1rem', color: '#1e293b', marginBottom: '1rem' }}>Últimas Interações</h4>
+                            <div style={{ background: 'white', padding: '1.5rem', borderRadius: '12px', border: '1px solid #e2e8f0', minWidth: 0, maxHeight: '520px', overflowY: 'auto' }}>
+                                <h4 style={{ fontSize: '1rem', color: '#1e293b', margin: '0 0 1rem 0' }}>Últimas Interações</h4>
                                 {lead?.id ? (
                                 <HistoryTimeline 
                                     entityType="lead" 
@@ -1259,6 +1262,10 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
                                     <p style={{ color: '#64748b' }}>Salve o lead primeiro para ver o histórico de interações.</p>
                                 )}
                             </div>
+                            </div>
+
+                            {/* NDA e termos de confidencialidade: só para a equipe, não para o originador. */}
+                            {!isOriginator && <GeradorNda leadId={lead?.id} addHistory={addHistory} />}
                         </div>
                     )}
                 </div>

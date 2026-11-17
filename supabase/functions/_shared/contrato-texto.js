@@ -233,11 +233,13 @@ const alturaEmLinhas = (trecho) =>
  * @param texto           corpo do contrato
  * @param linhasPorPagina linhas úteis por folha, já descontados logo e rodapé
  */
-export const paginarTexto = (texto, linhasPorPagina = 32) => {
+// `marcador` troca o que conta como início de bloco. O padrão cobre os
+// contratos com "CLÁUSULA n"; o NDA numera as cláusulas como "1. FINALIDADE".
+export const paginarTexto = (texto, linhasPorPagina = 32, marcador = /^(?:CLÁUSULA|CAPÍTULO|ANEXO)\b.*$/gim) => {
     if (!texto) return [''];
 
     // Cada bloco começa num cabeçalho de cláusula/capítulo, ou é o preâmbulo.
-    const marcadores = [...texto.matchAll(/^(?:CLÁUSULA|CAPÍTULO|ANEXO)\b.*$/gim)];
+    const marcadores = [...texto.matchAll(marcador)];
     if (marcadores.length === 0) return [texto];
 
     const blocos = [];
