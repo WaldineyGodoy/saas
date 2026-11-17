@@ -691,26 +691,27 @@ export default function EletropostoPlanModal({
     return (
         <div style={{
             position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-            background: 'rgba(15, 23, 42, 0.72)', display: 'flex', alignItems: 'center',
-            justifyContent: 'center', zIndex: 10000, backdropFilter: 'blur(8px)', padding: '1rem'
+            background: 'rgba(15, 23, 42, 0.68)', display: 'flex', alignItems: 'center',
+            justifyContent: 'center', zIndex: 10000, backdropFilter: 'blur(6px)', padding: '1rem'
         }}>
             <div style={{
-                background: '#ffffff', width: '100%', maxWidth: '1060px', borderRadius: '30px',
-                maxHeight: '94vh', overflow: 'hidden', display: 'flex', flexDirection: 'column',
-                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35)',
-                animation: 'crmModalFadeIn 0.28s cubic-bezier(0.16, 1, 0.3, 1)',
-                border: '1px solid #e2e8f0'
+                background: '#f8fafc', width: '96vw', maxWidth: '1340px', borderRadius: '16px',
+                height: '92vh', maxHeight: '92vh', overflow: 'hidden', display: 'flex', flexDirection: 'column',
+                boxShadow: '0 25px 50px -12px rgba(15, 23, 42, 0.38)',
+                animation: 'crmModalFadeIn 0.22s cubic-bezier(0.16, 1, 0.3, 1)',
+                border: '1px solid rgba(255, 255, 255, 0.14)'
             }}>
                 <style>{`
                     @keyframes crmModalFadeIn {
-                        from { opacity: 0; transform: translateY(12px) scale(0.985); }
-                        to { opacity: 1; transform: translateY(0) scale(1); }
+                        from { opacity: 0; transform: translateY(8px); }
+                        to { opacity: 1; transform: translateY(0); }
                     }
                     .crm-scrollbar::-webkit-scrollbar { width: 7px; }
                     .crm-scrollbar::-webkit-scrollbar-track { background: #f8fafc; }
                     .crm-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 6px; }
                     .crm-input {
-                        transition: all 0.2s ease;
+                        transition: all 0.15s ease;
+                        font-variant-numeric: tabular-nums;
                     }
                     .crm-input:focus {
                         border-color: #10b981 !important;
@@ -725,57 +726,103 @@ export default function EletropostoPlanModal({
                         padding: 0.7rem 1.25rem;
                         border-bottom: 1px solid #f1f5f9;
                         transition: background 0.15s ease;
+                        font-variant-numeric: tabular-nums;
                     }
                     .ledger-row:hover {
                         background: #f8fafc;
+                    }
+                    .eletro-top-fields {
+                        display: grid;
+                        grid-template-columns: 1.15fr 0.75fr 1.6fr;
+                        gap: 1rem;
+                        align-items: end;
+                    }
+                    @media (max-width: 960px) {
+                        .eletro-top-fields {
+                            grid-template-columns: 1fr;
+                        }
                     }
                 `}</style>
 
                 {/* HEADER PREMIUM */}
                 <div style={{
-                    padding: '1.35rem 2rem',
-                    background: 'linear-gradient(135deg, #064e3b 0%, #1e293b 100%)',
+                    padding: '1.15rem 1.75rem',
+                    background: 'linear-gradient(135deg, #064e3b 0%, #0f172a 100%)',
+                    borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
                     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    color: '#ffffff'
+                    gap: '1rem', flexWrap: 'wrap',
+                    color: '#ffffff', flexShrink: 0
                 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                         <div style={{
-                            width: '48px', height: '48px', borderRadius: '14px',
+                            width: '44px', height: '44px', borderRadius: '12px',
                             background: 'rgba(16, 185, 129, 0.2)', border: '1px solid rgba(52, 211, 153, 0.35)',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#34d399'
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#34d399',
+                            flexShrink: 0
                         }}>
-                            <BatteryCharging size={24} />
+                            <BatteryCharging size={22} />
                         </div>
                         <div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                                <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: '#f8fafc', letterSpacing: '-0.01em' }}>
-                                    {planToEdit ? 'Editar Plano de Eletroposto & Recompensas' : 'Novo Plano de Eletroposto & Recompensas'}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+                                <h3 style={{ margin: 0, fontSize: '1.22rem', fontWeight: 800, color: '#f8fafc', letterSpacing: '-0.02em' }}>
+                                    {planToEdit ? (nome || 'Editar Plano de Eletroposto & Recompensas') : 'Novo Plano de Eletroposto & Recompensas'}
                                 </h3>
                                 <span style={{
-                                    fontSize: '0.7rem', fontWeight: 700, padding: '0.2rem 0.6rem',
-                                    borderRadius: '20px', background: 'rgba(59, 130, 246, 0.25)',
+                                    fontSize: '0.7rem', fontWeight: 700, padding: '0.18rem 0.6rem',
+                                    borderRadius: '999px', background: 'rgba(59, 130, 246, 0.25)',
                                     color: '#93c5fd', border: '1px solid rgba(147, 197, 253, 0.35)'
                                 }}>
-                                    Lastro: Plano de Assinatura (Sem Fio B) • Multinível L1 a L4+
+                                    Lastro s/ Fio B • Multinível L1 a L4+
+                                </span>
+                                <span style={{
+                                    fontSize: '0.7rem', fontWeight: 700, padding: '0.18rem 0.6rem',
+                                    borderRadius: '999px',
+                                    background: ativo ? 'rgba(34, 197, 94, 0.2)' : 'rgba(148, 163, 184, 0.2)',
+                                    color: ativo ? '#86efac' : '#cbd5e1'
+                                }}>
+                                    {ativo ? 'Ativo' : 'Inativo'}
                                 </span>
                             </div>
-                            <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.82rem', color: '#cbd5e1' }}>
-                                Ponto de partida fixo no Plano de Assinatura vinculado (Tarifa Concessionária menos Desconto do Assinante)
+                            <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.8rem', color: '#cbd5e1' }}>
+                                Ponto de partida fixo no Plano de Assinatura vinculado ({planoVinculadoNome} • {concessionariaOrigem})
                             </p>
                         </div>
                     </div>
 
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        style={{
-                            background: 'rgba(255, 255, 255, 0.1)', border: '1px solid rgba(255, 255, 255, 0.15)',
-                            cursor: 'pointer', color: '#f8fafc', padding: '0.55rem', borderRadius: '12px',
-                            display: 'flex'
-                        }}
-                    >
-                        <X size={18} />
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
+                        <div style={{
+                            display: 'flex', alignItems: 'center', gap: '0.85rem',
+                            background: 'rgba(255, 255, 255, 0.06)', border: '1px solid rgba(255, 255, 255, 0.12)',
+                            borderRadius: '10px', padding: '0.38rem 0.85rem', fontVariantNumeric: 'tabular-nums'
+                        }}>
+                            <div>
+                                <div style={{ fontSize: '0.62rem', textTransform: 'uppercase', color: '#94a3b8', fontWeight: 700 }}>Lastro (s/ Fio B)</div>
+                                <div style={{ fontSize: '0.84rem', fontWeight: 800, color: '#f8fafc' }}>R$ {formatCurrencyUnit(calc.vLastro, 4)}</div>
+                            </div>
+                            <div style={{ width: '1px', height: '24px', background: 'rgba(255,255,255,0.12)' }} />
+                            <div>
+                                <div style={{ fontSize: '0.62rem', textTransform: 'uppercase', color: '#94a3b8', fontWeight: 700 }}>Desconto</div>
+                                <div style={{ fontSize: '0.84rem', fontWeight: 800, color: '#6ee7b7' }}>{formatPct(calc.pctDescEletroposto)}%</div>
+                            </div>
+                            <div style={{ width: '1px', height: '24px', background: 'rgba(255,255,255,0.12)' }} />
+                            <div>
+                                <div style={{ fontSize: '0.62rem', textTransform: 'uppercase', color: '#94a3b8', fontWeight: 700 }}>Base Líquida</div>
+                                <div style={{ fontSize: '0.84rem', fontWeight: 800, color: '#34d399' }}>R$ {formatCurrencyUnit(calc.baseLiquida, 4)}</div>
+                            </div>
+                        </div>
+
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            style={{
+                                background: 'rgba(255, 255, 255, 0.1)', border: '1px solid rgba(255, 255, 255, 0.15)',
+                                cursor: 'pointer', color: '#f8fafc', width: '38px', height: '38px', borderRadius: '10px',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center'
+                            }}
+                        >
+                            <X size={20} />
+                        </button>
+                    </div>
                 </div>
 
                 {planToEdit?.status === 'somente_contratos' && (
@@ -789,14 +836,14 @@ export default function EletropostoPlanModal({
 
                 <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
                     <div className="crm-scrollbar" style={{
-                        padding: '1.65rem 2rem', overflowY: 'auto', flex: 1,
-                        background: '#f8fafc', display: 'flex', flexDirection: 'column', gap: '1.4rem'
+                        padding: '1.35rem 1.75rem', overflowY: 'auto', flex: 1,
+                        background: '#f8fafc', display: 'flex', flexDirection: 'column', gap: '1.15rem'
                     }}>
 
-                        {/* BLOCO 1: ALINHAMENTO HORIZONTAL PERFEITO E LINHA ÚNICA */}
+                        {/* BLOCO 1: ALINHAMENTO HORIZONTAL PERFEITO EM 3 COLUNAS */}
                         <div style={{
-                            background: '#ffffff', padding: '1.4rem 1.5rem', borderRadius: '20px',
-                            border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
+                            background: '#ffffff', padding: '1.25rem 1.5rem', borderRadius: '14px',
+                            border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04)'
                         }}>
                             <div style={{
                                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -837,12 +884,7 @@ export default function EletropostoPlanModal({
                                 </div>
                             </div>
 
-                            <div style={{
-                                display: 'grid',
-                                gridTemplateColumns: '1.2fr 1.8fr',
-                                gap: '1rem',
-                                alignItems: 'end'
-                            }}>
+                            <div className="eletro-top-fields">
                                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                                     <label style={{
                                         display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#475569',
@@ -925,8 +967,8 @@ export default function EletropostoPlanModal({
 
                         {/* BLOCO 2: DEMONSTRATIVO MULTINÍVEL DO ELETROPOSTO */}
                         <div style={{
-                            background: '#ffffff', padding: '1.4rem 1.5rem', borderRadius: '20px',
-                            border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
+                            background: '#ffffff', padding: '1.35rem 1.5rem', borderRadius: '14px',
+                            border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04)'
                         }}>
                             <div style={{
                                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -1496,6 +1538,118 @@ export default function EletropostoPlanModal({
                                             </div>
                                         </div>
                                     )}
+
+                                    {(tipoRecompensa === 'start' || tipoRecompensa === 'hibrido') && (
+                                        <div style={{
+                                            border: '1px solid #bfdbfe', background: '#eff6ff', borderRadius: '14px',
+                                            padding: '1.25rem'
+                                        }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.85rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                    <span style={{
+                                                        background: '#2563eb', color: 'white', fontSize: '0.7rem',
+                                                        fontWeight: 800, padding: '0.2rem 0.6rem', borderRadius: '6px', textTransform: 'uppercase'
+                                                    }}>
+                                                        Start Eletroposto
+                                                    </span>
+                                                    <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#1e3a8a' }}>
+                                                        Bonificação nos Ciclos Iniciais (% sobre Base Líquida: R$ {formatCurrencyUnit(calc.baseLiquida, 4)}/kWh)
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '0.85rem' }}>
+                                                {[1, 2, 3].map(fatNum => {
+                                                    const isChecked = faturasElegiveisStart.includes(fatNum);
+                                                    return (
+                                                        <button
+                                                            key={fatNum}
+                                                            type="button"
+                                                            onClick={() => toggleFaturaStart(fatNum)}
+                                                            style={{
+                                                                flex: 1, padding: '0.6rem 0.85rem', borderRadius: '10px',
+                                                                border: isChecked ? '2px solid #2563eb' : '1px solid #cbd5e1',
+                                                                background: isChecked ? '#ffffff' : '#f8fafc',
+                                                                color: isChecked ? '#1d4ed8' : '#64748b',
+                                                                fontWeight: 700, fontSize: '0.84rem', cursor: 'pointer',
+                                                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.45rem'
+                                                            }}
+                                                        >
+                                                            <div style={{
+                                                                width: '16px', height: '16px', borderRadius: '4px',
+                                                                background: isChecked ? '#2563eb' : 'transparent',
+                                                                border: isChecked ? 'none' : '1.5px solid #94a3b8',
+                                                                display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                                            }}>
+                                                                {isChecked && <Check size={12} color="white" />}
+                                                            </div>
+                                                            Ciclo {fatNum}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                                {faturasElegiveisStart.map(fatNum => {
+                                                    const r = regrasStart[fatNum] || {};
+                                                    const maxPP = Math.max(parseFloat(r.ppe) || 0, parseFloat(r.ppp) || 0, parseFloat(r.ppf) || 0);
+                                                    const soma = (parseFloat(r.b2w) || 0) + (parseFloat(r.lider) || 0) + maxPP + (parseFloat(r.assinante_conect) || 0);
+                                                    const excedeu = soma > 100;
+                                                    return (
+                                                        <div key={fatNum} style={{
+                                                            background: '#ffffff', padding: '1rem 1.25rem', borderRadius: '12px',
+                                                            border: `1px solid ${excedeu ? '#ef4444' : '#bfdbfe'}`
+                                                        }}>
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.65rem', flexWrap: 'wrap', gap: '0.4rem' }}>
+                                                                <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#1e3a8a' }}>
+                                                                    Ciclo {fatNum} — Percentuais sobre a Base Líquida
+                                                                </span>
+                                                                <span style={{
+                                                                    fontSize: '0.74rem', fontWeight: 800, fontVariantNumeric: 'tabular-nums',
+                                                                    color: excedeu ? '#dc2626' : '#15803d',
+                                                                    background: excedeu ? '#fef2f2' : '#f0fdf4',
+                                                                    padding: '0.18rem 0.55rem', borderRadius: '6px'
+                                                                }}>
+                                                                    Total Teto: {formatPct(soma)}% (limite 100%)
+                                                                </span>
+                                                            </div>
+                                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '0.6rem' }}>
+                                                                {[
+                                                                    { key: 'b2w', label: 'B2W (%)' },
+                                                                    { key: 'lider', label: 'Líder (%)' },
+                                                                    { key: 'ppe', label: 'PPE (%)' },
+                                                                    { key: 'ppp', label: 'PPP (%)' },
+                                                                    { key: 'ppf', label: 'PPF (%)' },
+                                                                    { key: 'assinante_conect', label: 'Assin. Conect (%)' }
+                                                                ].map(item => (
+                                                                    <div key={item.key}>
+                                                                        <label style={{ display: 'block', fontSize: '0.7rem', color: '#475569', fontWeight: 700, marginBottom: '0.25rem' }}>
+                                                                            {item.label}
+                                                                        </label>
+                                                                        <input
+                                                                            type="number"
+                                                                            step="0.01"
+                                                                            min="0"
+                                                                            max="100"
+                                                                            className="crm-input"
+                                                                            value={r[item.key] ?? ''}
+                                                                            onChange={e => handleStartPctChange(fatNum, item.key, e.target.value)}
+                                                                            style={{
+                                                                                width: '100%', padding: '0.45rem 0.5rem', borderRadius: '8px',
+                                                                                border: '1px solid #cbd5e1', background: '#ffffff',
+                                                                                fontSize: '0.82rem', fontWeight: 700,
+                                                                                boxSizing: 'border-box', textAlign: 'center'
+                                                                            }}
+                                                                        />
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
                                 </>
                             ) : (
                                 <div style={{
@@ -1526,26 +1680,25 @@ export default function EletropostoPlanModal({
 
                     {/* FOOTER */}
                     <div style={{
-                        padding: '1.15rem 2rem', background: '#ffffff', borderTop: '1px solid #e2e8f0',
-                        display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                        padding: '1rem 1.75rem', background: '#ffffff', borderTop: '1px solid #e2e8f0',
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                        flexWrap: 'wrap', gap: '0.85rem', flexShrink: 0
                     }}>
-                        <div style={{ fontSize: '0.8rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.85rem', flexWrap: 'wrap' }}>
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
-                                <Percent size={15} color="#059669" />
-                                Superávit L1: <strong style={{ color: '#16a34a' }}>+R$ {formatCurrencyUnit(calc.byLevel.L1.margemLivre, 5)}</strong>
-                            </span>
-                            <span>•</span>
-                            <span>
-                                Superávit L2: <strong style={{ color: '#16a34a' }}>+R$ {formatCurrencyUnit(calc.byLevel.L2.margemLivre, 5)}</strong>
-                            </span>
-                            <span>•</span>
-                            <span>
-                                Superávit L3: <strong style={{ color: '#16a34a' }}>+R$ {formatCurrencyUnit(calc.byLevel.L3.margemLivre, 5)}</strong>
-                            </span>
-                            <span>•</span>
-                            <span>
-                                Superávit L4+: <strong style={{ color: '#16a34a' }}>+R$ {formatCurrencyUnit(calc.byLevel.L4.margemLivre, 5)}</strong>
-                            </span>
+                        <div style={{ fontSize: '0.78rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap', fontVariantNumeric: 'tabular-nums' }}>
+                            {LEVEL_KEYS.map((lk, idx) => {
+                                const lv = calc.byLevel[lk];
+                                const neg = lv.margemLivre < 0;
+                                return (
+                                    <span key={lk} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                                        {idx === 0 && <Percent size={14} color="#059669" />}
+                                        {idx > 0 && <span style={{ color: '#cbd5e1', marginRight: '0.25rem' }}>•</span>}
+                                        <span>{lk === 'L4' ? 'L4+' : lk}:</span>
+                                        <strong style={{ color: neg ? '#dc2626' : '#15803d' }}>
+                                            {neg ? '-' : '+'}R$ {formatCurrencyUnit(Math.abs(lv.margemLivre), 5)}
+                                        </strong>
+                                    </span>
+                                );
+                            })}
                         </div>
 
                         <div style={{ display: 'flex', gap: '0.75rem' }}>
@@ -1553,8 +1706,8 @@ export default function EletropostoPlanModal({
                                 type="button"
                                 onClick={onClose}
                                 style={{
-                                    padding: '0.75rem 1.4rem', borderRadius: '14px', border: '1px solid #cbd5e1',
-                                    background: '#ffffff', color: '#475569', fontWeight: 700, fontSize: '0.88rem',
+                                    padding: '0.62rem 1.25rem', borderRadius: '10px', border: '1px solid #cbd5e1',
+                                    background: '#ffffff', color: '#475569', fontWeight: 700, fontSize: '0.84rem',
                                     cursor: 'pointer'
                                 }}
                             >
@@ -1564,17 +1717,17 @@ export default function EletropostoPlanModal({
                                 type="submit"
                                 disabled={loading || bloqueadoPorDeficit}
                                 style={{
-                                    padding: '0.75rem 2rem', borderRadius: '14px', border: 'none',
+                                    padding: '0.62rem 1.5rem', borderRadius: '10px', border: 'none',
                                     background: bloqueadoPorDeficit
                                         ? '#94a3b8'
                                         : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                                    color: '#ffffff', fontWeight: 800, fontSize: '0.88rem',
+                                    color: '#ffffff', fontWeight: 700, fontSize: '0.86rem',
                                     cursor: (loading || bloqueadoPorDeficit) ? 'not-allowed' : 'pointer',
-                                    display: 'flex', alignItems: 'center', gap: '0.5rem',
-                                    boxShadow: bloqueadoPorDeficit ? 'none' : '0 10px 15px -3px rgba(5, 150, 105, 0.3)'
+                                    display: 'flex', alignItems: 'center', gap: '0.45rem',
+                                    boxShadow: bloqueadoPorDeficit ? 'none' : '0 4px 12px rgba(5, 150, 105, 0.25)'
                                 }}
                             >
-                                <Save size={18} />
+                                <Save size={16} />
                                 {loading ? 'Salvando...' : (planToEdit ? 'Salvar Alterações' : 'Criar Plano de Eletroposto')}
                             </button>
                         </div>
