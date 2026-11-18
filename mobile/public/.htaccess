@@ -19,4 +19,8 @@ RewriteRule ^ /index.html [L]
   <FilesMatch "\.(js|css|png|ttf|woff2?)$">
     Header set Cache-Control "public, max-age=604800"
   </FilesMatch>
+  # Video e poster do login (public/fundo/): nome com versao, cache longo.
+  <FilesMatch "\.(mp4|jpg)$">
+    Header set Cache-Control "public, max-age=2592000, immutable"
+  </FilesMatch>
 </IfModule>

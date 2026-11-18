@@ -54,6 +54,7 @@ jobs:
           test -f dist/.htaccess
           grep -q 'manifest.json' dist/index.html
           grep -q 'viewport-fit=cover' dist/index.html
+          ls dist/fundo/intro-h-*.mp4 dist/fundo/intro-v-*.mp4 >/dev/null
 
       - name: Enviar para a Hostinger (FTP)
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
