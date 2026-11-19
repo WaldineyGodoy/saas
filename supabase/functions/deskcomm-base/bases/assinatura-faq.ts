@@ -22,27 +22,37 @@ export const FAQ_ASSINATURA = `## Pergunta: Como funciona a energia por assinatu
 
 ## Pergunta: Em quanto tempo começa o desconto?
 ## Resposta: Em 30 a 60 dias (1 a 2 ciclos). Podem vir até 2 contas proporcionais sem desconto: uma ainda no seu nome, até a troca de titularidade, e outra já no nome da Associação, enquanto a distribuidora processa a lista de rateio.
+O processamento leva cerca de 15 dias. Depois vêm duas leituras: no mês 1, a da usina geradora, que envia os créditos; no mês 2, a do seu consumo. O desconto aparece na primeira fatura depois da leitura do mês 2.
 
 ## Pergunta: Precisa ter vaga?
 ## Resposta: Sim. Com vaga numa usina que já gera, a adesão é imediata. Com vaga só numa usina em pré-operação, você assina agora e o desconto começa quando ela entrar em operação. Sem vaga, você entra na fila de espera e a equipe avisa quando abrir.
 
 ## Pergunta: A conta muda de nome?
-## Resposta: Sim. A unidade consumidora passa para o nome da Associação, que representa você na distribuidora. O imóvel e o consumo continuam seus.
+## Resposta: Sim. A unidade consumidora passa para o nome da Associação, que representa você na distribuidora. O imóvel e o consumo continuam seus. O modelo é o de autoconsumo remoto por meio de associação, previsto na Lei 14.300, e a B2W precisa do acesso aos dados da unidade consumidora e do medidor para destinar os créditos de energia.
+
+## Pergunta: Como a conta volta para o meu nome quando eu sair?
+## Resposta: Ao cancelar com os débitos quitados, você recebe um termo de transferência de titularidade. É só levar o termo à distribuidora e pedir a troca da conta para o seu nome de novo.
+
+## Pergunta: A procuração veio com um número de unidade consumidora estranho, como 000000000. É erro?
+## Resposta: Não é erro. Esse número é provisório e aleatório, e é trocado pelo número real da sua unidade consumidora quando você envia a cópia da sua conta de energia. A procuração com o número correto é a que vale para a adesão.
 
 ## Pergunta: Como eu pago?
-## Resposta: Um único boleto ou PIX da B2W por mês, que já inclui o que é devido à distribuidora: a B2W quita a conta da concessionária. Ele chega por e-mail ou WhatsApp com 5 dias de antecedência, e a 2ª via sai pelo app.
+## Resposta: Um único boleto ou PIX da B2W por mês, que já inclui o que é devido à distribuidora: a B2W quita a conta da concessionária. Ele chega por e-mail ou WhatsApp com 5 dias de antecedência, e a 2ª via sai pelo app. Junto com o boleto vai uma cópia da conta da distribuidora, para você conferir que ela foi quitada.
 
 ## Pergunta: Qual o vencimento?
 ## Resposta: Todo dia 5.
 
 ## Pergunta: E se eu atrasar?
-## Resposta: Aquela fatura sai pelo valor cheio, sem o desconto, com multa de 2%, juros de 1% ao mês e correção pelo IPCA. O desconto volta no ciclo seguinte. Com 30 dias de atraso a unidade sai do rateio; com 45, o débito pode ir a protesto; com 60, o contrato é rescindido.
+## Resposta: Aquela fatura sai pelo valor cheio, sem o desconto, com multa de 2%, juros de 1% ao mês e correção pelo IPCA. O desconto volta no ciclo seguinte. Com 30 dias de atraso a unidade sai do rateio; com 45, o débito pode ir a protesto; com 60, o contrato é rescindido. A perda do desconto e a multa são cobranças distintas: a multa fica em 2%, limite do Código Civil, e a perda do desconto significa pagar a tarifa cheia da distribuidora.
 
 ## Pergunta: Tem fidelidade? Como cancelo?
-## Resposta: Não há fidelidade nem multa. Para sair, avise com 90 dias ou 3 ciclos de compensação, o que vier por último.
+## Resposta: Não há fidelidade nem multa. Para sair, avise com 90 dias ou 3 ciclos de compensação, o que vier por último. Basta comunicar a B2W.
+
+## Pergunta: Vou instalar uma usina solar própria. Como funciona a saída? Há multa ou cobrança?
+## Resposta: Basta comunicar a B2W. Não há multa nem cobrança durante o prazo de desconexão. Os 90 dias são o período em que a unidade ainda pode receber créditos de meses anteriores. O que pode ser cobrado são os créditos enviados antes da data do desligamento. O desligamento vale a partir do momento em que a conta volta para o seu nome.
 
 ## Pergunta: E se a usina gerar menos?
-## Resposta: No ciclo sem compensação você paga o valor normal da distribuidora, sem desconto e sem nenhum custo extra.
+## Resposta: No ciclo sem compensação você paga o valor normal da distribuidora, sem desconto e sem nenhum custo extra. Sem compensação não há contribuição à B2W: só é devida a tarifa mínima (custo de disponibilidade) da distribuidora.
 
 ## Pergunta: Vou mudar ou vender o imóvel. O que faço?
 ## Resposta: Avise a B2W com 30 dias de antecedência.
