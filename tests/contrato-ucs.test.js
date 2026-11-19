@@ -172,3 +172,45 @@ describe('contratoBloqueado', () => {
     expect(contratoBloqueado(null)).toBe(false);
   });
 });
+
+describe('avisosDoContrato: UC e plano discordam (o caso MULTI TV: UC 20%, plano Ultra Connect 15%)', () => {
+  const divergente = () => uc({ numero_uc: '000000000', desconto_assinante: '20', planos_assinatura_energia: { id: 'p', nome: 'Plano Ultra Connect', desconto_assinante: '15.00' } });
+
+  test('bloqueia e diz os dois numeros, o plano e qual o termo vai usar', () => {
+    const a = avisosDoContrato([divergente()]);
+    const d = a.find((x) => x.codigo === 'desconto_diverge_plano');
+    expect(d).toBeTruthy();
+    expect(d.gravidade).toBe('bloqueia');
+    expect(d.mensagem).toContain('000000000');
+    expect(d.mensagem).toContain('20%');
+    expect(d.mensagem).toContain('15%');
+    expect(d.mensagem).toContain('Plano Ultra Connect');
+    expect(contratoBloqueado(a)).toBe(true);
+  });
+
+  test('desconto da UC igual ao do plano, mesmo em formatos diferentes: sem aviso', () => {
+    expect(avisosDoContrato([uc({ desconto_assinante: 15 })])).toEqual([]);
+    expect(avisosDoContrato([uc({ desconto_assinante: '15.00' })])).toEqual([]);
+    expect(avisosDoContrato([uc({ desconto_assinante: '15,0' })])).toEqual([]);
+  });
+
+  test('desconto 0 ou vazio na UC nao e divergencia: o termo ja usa o plano', () => {
+    expect(avisosDoContrato([uc({ desconto_assinante: 0 })])).toEqual([]);
+    expect(avisosDoContrato([uc({ desconto_assinante: null })])).toEqual([]);
+  });
+
+  test('UC sem plano nao tem com o que divergir', () => {
+    expect(avisosDoContrato([uc({ desconto_assinante: 20, planos_assinatura_energia: null })])).toEqual([]);
+  });
+
+  test('UC encerrada divergente nao trava o contrato', () => {
+    expect(avisosDoContrato([uc({ id: 'a' }), { ...divergente(), id: 'velha', status: 'cancelado' }])).toEqual([]);
+  });
+
+  test('com varias UCs, lista cada uma que diverge', () => {
+    const a = avisosDoContrato([divergente(), { ...divergente(), id: 'b', numero_uc: '555', created_at: '2026-03-01T00:00:00Z' }]);
+    const d = a.find((x) => x.codigo === 'desconto_diverge_plano');
+    expect(d.mensagem).toContain('000000000');
+    expect(d.mensagem).toContain('555');
+  });
+});

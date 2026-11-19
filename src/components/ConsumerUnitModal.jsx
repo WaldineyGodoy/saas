@@ -33,6 +33,7 @@ import PowerPlantModal from './PowerPlantModal';
 import InvoiceSummaryModal from './InvoiceSummaryModal';
 import TrocaTitularidadePanel from './TrocaTitularidadePanel';
 import { ENERGY_PAID_DIVERGENT, energyStatusMatchesFilter } from '../lib/energyBillStatus';
+import { descontoParaGravar, descontoDoPlanoParaCampo } from '../lib/ucDesconto';
 
 const semAcento = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase();
 
@@ -1063,7 +1064,11 @@ Qualquer dúvida, é só responder esta mensagem.`;
                 tusd: parseCurrency(formData.tusd),
                 fio_b: parseCurrency(formData.fio_b),
                 plano_assinatura_id: formData.plano_assinatura_id || null,
-                desconto_assinante: Number(formData.desconto_assinante),
+                // Com plano, vale o desconto do PLANO: e o que "Desconto Herdado"
+                // mostra, e o que a adesao publica e o mover-UCs ja gravam. O campo
+                // vem do municipio (busca por CEP) e gravava 20 com plano de 15
+                // (MULTI TV, 19/11/2026). Ver lib/ucDesconto.js.
+                desconto_assinante: descontoParaGravar(formData, planos),
                 dia_vencimento: Number(formData.dia_vencimento),
                 data_ativacao: formData.data_ativacao || null,
                 address: {
@@ -1638,7 +1643,15 @@ Qualquer dúvida, é só responder esta mensagem.`;
                                                     <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Plano de Serviço *</label>
                                                     <select
                                                         value={formData.plano_assinatura_id}
-                                                        onChange={e => setFormData({ ...formData, plano_assinatura_id: e.target.value })}
+                                                        onChange={e => {
+                                                            const planoId = e.target.value;
+                                                            const doPlano = descontoDoPlanoParaCampo(planoId, planos);
+                                                            setFormData(prev => ({
+                                                                ...prev,
+                                                                plano_assinatura_id: planoId,
+                                                                ...(doPlano !== null ? { desconto_assinante: doPlano } : {})
+                                                            }));
+                                                        }}
                                                         style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none' }}
                                                     >
                                                         <option value="">Selecione o plano de assinatura (obrigatório para a UC em operação)</option>

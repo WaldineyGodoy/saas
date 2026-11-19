@@ -90,6 +90,26 @@ export function avisosDoContrato(ucs) {
         });
     }
 
+    // UC e plano discordam (ex.: UC gravada com 20% e plano de 15%). O termo le a
+    // UC, e a cobranca tambem: se um dos dois esta errado, o erro vai para o
+    // contrato assinado. Zero ou vazio na UC nao conta: ai o termo ja usa o plano.
+    const divergentes = vigentes.filter((u) => {
+        const daUc = paraNumero(u.desconto_assinante);
+        const doPlano = paraNumero(u.planos_assinatura_energia?.desconto_assinante);
+        return daUc > 0 && doPlano > 0 && daUc !== doPlano;
+    });
+    if (divergentes.length > 0) {
+        const detalhe = divergentes.map((u) => {
+            const plano = u.planos_assinatura_energia?.nome || 'plano';
+            return `UC ${u.numero_uc || '?'}: ${pct(paraNumero(u.desconto_assinante))} gravado na UC, mas o ${plano} é de ${pct(paraNumero(u.planos_assinatura_energia.desconto_assinante))}`;
+        }).join('; ');
+        avisos.push({
+            codigo: 'desconto_diverge_plano',
+            gravidade: 'bloqueia',
+            mensagem: `O desconto da UC não bate com o do plano (${detalhe}). O termo usa o da UC. Abra a UC e salve de novo para herdar o desconto do plano, ou confirme qual dos dois está certo antes de enviar.`
+        });
+    }
+
     const distintos = [...new Set(vigentes.map(descontoDaUc).filter((d) => d !== null))];
     if (distintos.length > 1) {
         const porUc = vigentes.map((u) => `UC ${u.numero_uc || '?'}: ${descontoDaUc(u) === null ? 'sem desconto' : pct(descontoDaUc(u))}`).join('; ');
