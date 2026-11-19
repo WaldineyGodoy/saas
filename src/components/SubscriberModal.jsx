@@ -12,6 +12,7 @@ import { ehPapelInterno, ehPapelAdmin } from '../lib/papeis';
 import { avaliarCpfDigitado, aplicarConsulta } from '../lib/consultaCpf';
 import { ucsParaContrato, descontoDaUc, avisosDoContrato, contratoBloqueado } from '../lib/contratoUcs';
 import { documentoEhCnpj, validarRepresentante, representanteParaGravar, representanteParaContrato } from '../lib/representanteLegal';
+import { urlTermosDoContrato, linkDeAssinaturaDaSig, textoLinkContratoCrm, keywordTermos } from '../lib/contratoLink';
 import { CreditCard, Plus, Trash2, History, User, Home, Zap, X, Eye, EyeOff, Key, DollarSign, Calendar, FileText, CheckCircle, Clock, AlertCircle, Ban, TicketCheck, TicketMinus, Download, Loader2, ArrowLeft, Info, RefreshCw, Send, MessageSquare, Paperclip, MessageCircle, Copy, Pencil, Printer, Share2 } from 'lucide-react';
 import ConsumerUnitModal from './ConsumerUnitModal';
 import ContratoAdesao from './ContratoAdesao';
@@ -226,6 +227,22 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
         }
     }, []);
 
+    /**
+     * Pagina de termos preenchida para este contrato e seu link curto. Se o
+     * encurtador falhar, o cliente recebe a URL longa (valida do mesmo jeito),
+     * como o servidor faz.
+     */
+    const montarLinkTermos = async ({ linkAssinatura, titulo }) => {
+        const url = urlTermosDoContrato({ linkAssinatura, nome: formData.name, uc: ucsContrato[0] });
+        try {
+            const res = await shortenLink(url, keywordTermos(subscriber.id, new Date()), titulo);
+            if (res?.success && res.shortUrl) return { urlTermos: url, curta: res.shortUrl };
+        } catch (e) {
+            console.warn('Falha ao encurtar a pagina de termos:', e);
+        }
+        return { urlTermos: url, curta: url };
+    };
+
     const handleSendContract = async () => {
         if (!subscriber?.id) return;
         // Mesma regra do botao, repetida aqui: o botao desabilitado nao e a unica
@@ -288,23 +305,29 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
                 console.warn('Falha ao encurtar link do contrato:', shortErr);
             }
 
-            await supabase
-                .from('subscribers')
-                .update({ signature_link: finalLink })
-                .eq('id', subscriber.id);
-
-            // O link curto também vai para a própria assinatura. Sem isto o
-            // short_url só era preenchido no reenvio, e nada ligava o registro
-            // ao link que o cliente recebeu.
+            // O link curto direto da Autentique fica na assinatura (mesma convencao
+            // do onboarding-finalizar): e ele que vai DENTRO da pagina de termos.
             await supabase
                 .from('signatures')
                 .update({ short_url: finalLink })
                 .eq('autentique_doc_id', result.documentId);
 
-            setSignatureLink(finalLink);
+            // O cliente NAO recebe o link da Autentique: recebe a pagina de termos
+            // (resumo das clausulas + botao de assinar), como na adesao publica.
+            const { urlTermos: urlTermosContrato, curta: linkCliente } = await montarLinkTermos({
+                linkAssinatura: finalLink,
+                titulo: `Termos do contrato - ${formData.name}`
+            });
+
+            await supabase
+                .from('subscribers')
+                .update({ signature_link: linkCliente })
+                .eq('id', subscriber.id);
+
+            setSignatureLink(linkCliente);
 
             // 6. Send Notifications
-            const messageWithLink = `Olá ${formData.name}, bem vindo a B2W Energia. ⚡\n\nA partir de agora vc começa a economizar na sua conta de energia 💰\n\nPor favor, assine digitalmente para darmos prosseguimento à ativação da sua conta ✍️\n\nsegue link para assinatura do seu contrato de energia: 📄\n\n${finalLink}\n\num resumo do contrato e como funciona a energia por assinatura, vc pode acessar em: 🔗\n\nhttps://b2wenergia.com.br/contrato`;
+            const messageWithLink = textoLinkContratoCrm(formData.name, linkCliente);
             
             const envio = await enviarLinkAssinatura(messageWithLink);
 
@@ -315,8 +338,10 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
                 algumCanalFalhou(envio) ? 'warning' : 'success'
             );
             fetchSignatures(subscriber.id);
+            // contrato_url / contrato_url_curta: as mesmas chaves que o onboarding-finalizar
+            // le para reaproveitar o link no reenvio, sem criar outro.
             addHistory('subscriber', subscriber.id, 'envio_contrato',
-                { document_name: fileName, autentique_doc_id: result.documentId, envio },
+                { document_name: fileName, autentique_doc_id: result.documentId, contrato_url: urlTermosContrato, contrato_url_curta: linkCliente, envio },
                 `Contrato enviado para assinatura. ${resumoEnvio(envio)}`);
 
         } catch (error) {
@@ -408,7 +433,9 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
             if (res?.error) throw new Error(res.error);
 
             showAlert(res?.jaCancelado ? 'Este contrato já estava cancelado.' : 'Contrato cancelado.', 'success');
-            if (sig.short_url === signatureLink || sig.autentique_url === signatureLink) setSignatureLink('');
+            // O link exibido e o da pagina de termos (nao bate com short_url): limpa
+            // tambem quando e a assinatura mais recente que esta sendo cancelada.
+            if (sig.short_url === signatureLink || sig.autentique_url === signatureLink || signatures[0]?.id === sig.id) setSignatureLink('');
             fetchSignatures(subscriber.id);
         } catch (error) {
             showAlert('Erro ao cancelar contrato: ' + error.message, 'error');
@@ -475,7 +502,34 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
                 }
             }
 
-            const messageWithLink = `Olá ${formData.name}, bem vindo a B2W Energia. ⚡\n\nA partir de agora vc começa a economizar na sua conta de energia 💰\n\nPor favor, assine digitalmente para darmos prosseguimento à ativação da sua conta ✍️\n\nsegue link para assinatura do seu contrato de energia: 📄\n\n${finalLink}\n\num resumo do contrato e como funciona a energia por assinatura, vc pode acessar em: 🔗\n\nhttps://b2wenergia.com.br/contrato`;
+            // O cliente recebe a pagina de termos, nao o link da Autentique. Reusa o
+            // link curto ja criado para este documento (mesmo registro que o
+            // servidor le); so cria um novo se nunca houve (contratos mandados
+            // antes desta correcao tinham so o link direto).
+            const { data: anterior } = await supabase
+                .from('crm_history')
+                .select('metadata')
+                .eq('entity_type', 'subscriber')
+                .eq('entity_id', subscriber.id)
+                .eq('metadata->>autentique_doc_id', sig.autentique_doc_id)
+                .not('metadata->>contrato_url_curta', 'is', null)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+            let linkCliente = anterior?.metadata?.contrato_url_curta || null;
+            let urlTermosContrato = anterior?.metadata?.contrato_url || null;
+            if (!linkCliente) {
+                const montado = await montarLinkTermos({
+                    linkAssinatura: linkDeAssinaturaDaSig({ short_url: finalLink, autentique_url: sig.autentique_url }),
+                    titulo: `Termos do contrato - ${formData.name}`
+                });
+                linkCliente = montado.curta;
+                urlTermosContrato = montado.urlTermos;
+            }
+            setSignatureLink(linkCliente);
+
+            const messageWithLink = textoLinkContratoCrm(formData.name, linkCliente);
             
             const envio = await enviarLinkAssinatura(messageWithLink);
 
@@ -484,7 +538,7 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
                 algumCanalFalhou(envio) ? 'warning' : 'success'
             );
             addHistory('subscriber', subscriber.id, 'reenvio_contrato',
-                { document_name: sig.document_name, envio },
+                { document_name: sig.document_name, autentique_doc_id: sig.autentique_doc_id, contrato_url: urlTermosContrato, contrato_url_curta: linkCliente, envio },
                 `Link de assinatura reenviado. ${resumoEnvio(envio)}`);
         } catch (error) {
             showAlert('Erro ao reenviar: ' + error.message, 'error');
