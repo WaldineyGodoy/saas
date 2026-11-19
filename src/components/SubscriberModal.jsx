@@ -10,6 +10,7 @@ import { maskCpfCnpj, maskPhone, validateDocument, validatePhone } from '../lib/
 import { ehDiaUtil, proximoDiaUtil, proximaOcorrenciaDoDia } from '../lib/diasUteis';
 import { ehPapelInterno, ehPapelAdmin } from '../lib/papeis';
 import { avaliarCpfDigitado, aplicarConsulta } from '../lib/consultaCpf';
+import { ucsParaContrato, descontoDaUc, avisosDoContrato, contratoBloqueado } from '../lib/contratoUcs';
 import { CreditCard, Plus, Trash2, History, User, Home, Zap, X, Eye, EyeOff, Key, DollarSign, Calendar, FileText, CheckCircle, Clock, AlertCircle, Ban, TicketCheck, TicketMinus, Download, Loader2, ArrowLeft, Info, RefreshCw, Send, MessageSquare, Paperclip, MessageCircle, Copy, Pencil, Printer, Share2 } from 'lucide-react';
 import ConsumerUnitModal from './ConsumerUnitModal';
 import ContratoAdesao from './ContratoAdesao';
@@ -224,6 +225,12 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
 
     const handleSendContract = async () => {
         if (!subscriber?.id) return;
+        // Mesma regra do botao, repetida aqui: o botao desabilitado nao e a unica
+        // porta (o estado pode mudar entre o clique e a execucao).
+        if (envioBloqueado) {
+            showAlert(avisosContrato.find(a => a.gravidade === 'bloqueia')?.mensagem || 'Corrija as UCs antes de enviar o contrato.', 'warning');
+            return;
+        }
         setIsCreatingContract(true);
         console.log('Iniciando geração de contrato para:', formData.name);
         
@@ -238,7 +245,7 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
             // Mesmos argumentos passados ao <ContratoAdesao> abaixo (formData +
             // minuta), e mesma paginação — inclusive sem o título repetido,
             // que a conta antiga não tirava.
-            const paginasDoTermo = paginasTermoAdesao(formData, consumerUnits, { texto: contractDraft });
+            const paginasDoTermo = paginasTermoAdesao(formData, ucsContrato, { texto: contractDraft });
 
             // 4. Send to Autentique
             const result = await createAutentiqueDocument({
@@ -414,9 +421,16 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
      * Mesma armadilha do modal do fornecedor: o rascunho editado à mão vence
      * o gerado, e sem aviso isso se parece com "o cadastro não atualizou".
      */
+    // UCs que valem para o contrato, da mais antiga para a mais nova. A primeira
+    // define desconto, distribuidora e vencimento do termo (ver contratoUcs.js):
+    // a consulta das UCs nao tem ordem, e `consumerUnits[0]` dava um desconto
+    // diferente conforme a ordem em que o banco devolvia as linhas.
+    const ucsContrato = useMemo(() => ucsParaContrato(consumerUnits), [consumerUnits]);
+    const avisosContrato = useMemo(() => avisosDoContrato(consumerUnits), [consumerUnits]);
+
     const textoGeradoAssinante = useMemo(() => {
-        const uc = consumerUnits[0];
-        const desconto = uc?.desconto_assinante ?? uc?.planos_assinatura_energia?.desconto_assinante;
+        const uc = ucsContrato[0];
+        const desconto = descontoDaUc(uc) ?? undefined;
         return montarTextoContrato(
             subscriber || formData,
             uc?.concessionaria,
@@ -425,9 +439,14 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
                 diaVencimento: uc?.dia_vencimento ?? subscriber?.consolidated_due_day ?? consolidatedDueDay
             }
         );
-    }, [subscriber, formData, consumerUnits, consolidatedDueDay]);
+    }, [subscriber, formData, ucsContrato, consolidatedDueDay]);
 
     const minutaEditada = contractDraft !== '' && contractDraft !== textoGeradoAssinante;
+
+    // Sem UC ou sem desconto definido o termo sairia com o padrao de 20%, que
+    // ninguem escolheu. Uma minuta editada a mao e responsabilidade de quem
+    // editou: nesse caso os avisos aparecem, mas o envio nao trava.
+    const envioBloqueado = contratoBloqueado(avisosContrato) && !minutaEditada;
 
     const handleResendContractLink = async (sig) => {
         const confirm = await showConfirm('Deseja reenviar os links de assinatura para o cliente?', 'Reenviar Links');
@@ -689,14 +708,14 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
             if (subscriber?.id) {
                 fetchSignatures(subscriber.id);
             }
-            const ucContrato = consumerUnits[0];
-            const ucDesconto = ucContrato?.desconto_assinante ?? ucContrato?.planos_assinatura_energia?.desconto_assinante;
+            const ucContrato = ucsContrato[0];
+            const ucDesconto = descontoDaUc(ucContrato) ?? undefined;
             setContractDraft(montarTextoContrato(subscriber || formData, ucContrato?.concessionaria, {
                 desconto: ucDesconto,
                 diaVencimento: ucContrato?.dia_vencimento ?? subscriber?.consolidated_due_day ?? consolidatedDueDay
             }));
         }
-    }, [subscriber?.id, activeTab, fetchSignatures, subscriber, consumerUnits, formData, consolidatedDueDay]);
+    }, [subscriber?.id, activeTab, fetchSignatures, subscriber, ucsContrato, formData, consolidatedDueDay]);
 
 
 
@@ -3570,6 +3589,38 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
                                         </p>
                                     </div>
 
+                                    {avisosContrato.length > 0 && (
+                                        <div role="alert" style={{ display: 'grid', gap: '0.5rem', marginBottom: '1.15rem' }}>
+                                            {avisosContrato.map(a => {
+                                                const bloqueia = a.gravidade === 'bloqueia';
+                                                return (
+                                                    <div
+                                                        key={a.codigo}
+                                                        style={{
+                                                            display: 'flex', gap: '0.55rem', alignItems: 'flex-start',
+                                                            padding: '0.7rem 0.9rem', borderRadius: '10px', fontSize: '0.8rem', lineHeight: 1.45,
+                                                            background: bloqueia ? '#fef2f2' : '#fffbeb',
+                                                            border: `1px solid ${bloqueia ? '#fecaca' : '#fde68a'}`,
+                                                            color: bloqueia ? '#991b1b' : '#92400e'
+                                                        }}
+                                                    >
+                                                        <AlertCircle size={16} style={{ flexShrink: 0, marginTop: '0.1rem' }} />
+                                                        <span>{a.mensagem}</span>
+                                                    </div>
+                                                );
+                                            })}
+                                            {envioBloqueado && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setActiveTab('ucs')}
+                                                    style={{ justifySelf: 'start', padding: '0.4rem 0.8rem', background: '#ffffff', color: '#991b1b', border: '1px solid #fecaca', borderRadius: '8px', fontWeight: 700, cursor: 'pointer', fontSize: '0.78rem' }}
+                                                >
+                                                    Ir para Unidades Consumidoras
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
+
                                     <div style={{ marginBottom: '1.15rem' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '0.45rem' }}>
                                             <label style={{ ...subLabelStyle, marginBottom: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
@@ -3653,17 +3704,18 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
                                     <button
                                         type="button"
                                         onClick={handleSendContract}
-                                        disabled={isCreatingContract || !subscriber?.id}
+                                        disabled={isCreatingContract || !subscriber?.id || envioBloqueado}
+                                        title={envioBloqueado ? 'Corrija as UCs deste assinante antes de enviar o contrato.' : undefined}
                                         style={{
                                             width: '100%',
                                             padding: '0.75rem 1rem',
-                                            background: isCreatingContract ? '#f1f5f9' : '#0f172a',
-                                            color: isCreatingContract ? '#94a3b8' : '#ffffff',
+                                            background: (isCreatingContract || envioBloqueado) ? '#f1f5f9' : '#0f172a',
+                                            color: (isCreatingContract || envioBloqueado) ? '#94a3b8' : '#ffffff',
                                             border: 'none',
                                             borderRadius: '10px',
                                             fontWeight: 700,
                                             fontSize: '0.86rem',
-                                            cursor: (isCreatingContract || !subscriber?.id) ? 'not-allowed' : 'pointer',
+                                            cursor: (isCreatingContract || !subscriber?.id || envioBloqueado) ? 'not-allowed' : 'pointer',
                                             display: 'flex',
                                             alignItems: 'center',
                                             justifyContent: 'center',
@@ -4024,7 +4076,7 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
                 <div ref={contractFullRef}>
                     <ContratoAdesao
                         subscriber={formData}
-                        consumerUnits={consumerUnits}
+                        consumerUnits={ucsContrato}
                         branding={branding}
                         texto={contractDraft}
                     />
