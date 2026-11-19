@@ -8,12 +8,13 @@ import StandaloneAnalysisModal from '../../components/StandaloneAnalysisModal';
 import ReadingCalendarModal from '../../components/ReadingCalendarModal';
 import ConsumerUnitModal from '../../components/ConsumerUnitModal';
 import ScraperQueueModal from '../../components/ScraperQueueModal';
-import { Search, Filter, Plus, FileText, CheckCircle, AlertCircle, Clock, CreditCard, Trash2, Ban, History, Layout, List, Info, Calendar as CalendarIcon, TicketCheck, TicketMinus, Download, CheckCircle2, X, Zap, BarChart2, Printer, Link as LinkIcon } from 'lucide-react';
+import { Search, Filter, Plus, FileText, CheckCircle, AlertCircle, Clock, CreditCard, Trash2, Ban, History, Layout, List, Info, Calendar as CalendarIcon, TicketCheck, TicketMinus, Download, CheckCircle2, X, Zap, BarChart2, Printer, Link as LinkIcon, Hourglass, Bot, UserX, Eye, EyeOff } from 'lucide-react';
 import { useUI } from '../../contexts/UIContext';
 import InvoiceSummaryModal from '../../components/InvoiceSummaryModal';
 import { useAuth } from '../../contexts/AuthContext';
 import AuditGraphViewInvoiceSummary from './AuditGraphViewInvoiceSummary';
 import { ENERGY_PAID_DIVERGENT, energyStatusMatchesFilter, isEnergyBillPaid } from '../../lib/energyBillStatus';
+import { ESTADOS_COLETA, ESTADOS_PENDENCIA, configEstado, diaDeLeituraNoMes, estadoDaColeta, isoLocal } from '../../lib/coletaConta';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -1213,7 +1214,8 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
             .select(`
                 id, numero_uc, concessionaria, titular_conta, tipo_unidade, usina_id,
                 tarifa_concessionaria, desconto_assinante, tipo_ligacao, dia_vencimento,
-                status, dia_leitura, created_at, last_scraping_status,
+                status, dia_leitura, created_at, last_scraping_status, last_scraping_error, last_scraping_at,
+                data_troca_titularidade, data_desligamento, acompanhar_conta_ate, subscriber_id, titular_fatura_id,
                 subscribers!consumer_units_subscriber_id_fkey(name, cpf_cnpj),
                 titular_fatura:subscribers!consumer_units_titular_fatura_id_fkey(name, cpf_cnpj),
                 usinas!consumer_units_usina_id_fkey(id, name),
@@ -2465,11 +2467,8 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                     onChange={e => setReadingStatusFilter(e.target.value)} 
                                     style={{ padding: '0.32rem 0.55rem', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '0.78rem', fontWeight: 600, color: '#334155', background: '#f8fafc', cursor: 'pointer', outline: 'none' }}
                                 >
-                                    <option value="">Status Leitura (Todos)</option>
-                                    <option value="success">Sucesso</option>
-                                    <option value="pending">Pendente</option>
-                                    <option value="error">Erro</option>
-                                    <option value="processing">Processando</option>
+                                    <option value="">Coleta (todas)</option>
+                                    {ESTADOS_COLETA.map(est => <option key={est.key} value={est.key}>{est.label}</option>)}
                                 </select>
                             </>
                         )}
@@ -2986,7 +2985,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                 </span>
                             </div>
                         </div>
-                    ) : (
+                    ) : viewMode === 'energy_reading_calendar' ? null : (
                         <div style={{
                             display: 'flex',
                             flexDirection: 'column',
@@ -3961,6 +3960,8 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                 readingFromIso={readingFromIso}
                                 readingToIso={readingToIso}
                                 readingStatusFilter={readingStatusFilter}
+                                onReadingStatusFilterChange={setReadingStatusFilter}
+                                onMonthChange={setMonthFilter}
                                 onCardClick={handleCalendarCardClick}
                             />
                         </div>
@@ -4116,223 +4117,309 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
     );
 }
 
-function CalendarView({ units, invoices, monthFilter, searchTerm, availableUsinas = [], readingFromIso = '', readingToIso = '', readingStatusFilter, onCardClick }) {
-    const today = new Date();
-    const currentYearNum = today.getFullYear();
-    const currentMonthNum = today.getMonth() + 1;
-    const currentDayNum = today.getDate();
+const ICONE_ESTADO = { recebida: CheckCircle2, no_prazo: Clock, portal: Hourglass, falha: Bot, cadastro: UserX, fora: EyeOff };
 
-    const [filterYear, filterMonth] = (monthFilter === 'all' ? [today.getFullYear(), today.getMonth() + 1] : (monthFilter || '').split('-').map(Number));
-    const isCurrentMonth = filterYear === currentYearNum && filterMonth === currentMonthNum;
+// Calendário de Leituras: um card por UC no dia de leitura, colorido pelo
+// estado da COLETA da conta (src/lib/coletaConta.js), nunca pelo pagamento.
+function CalendarView({ units, invoices, monthFilter, searchTerm, availableUsinas = [], readingFromIso = '', readingToIso = '', readingStatusFilter, onReadingStatusFilterChange, onMonthChange, onCardClick }) {
+    const hoje = new Date();
+    const hojeIso = isoLocal(hoje);
+    const [filterYear, filterMonth] = (monthFilter === 'all' ? [hoje.getFullYear(), hoje.getMonth() + 1] : (monthFilter || '').split('-').map(Number));
+    const ymAtual = `${filterYear}-${String(filterMonth).padStart(2, '0')}`;
+    // O filtro guardado na sessão pode ser do formato antigo (success/pending...).
+    const filtroEstado = ESTADOS_COLETA.some(e => e.key === readingStatusFilter) ? readingStatusFilter : '';
+    const [mostrarFora, setMostrarFora] = useState(true);
+    const [contas, setContas] = useState([]);
+    const [carregando, setCarregando] = useState(true);
+
+    // O mês exibido e os 6 anteriores: o que passou despercebido aparece na faixa de pendências.
+    const ciclos = Array.from({ length: 7 }, (_, i) => {
+        const d = new Date(filterYear, filterMonth - 1 - i, 1);
+        return { ano: d.getFullYear(), mes: d.getMonth() + 1, ym: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` };
+    });
+
+    // A lista da tela vem filtrada pelo mês; a coleta precisa dos meses anteriores também.
+    // Recarrega quando a lista do pai muda (ex.: status alterado no modal).
+    useEffect(() => {
+        let ativo = true;
+        (async () => {
+            setCarregando(true);
+            const desde = isoLocal(new Date(filterYear, filterMonth - 7, 1));
+            const ate = isoLocal(new Date(filterYear, filterMonth, 1));
+            const { data, error } = await supabase
+                .from('invoices')
+                .select('id, uc_id, mes_referencia, data_leitura, reading_status, reading_error, concessionaria_pdf_url, energy_bill_status, status')
+                .gte('mes_referencia', desde)
+                .lt('mes_referencia', ate)
+                .limit(5000);
+            if (!ativo) return;
+            if (error) console.error('Calendário de leituras: falha ao carregar contas', error);
+            setContas(error ? [] : (data || []));
+            setCarregando(false);
+        })();
+        return () => { ativo = false; };
+    }, [filterYear, filterMonth, invoices]);
+
+    const contasPorUcMes = new Map();
+    for (const c of contas) {
+        const chave = `${c.uc_id}|${String(c.mes_referencia).slice(0, 7)}`;
+        if (!contasPorUcMes.has(chave)) contasPorUcMes.set(chave, []);
+        contasPorUcMes.get(chave).push(c);
+    }
+
+    const matchedUsinas = searchTerm?.trim() ? availableUsinas.filter(u => usinaCasaComBusca(u, searchTerm)) : [];
+    const buscandoUsina = matchedUsinas.length > 0;
+    const passaBusca = (unit) => {
+        if (!searchTerm) return true;
+        const nomeUsina = unit.usinas?.name || '';
+        if (buscandoUsina) return !!nomeUsina && usinaCasaComBusca(nomeUsina, searchTerm);
+        const q = normalizarTextoBusca(searchTerm);
+        const nome = unit.tipo_unidade === 'geradora' ? (unit.usinas?.name || unit.suppliers?.name || '') : (unit.subscribers?.name || '');
+        return ucCasaComBusca(unit.numero_uc, searchTerm)
+            || normalizarTextoBusca(nome).includes(q)
+            || normalizarTextoBusca(unit.titular_fatura?.name).includes(q)
+            || normalizarTextoBusca(unit.concessionaria).includes(q)
+            || normalizarTextoBusca(nomeUsina).includes(q);
+    };
+    const nomeDaUc = (uc) => (uc.tipo_unidade === 'geradora' ? (uc.usinas?.name || uc.suppliers?.name) : uc.subscribers?.name) || 'Sem assinante';
+
+    const unidades = units.filter(passaBusca);
+
+    // Status antigo que o modal da UC entende para o mês.
+    const statusDoModal = (inv) => {
+        const rs = inv?.reading_status;
+        if (rs === 'error') return 'indisponivel';
+        if (rs === 'processing') return 'baixada';
+        if (rs === 'success') return 'processada';
+        return 'pendente';
+    };
+
+    const entradas = unidades.map(unit => {
+        const coleta = estadoDaColeta(unit, filterYear, filterMonth, contasPorUcMes.get(`${unit.id}|${ymAtual}`), hojeIso);
+        return { ...unit, coleta, matchingInvoice: coleta.invoice, displayStatus: statusDoModal(coleta.invoice) };
+    }).filter(e => {
+        if (!readingFromIso && !readingToIso) return true;
+        if (!e.coleta.leituraIso) return false;
+        if (readingFromIso && e.coleta.leituraIso < readingFromIso) return false;
+        if (readingToIso && e.coleta.leituraIso > readingToIso) return false;
+        return true;
+    });
+
+    const contagem = entradas.reduce((acc, e) => { acc[e.coleta.estado] = (acc[e.coleta.estado] || 0) + 1; return acc; }, {});
+    const visiveis = entradas.filter(e => (filtroEstado ? e.coleta.estado === filtroEstado : (mostrarFora || e.coleta.estado !== 'fora')));
+
+    const semDia = visiveis.filter(e => !diaDeLeituraNoMes(e.dia_leitura, filterYear, filterMonth));
+    const porDia = visiveis.reduce((acc, e) => {
+        const dia = diaDeLeituraNoMes(e.dia_leitura, filterYear, filterMonth);
+        if (dia) (acc[dia] = acc[dia] || []).push(e);
+        return acc;
+    }, {});
+    const ordemEstado = ['falha', 'cadastro', 'portal', 'no_prazo', 'recebida', 'fora'];
+    Object.values(porDia).forEach(lista => lista.sort((a, b) => ordemEstado.indexOf(a.coleta.estado) - ordemEstado.indexOf(b.coleta.estado)));
+
+    const pendenciasAnteriores = carregando ? [] : ciclos.slice(1).map(c => ({
+        ...c,
+        total: unidades.filter(u => ESTADOS_PENDENCIA.includes(estadoDaColeta(u, c.ano, c.mes, contasPorUcMes.get(`${u.id}|${c.ym}`), hojeIso).estado)).length,
+    })).filter(c => c.total > 0);
 
     const firstDay = new Date(filterYear, filterMonth - 1, 1).getDay();
     const startOffset = (firstDay + 6) % 7; // Segunda = 0
     const daysInMonth = new Date(filterYear, filterMonth, 0).getDate();
     const calendarDays = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+    const isoDoDia = (dia) => `${ymAtual}-${String(dia).padStart(2, '0')}`;
+    const mmaa = (ym) => `${ym.slice(5, 7)}/${ym.slice(2, 4)}`;
 
-    // 1. Filtrar UCs a partir de Aguardando Conexão, exceto cancelados
-    const calendarUnits = units.filter(u => ['aguardando_conexao', 'ativo', 'sem_geracao', 'em_atraso', 'desconectado', 'desligado_por_tt'].includes(u.status));
-
-    const matchedUsinasForCalendar = searchTerm?.trim()
-        ? availableUsinas.filter(uName => usinaCasaComBusca(uName, searchTerm))
-        : [];
-    const isSearchingUsinaInCalendar = matchedUsinasForCalendar.length > 0;
-
-    // 2. Agrupar e Calcular Status
-    const groupedUnits = calendarUnits.reduce((acc, unit) => {
-        const unitDate = new Date(unit.created_at);
-        const unitYear = unitDate.getFullYear();
-        const unitMonth = unitDate.getMonth() + 1;
-        
-        if (unitYear > filterYear || (unitYear === filterYear && unitMonth > filterMonth)) {
-            return acc;
-        }
-
-        const day = unit.dia_leitura || 0;
-        const matchingInvoice = invoices.find(inv => 
-            inv.uc_id === unit.id && 
-            (inv.mes_referencia?.startsWith(monthFilter === 'all' ? `${filterYear}-${String(filterMonth).padStart(2, '0')}` : monthFilter) || inv.vencimento?.startsWith(monthFilter === 'all' ? `${filterYear}-${String(filterMonth).padStart(2, '0')}` : monthFilter)) && 
-            !['cancelado', 'cancelada'].includes(inv.status?.trim().toLowerCase())
+    const renderCard = (uc) => {
+        const { coleta } = uc;
+        const cfg = configEstado(coleta.estado);
+        const Icone = ICONE_ESTADO[coleta.estado];
+        const fora = coleta.estado === 'fora';
+        return (
+            <button
+                key={uc.id}
+                type="button"
+                className={`coleta-card${fora ? ' coleta-card--fora' : ''}`}
+                onClick={() => onCardClick(uc)}
+                title={[`${cfg.label}: ${coleta.tag}`, coleta.detalhe].filter(Boolean).join('\n')}
+                style={{ '--coleta-cor': cfg.color, background: cfg.bg, borderColor: cfg.border }}
+            >
+                <span className="coleta-card__nome">
+                    <Icone size={13} strokeWidth={2.4} color={cfg.color} aria-hidden="true" style={{ flexShrink: 0 }} />
+                    <span>{nomeDaUc(uc)}</span>
+                </span>
+                <span className="coleta-card__uc">UC {uc.numero_uc}</span>
+                {uc.titular_fatura?.name && <span className="coleta-card__uc" title={`Titular da conta: ${uc.titular_fatura.name}`}>{uc.titular_fatura.name}</span>}
+                <span className="coleta-card__tag">
+                    <span className="sr-only">{cfg.label}: </span>{coleta.tag}
+                </span>
+            </button>
         );
-        const hasInvoice = !!matchingInvoice;
-
-        if (readingFromIso || readingToIso) {
-            const invReadIso = normalizeReadingDateToIso(matchingInvoice?.data_leitura);
-            if (!invReadIso) return acc;
-            if (readingFromIso && invReadIso < readingFromIso) return acc;
-            if (readingToIso && invReadIso > readingToIso) return acc;
-        }
-
-        let status = 'pendente';
-
-        const isFuture = (filterYear > currentYearNum) || 
-                       (filterYear === currentYearNum && filterMonth > currentMonthNum) || 
-                       (isCurrentMonth && day > currentDayNum);
-
-        if (hasInvoice) {
-            const rs = matchingInvoice.reading_status;
-            if (rs === 'error') status = 'indisponivel';
-            else if (rs === 'processing') status = 'baixada';
-            else if (rs === 'success') status = 'processada';
-            else status = 'pendente';
-        } else if (isFuture) {
-            status = 'not_available';
-        } else {
-            status = 'pendente';
-        }
-
-        if (readingStatusFilter && status !== readingStatusFilter) return acc;
-
-        if (searchTerm) {
-            const unitUsinaName = unit.usinas?.name || '';
-            if (isSearchingUsinaInCalendar) {
-                if (!unitUsinaName || !usinaCasaComBusca(unitUsinaName, searchTerm)) return acc;
-            } else {
-                const normQuery = normalizarTextoBusca(searchTerm);
-                const displayName = unit.tipo_unidade === 'geradora'
-                    ? (unit.usinas?.name || unit.suppliers?.name || '')
-                    : (unit.subscribers?.name || '');
-                const matchesSearch = 
-                    ucCasaComBusca(unit.numero_uc, searchTerm) ||
-                    normalizarTextoBusca(displayName).includes(normQuery) ||
-                    normalizarTextoBusca(unit.titular_fatura?.name).includes(normQuery) ||
-                    normalizarTextoBusca(unit.concessionaria).includes(normQuery) ||
-                    normalizarTextoBusca(unitUsinaName).includes(normQuery);
-                if (!matchesSearch) return acc;
-            }
-        }
-
-        if (!acc[day]) acc[day] = [];
-        acc[day].push({ ...unit, displayStatus: status, matchingInvoice: matchingInvoice });
-        return acc;
-    }, {});
+    };
 
     return (
-        <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
-            gap: '1rem',
-            padding: '1rem',
-            maxWidth: '1600px',
-            margin: '0 auto'
-        }}>
-            <div style={{
-                gridColumn: '1 / -1',
-                display: 'grid',
-                gridTemplateColumns: 'repeat(7, 1fr)',
-                gap: '1rem',
-                position: 'sticky',
-                top: 'calc(var(--sticky-header-height, 120px) + 1.5rem)',
-                zIndex: 10,
-                background: '#f8fafc',
-                padding: '0.5rem 0',
-                margin: '-0.5rem 0 0.5rem 0'
-            }}>
-                {['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SAB', 'DOM'].map(d => (
-                    <div key={d} style={{ 
-                        fontWeight: '800', 
-                        textAlign: 'center', 
-                        padding: '0.5rem', 
-                        color: '#64748b', 
-                        fontSize: '0.75rem', 
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.05em'
-                    }}>
-                        {d}
-                    </div>
-                ))}
+        <div className="coleta-calendario">
+            <style>{`
+                .coleta-calendario { padding: 1rem; max-width: 1600px; margin: 0 auto; display: flex; flex-direction: column; gap: 0.85rem; font-variant-numeric: tabular-nums; }
+                .coleta-calendario .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+                .coleta-filtro { display: inline-flex; align-items: center; gap: 0.45rem; padding: 0.45rem 0.75rem; border-radius: 8px; border: 1px solid #e2e8f0; background: white; cursor: pointer; font: inherit; font-size: 0.78rem; font-weight: 600; color: #334155; transition: border-color 0.15s, background 0.15s; }
+                .coleta-filtro:hover { border-color: #cbd5e1; background: #f8fafc; }
+                .coleta-filtro[aria-pressed="true"] { border-color: var(--coleta-cor); background: var(--coleta-bg); color: var(--coleta-cor); }
+                .coleta-filtro__n { font-weight: 800; color: #0f172a; min-width: 1.1rem; text-align: right; }
+                .coleta-filtro[aria-pressed="true"] .coleta-filtro__n { color: var(--coleta-cor); }
+                .coleta-filtro--vazio { color: #94a3b8; }
+                .coleta-filtro--vazio .coleta-filtro__n { color: #94a3b8; }
+                .coleta-filtro:focus-visible, .coleta-card:focus-visible, .coleta-pend:focus-visible { outline: 2px solid var(--color-blue); outline-offset: 2px; }
+                .coleta-card { display: flex; flex-direction: column; gap: 0.15rem; width: 100%; text-align: left; padding: 0.5rem 0.6rem; border-radius: 8px; border: 1px solid; cursor: pointer; font: inherit; transition: border-color 0.15s, transform 0.15s; }
+                .coleta-card:hover { border-color: var(--coleta-cor) !important; }
+                .coleta-card--fora { border-style: dashed; }
+                .coleta-card__nome { display: flex; align-items: flex-start; gap: 0.35rem; font-size: 0.76rem; font-weight: 700; line-height: 1.25; color: #0f172a; min-width: 0; }
+                .coleta-card__nome > svg { margin-top: 0.1rem; }
+                .coleta-card__nome > span { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
+                .coleta-card--fora .coleta-card__nome { color: #94a3b8; font-weight: 600; }
+                .coleta-card__uc { font-size: 0.68rem; color: #64748b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+                .coleta-card--fora .coleta-card__uc { color: #94a3b8; }
+                .coleta-card__tag { font-size: 0.68rem; font-weight: 700; color: var(--coleta-cor); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+                .coleta-pend { font: inherit; font-size: 0.75rem; font-weight: 700; padding: 0.2rem 0.55rem; border-radius: 6px; border: 1px solid #fcd34d; background: white; color: #92400e; cursor: pointer; }
+                .coleta-pend:hover { background: #fef3c7; }
+            `}</style>
+
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.5rem' }}>
+                {ESTADOS_COLETA.map(est => {
+                    const Icone = ICONE_ESTADO[est.key];
+                    const n = contagem[est.key] || 0;
+                    const ativo = filtroEstado === est.key;
+                    return (
+                        <button
+                            key={est.key}
+                            type="button"
+                            className={`coleta-filtro${n === 0 && !ativo ? ' coleta-filtro--vazio' : ''}`}
+                            aria-pressed={ativo}
+                            title={est.descricao}
+                            onClick={() => onReadingStatusFilterChange(ativo ? '' : est.key)}
+                            style={{ '--coleta-cor': est.color, '--coleta-bg': est.bg }}
+                        >
+                            <Icone size={14} strokeWidth={2.4} color={n === 0 && !ativo ? '#94a3b8' : est.color} aria-hidden="true" />
+                            {est.label}
+                            <span className="coleta-filtro__n">{n}</span>
+                        </button>
+                    );
+                })}
+                <span style={{ flex: 1 }} />
+                <button
+                    type="button"
+                    className="coleta-filtro"
+                    aria-pressed={!mostrarFora}
+                    onClick={() => setMostrarFora(v => !v)}
+                    title="UC que ainda não existia, ainda não era deste titular ou já estava encerrada no ciclo"
+                    style={{ '--coleta-cor': '#475569', '--coleta-bg': '#f1f5f9' }}
+                >
+                    {mostrarFora ? <EyeOff size={14} aria-hidden="true" /> : <Eye size={14} aria-hidden="true" />}
+                    {mostrarFora ? 'Ocultar fora do escopo' : 'Mostrar fora do escopo'}
+                    <span className="coleta-filtro__n">{contagem.fora || 0}</span>
+                </button>
             </div>
-            {Array.from({ length: startOffset }).map((_, i) => (
-                <div key={`pad-${i}`} style={{ background: '#f8fafc50', borderRadius: 'var(--radius-md)', border: '1px dashed #e2e8f0', minHeight: '180px' }} />
-            ))}
-            {calendarDays.map(day => {
-                const dayUnits = groupedUnits[day] || [];
-                return (
-                    <div key={day} style={{
-                        background: 'white',
-                        borderRadius: 'var(--radius-md)',
-                        border: '1px solid var(--color-border)',
-                        minHeight: '180px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        boxShadow: 'var(--shadow-sm)',
-                        transition: 'transform 0.2s',
-                        overflow: 'hidden'
-                    }}>
-                        <div style={{
-                            padding: '0.6rem 1rem',
-                            borderBottom: '1px solid var(--color-border)',
-                            background: '#f8fafc',
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            borderTopLeftRadius: 'var(--radius-md)',
-                            borderTopRightRadius: 'var(--radius-md)'
-                        }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                <span style={{ fontWeight: 800, color: 'var(--color-blue)', fontSize: '0.85rem', whiteSpace: 'nowrap' }}>Leit. {day}</span>
-                            </div>
-                            <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center' }}>
-                                {contasStatuses.concat([{ key: 'not_available', label: 'Não Disponível', bg: '#f1f5f9', color: '#475569' }]).map(status => {
-                                    const count = dayUnits.filter(u => u.displayStatus === status.key).length;
-                                    if (count === 0) return null;
-                                    return (
-                                        <span key={status.key} style={{ 
-                                            fontSize: '0.7rem', color: status.color, background: status.bg, 
-                                            padding: '0.15rem 0.4rem', borderRadius: '6px', fontWeight: '800',
-                                            minWidth: '1.2rem', textAlign: 'center', border: `1px solid ${status.color}20`
-                                        }}>
-                                            {count}
-                                        </span>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                        <div style={{ padding: '0.75rem', flex: 1, display: 'flex', flexDirection: 'column', gap: '0.6rem', overflowY: 'auto', maxHeight: '250px' }}>
-                            {dayUnits.length === 0 ? (
-                                <div style={{ fontSize: '0.8rem', color: '#94a3b8', textAlign: 'center', marginTop: '2rem', fontStyle: 'italic', opacity: 0.6 }}>Sem leituras</div>
-                            ) : (
-                                dayUnits.map(uc => {
-                                    const stConf = contasStatuses.find(s => s.key === uc.displayStatus) || { bg: '#f1f5f9', color: '#cbd5e1' };
-                                    return (
-                                    <div key={uc.id} onClick={() => onCardClick(uc)} style={{
-                                        padding: '0.6rem', borderRadius: '8px',
-                                        background: stConf.bg,
-                                        borderLeft: `5px solid ${stConf.color}`,
-                                        cursor: 'pointer', fontSize: '0.8rem', transition: 'all 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                                    }}>
-                                        <div style={{ 
-                                            fontWeight: 'bold', 
-                                            color: '#0f172a', 
-                                            whiteSpace: 'nowrap', 
-                                            overflow: 'hidden', 
-                                            textOverflow: 'ellipsis' 
-                                        }}>
-                                            {(uc.tipo_unidade === 'geradora' ? (uc.usinas?.name || uc.suppliers?.name) : uc.subscribers?.name) || 'S/ Assinante'}
-                                        </div>
-                                        <div style={{ 
-                                            fontSize: '0.7rem', 
-                                            color: '#64748b', 
-                                            marginTop: '0.2rem',
-                                            whiteSpace: 'nowrap',
-                                            overflow: 'hidden',
-                                            textOverflow: 'ellipsis'
-                                        }}>
-                                            UC: {uc.numero_uc}
-                                            {uc.titular_fatura?.name && (
-                                                <div style={{ marginTop: '0.1rem', fontStyle: 'italic', opacity: 0.9 }}>
-                                                    {uc.titular_fatura.name}
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                    );
-                                })
-                            )}
-                        </div>
+
+            {pendenciasAnteriores.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.5rem', padding: '0.55rem 0.85rem', borderRadius: '10px', background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e', fontSize: '0.8rem' }}>
+                    <History size={15} aria-hidden="true" />
+                    <span style={{ fontWeight: 700 }}>Ciclos anteriores com conta faltando</span>
+                    <span style={{ color: '#a16207' }}>(atrasada no portal, falha do robô ou cadastro):</span>
+                    {pendenciasAnteriores.map(c => (
+                        <button key={c.ym} type="button" className="coleta-pend" onClick={() => onMonthChange(c.ym)} title={`Abrir o calendário de ${mmaa(c.ym)}`}>
+                            {mmaa(c.ym)} · {c.total}
+                        </button>
+                    ))}
+                </div>
+            )}
+
+            {semDia.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', padding: '0.75rem', borderRadius: '10px', background: 'white', border: '1px solid #e2e8f0' }}>
+                    <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#5b21b6' }}>Sem dia de leitura cadastrado: o robô não sabe quando buscar</span>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '0.5rem' }}>
+                        {semDia.map(renderCard)}
                     </div>
-                );
-            })}
+                </div>
+            )}
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: '0.75rem' }}>
+                <div style={{
+                    gridColumn: '1 / -1',
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(7, 1fr)',
+                    gap: '0.75rem',
+                    position: 'sticky',
+                    top: 'calc(var(--sticky-header-height, 120px) + 1.5rem)',
+                    zIndex: 10,
+                    background: '#f8fafc',
+                    padding: '0.4rem 0'
+                }}>
+                    {['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].map(d => (
+                        <div key={d} style={{ fontWeight: 700, textAlign: 'center', color: '#64748b', fontSize: '0.75rem' }}>{d}</div>
+                    ))}
+                </div>
+                {Array.from({ length: startOffset }).map((_, i) => (
+                    <div key={`pad-${i}`} style={{ borderRadius: '10px', border: '1px dashed #e2e8f0', minHeight: '150px' }} />
+                ))}
+                {calendarDays.map(day => {
+                    const lista = porDia[day] || [];
+                    const ehHoje = isoDoDia(day) === hojeIso;
+                    const atencao = lista.filter(e => ESTADOS_PENDENCIA.includes(e.coleta.estado)).length;
+                    return (
+                        <div key={day} style={{
+                            background: 'white',
+                            borderRadius: '10px',
+                            border: ehHoje ? '1.5px solid var(--color-blue)' : '1px solid #e2e8f0',
+                            minHeight: '150px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            overflow: 'hidden'
+                        }}>
+                            <div style={{ padding: '0.45rem 0.7rem', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.4rem' }}>
+                                <span style={{ fontWeight: 800, color: 'var(--color-blue)', fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
+                                    Leit. {day}{ehHoje && <span style={{ marginLeft: '0.35rem', fontSize: '0.68rem', fontWeight: 700, color: '#64748b' }}>hoje</span>}
+                                </span>
+                                <span style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                                    {ordemEstado.filter(k => k !== 'fora').map(k => {
+                                        const n = lista.filter(e => e.coleta.estado === k).length;
+                                        if (!n) return null;
+                                        const Icone = ICONE_ESTADO[k];
+                                        const cfg = configEstado(k);
+                                        return (
+                                            <span key={k} title={`${n} ${cfg.label.toLowerCase()}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.15rem', fontSize: '0.7rem', fontWeight: 800, color: cfg.color }}>
+                                                <Icone size={12} strokeWidth={2.4} aria-hidden="true" />{n}
+                                            </span>
+                                        );
+                                    })}
+                                    {atencao === 0 && lista.length > 0 && lista.every(e => e.coleta.estado === 'fora') && (
+                                        <span style={{ fontSize: '0.68rem', color: '#94a3b8' }}>fora</span>
+                                    )}
+                                </span>
+                            </div>
+                            <div style={{ padding: '0.5rem', flex: 1, display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                                {lista.length === 0
+                                    ? <span style={{ fontSize: '0.72rem', color: '#cbd5e1', textAlign: 'center', marginTop: '1.5rem' }}>Sem leituras</span>
+                                    : lista.map(renderCard)}
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem 1.1rem', fontSize: '0.72rem', color: '#64748b', paddingTop: '0.25rem' }}>
+                {ESTADOS_COLETA.map(est => {
+                    const Icone = ICONE_ESTADO[est.key];
+                    return (
+                        <span key={est.key} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                            <Icone size={12} strokeWidth={2.4} color={est.color} aria-hidden="true" />
+                            <strong style={{ color: '#334155', fontWeight: 700 }}>{est.label}</strong> {est.descricao.toLowerCase()}
+                        </span>
+                    );
+                })}
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                    <EyeOff size={12} aria-hidden="true" />
+                    <strong style={{ color: '#334155', fontWeight: 700 }}>Tracejado</strong> fora do escopo no ciclo
+                </span>
+            </div>
         </div>
     );
 }
