@@ -28,10 +28,10 @@ export const FAQ_GESTORA = `## Pergunta: Como funciona a parceria com a B2W para
 ## Resposta: É a parcela da tarifa de uso do sistema de distribuição que a distribuidora cobra sobre a energia compensada de geração distribuída. Ela é descontada no cálculo do repasse e muda conforme as regras do setor elétrico. O valor aplicável à sua usina é confirmado pelo especialista.
 
 ## Pergunta: Quando o dono recebe o repasse?
-## Resposta: O repasse é mensal, em dia fixo definido no plano. O dia de corte é a data de fechamento da apuração das faturas pagas pelo assinante que entram no repasse daquele mês. O dia do repasse e o dia de corte estão no documento "Gestora: planos vigentes".
+## Resposta: O repasse é mensal, em dia fixo definido no plano, e começa depois do prazo até o primeiro repasse, que é a carência dos pagamentos ao dono (o prazo está no documento "Gestora: planos vigentes"). O dia de corte é a data de fechamento da apuração das faturas pagas pelo assinante que entram no repasse daquele mês. O dia do repasse e o dia de corte estão no documento "Gestora: planos vigentes".
 
-## Pergunta: Há custo de setup, carência ou prazo para começar a receber?
-## Resposta: Sim, é importante saber antes de seguir. Há custo de setup, uma carência antes de os repasses começarem e um prazo até o primeiro repasse. Os valores vigentes estão no documento "Gestora: planos vigentes"; o que ainda não estiver definido ali, o especialista confirma. Eu nunca estimo esses valores.
+## Pergunta: Há custo de setup? O que acontece se eu não pagar?
+## Resposta: O setup é opcional. A usina que paga o setup tem prioridade na captação de assinantes: o valor é usado em campanhas de marketing e tráfego pago exclusivos para captar clientes para a usina pagante. Quem opta por não pagar o setup fica em segunda prioridade. Na prática, os assinantes vão primeiro para a usina prioritária e o excedente da captação vai para a segunda. O valor do setup está no documento "Gestora: planos vigentes"; eu nunca estimo valores que não estejam lá.
 
 ## Pergunta: Qual é a taxa de gestão e o desconto do assinante?
 ## Resposta: Os percentuais do plano vigente estão no documento "Gestora: planos vigentes". Sempre vale lembrar que o especialista confirma o plano e o valor aplicáveis à sua usina.
