@@ -55,6 +55,8 @@ export function ucsParaContrato(ucs) {
         .sort((a, b) => (tempo(a) - tempo(b)) || String(a.id).localeCompare(String(b.id)));
 }
 
+import { documentoEhCnpj } from './representanteLegal';
+
 const pct = (n) => `${String(n).replace('.', ',')}%`;
 
 /**
@@ -64,9 +66,21 @@ const pct = (n) => `${String(n).replace('.', ',')}%`;
  *   'atencao'  -> o termo sai, mas a equipe precisa saber o que ele diz.
  * Bloqueios vem primeiro.
  */
-export function avisosDoContrato(ucs) {
+export function avisosDoContrato(ucs, assinante) {
     const vigentes = ucsParaContrato(ucs);
     const avisos = [];
+
+    // CNPJ sem representante legal: o termo qualificaria a empresa como pessoa
+    // fisica. So avalia quando o assinante e informado (chamadas antigas, so com
+    // as UCs, seguem como eram).
+    if (assinante && documentoEhCnpj(assinante.cpf_cnpj)
+        && (!String(assinante.representante_nome || '').trim() || !String(assinante.representante_cpf || '').replace(/\D/g, ''))) {
+        avisos.push({
+            codigo: 'sem_representante',
+            gravidade: 'bloqueia',
+            mensagem: 'Este assinante é pessoa jurídica e não tem representante legal (nome e CPF). Sem ele, o termo qualifica a empresa como pessoa física ("residente e domiciliado"). Preencha na aba Dados Cadastrais antes de enviar.'
+        });
+    }
 
     if (vigentes.length === 0) {
         avisos.push({

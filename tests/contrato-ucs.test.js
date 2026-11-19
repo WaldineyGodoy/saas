@@ -214,3 +214,38 @@ describe('avisosDoContrato: UC e plano discordam (o caso MULTI TV: UC 20%, plano
     expect(d.mensagem).toContain('555');
   });
 });
+
+describe('avisosDoContrato com o assinante: CNPJ sem representante legal', () => {
+  const cnpj = (o = {}) => ({ cpf_cnpj: '02.052.700/0001-55', representante_nome: null, representante_cpf: null, ...o });
+
+  test('CNPJ sem representante bloqueia: o termo qualificaria a empresa como pessoa fisica', () => {
+    const a = avisosDoContrato([uc()], cnpj());
+    const r = a.find((x) => x.codigo === 'sem_representante');
+    expect(r).toBeTruthy();
+    expect(r.gravidade).toBe('bloqueia');
+    expect(r.mensagem).toMatch(/representante legal/i);
+    expect(contratoBloqueado(a)).toBe(true);
+  });
+
+  test('CNPJ com nome mas sem CPF tambem bloqueia', () => {
+    expect(avisosDoContrato([uc()], cnpj({ representante_nome: 'Maria da Silva' })).map((x) => x.codigo)).toContain('sem_representante');
+  });
+
+  test('CNPJ com nome e CPF: sem aviso', () => {
+    expect(avisosDoContrato([uc()], cnpj({ representante_nome: 'Maria da Silva', representante_cpf: '11144477735' }))).toEqual([]);
+  });
+
+  test('pessoa fisica nao precisa de representante', () => {
+    expect(avisosDoContrato([uc()], { cpf_cnpj: '529.982.247-25' })).toEqual([]);
+  });
+
+  test('sem informar o assinante, o comportamento anterior continua (so UCs)', () => {
+    expect(avisosDoContrato([uc()])).toEqual([]);
+  });
+
+  test('o bloqueio do representante aparece junto com os das UCs, bloqueios primeiro', () => {
+    const a = avisosDoContrato([], cnpj());
+    expect(a.map((x) => x.codigo).sort()).toEqual(['sem_representante', 'sem_uc']);
+    expect(a.every((x) => x.gravidade === 'bloqueia')).toBe(true);
+  });
+});

@@ -11,6 +11,7 @@ import { ehDiaUtil, proximoDiaUtil, proximaOcorrenciaDoDia } from '../lib/diasUt
 import { ehPapelInterno, ehPapelAdmin } from '../lib/papeis';
 import { avaliarCpfDigitado, aplicarConsulta } from '../lib/consultaCpf';
 import { ucsParaContrato, descontoDaUc, avisosDoContrato, contratoBloqueado } from '../lib/contratoUcs';
+import { documentoEhCnpj, validarRepresentante, representanteParaGravar, representanteParaContrato } from '../lib/representanteLegal';
 import { CreditCard, Plus, Trash2, History, User, Home, Zap, X, Eye, EyeOff, Key, DollarSign, Calendar, FileText, CheckCircle, Clock, AlertCircle, Ban, TicketCheck, TicketMinus, Download, Loader2, ArrowLeft, Info, RefreshCw, Send, MessageSquare, Paperclip, MessageCircle, Copy, Pencil, Printer, Share2 } from 'lucide-react';
 import ConsumerUnitModal from './ConsumerUnitModal';
 import ContratoAdesao from './ContratoAdesao';
@@ -149,6 +150,8 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
         name: '',
         cpf_cnpj: '',
         data_nascimento: '',
+        representante_nome: '',
+        representante_cpf: '',
         status: 'ativacao',
         phone: '',
         email: '',
@@ -426,13 +429,16 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
     // a consulta das UCs nao tem ordem, e `consumerUnits[0]` dava um desconto
     // diferente conforme a ordem em que o banco devolvia as linhas.
     const ucsContrato = useMemo(() => ucsParaContrato(consumerUnits), [consumerUnits]);
-    const avisosContrato = useMemo(() => avisosDoContrato(consumerUnits), [consumerUnits]);
+    const avisosContrato = useMemo(
+        () => avisosDoContrato(consumerUnits, representanteParaContrato(subscriber, formData)),
+        [consumerUnits, subscriber, formData]
+    );
 
     const textoGeradoAssinante = useMemo(() => {
         const uc = ucsContrato[0];
         const desconto = descontoDaUc(uc) ?? undefined;
         return montarTextoContrato(
-            subscriber || formData,
+            representanteParaContrato(subscriber, formData),
             uc?.concessionaria,
             {
                 desconto,
@@ -676,6 +682,8 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
                 name: subscriber.name || '',
                 cpf_cnpj: subscriber.cpf_cnpj || '',
                 data_nascimento: subscriber.data_nascimento || '',
+                representante_nome: subscriber.representante_nome || '',
+                representante_cpf: subscriber.representante_cpf ? maskCpfCnpj(subscriber.representante_cpf) : '',
                 status: subscriber.status || 'ativacao',
                 phone: subscriber.phone || '',
                 email: subscriber.email || '',
@@ -710,7 +718,7 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
             }
             const ucContrato = ucsContrato[0];
             const ucDesconto = descontoDaUc(ucContrato) ?? undefined;
-            setContractDraft(montarTextoContrato(subscriber || formData, ucContrato?.concessionaria, {
+            setContractDraft(montarTextoContrato(representanteParaContrato(subscriber, formData), ucContrato?.concessionaria, {
                 desconto: ucDesconto,
                 diaVencimento: ucContrato?.dia_vencimento ?? subscriber?.consolidated_due_day ?? consolidatedDueDay
             }));
@@ -1856,6 +1864,11 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
             showAlert('Telefone inválido!', 'warning');
             return;
         }
+        const erroRepresentante = validarRepresentante(formData);
+        if (erroRepresentante) {
+            showAlert(erroRepresentante, 'warning');
+            return;
+        }
 
         setLoading(true);
 
@@ -1913,6 +1926,18 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
             };
             if (asaasId) dataToSave.asaas_customer_id = asaasId;
             if (dataToSave.originator_id === '') dataToSave.originator_id = null;
+
+            // Representante legal (so CNPJ): CPF em digitos e vazio vira NULL. Se o
+            // assinante veio de uma tela que nao carregou a coluna, nao a incluimos
+            // no UPDATE: gravar vazio apagaria um representante que existe.
+            const representante = representanteParaGravar(formData);
+            const representanteCarregado = !subscriber?.id || 'representante_nome' in subscriber;
+            if (representanteCarregado || representante.representante_nome) {
+                Object.assign(dataToSave, representante);
+            } else {
+                delete dataToSave.representante_nome;
+                delete dataToSave.representante_cpf;
+            }
 
             // Data de nascimento: so existe para CPF (CNPJ grava vazio) e o campo
             // em branco vira NULL (coluna `date` recusa texto vazio). Se o
@@ -2560,6 +2585,32 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
                                                 style={subInputStyle}
                                             />
                                         </div>
+
+                                        {documentoEhCnpj(formData.cpf_cnpj) && (
+                                            <>
+                                                <div>
+                                                    <label style={subLabelStyle}>Representante Legal (nome completo)</label>
+                                                    <input
+                                                        className="sub-modal-input"
+                                                        placeholder="Quem assina pela empresa"
+                                                        value={formData.representante_nome}
+                                                        onChange={e => setFormData({ ...formData, representante_nome: e.target.value })}
+                                                        style={subInputStyle}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label style={subLabelStyle}>CPF do Representante</label>
+                                                    <input
+                                                        className="sub-modal-input"
+                                                        placeholder="000.000.000-00"
+                                                        inputMode="numeric"
+                                                        value={formData.representante_cpf}
+                                                        onChange={e => setFormData({ ...formData, representante_cpf: maskCpfCnpj(e.target.value.replace(/\D/g, '').slice(0, 11)) })}
+                                                        style={{ ...subInputStyle, fontVariantNumeric: 'tabular-nums' }}
+                                                    />
+                                                </div>
+                                            </>
+                                        )}
 
                                         <div>
                                             <label style={subLabelStyle}>E-mail Principal *</label>
@@ -3610,13 +3661,26 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
                                                 );
                                             })}
                                             {envioBloqueado && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setActiveTab('ucs')}
-                                                    style={{ justifySelf: 'start', padding: '0.4rem 0.8rem', background: '#ffffff', color: '#991b1b', border: '1px solid #fecaca', borderRadius: '8px', fontWeight: 700, cursor: 'pointer', fontSize: '0.78rem' }}
-                                                >
-                                                    Ir para Unidades Consumidoras
-                                                </button>
+                                                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                                                    {avisosContrato.some(a => a.gravidade === 'bloqueia' && a.codigo !== 'sem_representante') && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setActiveTab('ucs')}
+                                                            style={{ padding: '0.4rem 0.8rem', background: '#ffffff', color: '#991b1b', border: '1px solid #fecaca', borderRadius: '8px', fontWeight: 700, cursor: 'pointer', fontSize: '0.78rem' }}
+                                                        >
+                                                            Ir para Unidades Consumidoras
+                                                        </button>
+                                                    )}
+                                                    {avisosContrato.some(a => a.codigo === 'sem_representante') && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setActiveTab('dados')}
+                                                            style={{ padding: '0.4rem 0.8rem', background: '#ffffff', color: '#991b1b', border: '1px solid #fecaca', borderRadius: '8px', fontWeight: 700, cursor: 'pointer', fontSize: '0.78rem' }}
+                                                        >
+                                                            Ir para Dados Cadastrais
+                                                        </button>
+                                                    )}
+                                                </div>
                                             )}
                                         </div>
                                     )}
