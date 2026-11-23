@@ -3,14 +3,15 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchAddressByCep } from '../lib/api';
 import { maskCpfCnpj, maskPhone, validateDocument, validatePhone, cleanDigits } from '../lib/validators';
-import { buildReferralUrl, normalizarEndereco, normalizarPixKeyType, PIX_KEY_TYPES } from '../lib/originador';
+import { normalizarEndereco, normalizarPixKeyType, PIX_KEY_TYPES } from '../lib/originador';
 import { listarPlanosOriginador, planoOriginadorAusente, planoPadraoDe, resumoPlanoOriginador, ROTULO_CARGO } from '../lib/planoOriginador';
 import { 
     History, User, MapPin, Wallet, Link as LinkIcon, FileSignature,
-    X, Save, Trash2, CheckCircle, AlertCircle, Copy, ExternalLink 
+    X, Save, Trash2, CheckCircle, AlertCircle 
 } from 'lucide-react';
 import HistoryTimeline, { CollapsibleSection } from './HistoryTimeline';
 import ContratoOriginacao from './ContratoOriginacao';
+import LinkIndicacaoOriginador from './LinkIndicacaoOriginador';
 import LicencaOriginador from './LicencaOriginador';
 
 export default function OriginatorModal({ originator, onClose, onSave, onDelete }) {
@@ -267,7 +268,6 @@ export default function OriginatorModal({ originator, onClose, onSave, onDelete 
         }
     };
 
-    const referralUrl = originator ? buildReferralUrl(originator) : 'Salve para gerar URL';
 
     const inputStyle = {
         width: '100%',
@@ -290,9 +290,9 @@ export default function OriginatorModal({ originator, onClose, onSave, onDelete 
 
     return (
         <div className="modal-overlay" style={{ background: 'rgba(15, 23, 42, 0.7)', backdropFilter: 'blur(8px)' }}>
-            <div className="modal-content" style={{ maxWidth: '850px', padding: 0, overflow: 'hidden', border: 'none', borderRadius: '30px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}>
+            <div className="modal-content" style={{ maxWidth: '1180px', width: 'calc(100% - 2rem)', maxHeight: 'calc(100dvh - 2rem)', display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden', border: 'none', borderRadius: '24px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}>
                 {/* Header Premium */}
-                <div style={{ background: 'linear-gradient(135deg, #1e293b 0%, #334155 100%)', padding: '1.5rem 2rem', position: 'relative' }}>
+                <div style={{ background: 'linear-gradient(135deg, #1e293b 0%, #334155 100%)', padding: `1.25rem 3.75rem 1.25rem clamp(1rem, 4vw, 2rem)`, position: 'relative', flexShrink: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
                         <div style={{ background: 'rgba(59, 130, 246, 0.2)', padding: '0.75rem', borderRadius: '16px', color: '#60a5fa' }}>
                             <User size={28} />
@@ -306,13 +306,13 @@ export default function OriginatorModal({ originator, onClose, onSave, onDelete 
                             </p>
                         </div>
                     </div>
-                    <button onClick={onClose} style={{ position: 'absolute', top: '1.5rem', right: '1.5rem', background: 'rgba(255,255,255,0.1)', border: 'none', color: 'white', borderRadius: '12px', padding: '0.5rem', cursor: 'pointer' }}>
+                    <button type="button" aria-label="Fechar" onClick={onClose} style={{ position: 'absolute', top: '1.25rem', right: '1rem', background: 'rgba(255,255,255,0.1)', border: 'none', color: 'white', borderRadius: '12px', padding: '0.5rem', cursor: 'pointer' }}>
                         <X size={20} />
                     </button>
                 </div>
 
                 {/* Sub-menu Horizontal */}
-                <div style={{ display: 'flex', gap: '1rem', padding: '1rem 2rem', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                <div role="tablist" style={{ display: 'flex', gap: '0.5rem', padding: `0.75rem clamp(1rem, 4vw, 2rem)`, background: '#f8fafc', borderBottom: '1px solid #e2e8f0', flexShrink: 0, overflowX: 'auto', scrollbarWidth: 'thin' }}>
                     {[
                         { id: 'geral', label: 'Dados Gerais', icon: User },
                         { id: 'endereco', label: 'Endereço', icon: MapPin },
@@ -323,9 +323,13 @@ export default function OriginatorModal({ originator, onClose, onSave, onDelete 
                     ].map(tab => (
                         <button
                             key={tab.id}
+                            type="button"
+                            role="tab"
+                            aria-selected={activeTab === tab.id}
                             onClick={() => setActiveTab(tab.id)}
                             style={{
                                 display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1rem',
+                                whiteSpace: 'nowrap', flexShrink: 0,
                                 border: 'none', background: activeTab === tab.id ? 'white' : 'transparent',
                                 color: activeTab === tab.id ? '#3b82f6' : '#64748b',
                                 borderRadius: '12px', cursor: 'pointer', fontWeight: 700, fontSize: '0.85rem',
@@ -339,8 +343,8 @@ export default function OriginatorModal({ originator, onClose, onSave, onDelete 
                     ))}
                 </div>
 
-                <form onSubmit={handleSubmit} style={{ padding: '2rem' }}>
-                    <div style={{ minHeight: '400px' }}>
+                <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+                    <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: `1.5rem clamp(1rem, 4vw, 2rem)`, overscrollBehavior: 'contain' }}>
                         {/* Tab Content: Geral */}
                         {activeTab === 'geral' && (
                             <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
@@ -530,7 +534,10 @@ export default function OriginatorModal({ originator, onClose, onSave, onDelete 
                         {/* Tab Content: Indicação */}
                         {activeTab === 'indicacao' && (
                             <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                                {/* Duas colunas no modal amplo: plano e licença à esquerda, link e QR à
+                                    direita -- cabe sem rolar; em tela estreita volta a uma coluna. */}
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 400px), 1fr))', gap: '1.25rem', alignItems: 'start' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', minWidth: 0 }}>
                                     {/* Plano do Originador: vinculado aqui, junto da indicação (revisão de 12/11/2026). */}
                                     <div style={{ background: '#f0f9ff', padding: '1.25rem', borderRadius: '20px', border: '1px solid #d0e8ff' }}>
                                         <label style={{ ...labelStyle, color: '#075985' }}>Plano do Originador</label>
@@ -578,48 +585,10 @@ export default function OriginatorModal({ originator, onClose, onSave, onDelete 
                                         labelStyle={labelStyle}
                                         inputStyle={inputStyle}
                                     />
-                                    <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '12px', border: '1px solid #eff6ff', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                                        <div style={{ padding: '0.75rem', background: 'white', borderRadius: '10px', color: '#3b82f6', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
-                                            <LinkIcon size={24} />
-                                        </div>
-                                        <div>
-                                            <h4 style={{ margin: 0, fontSize: '1rem', color: '#1e293b' }}>Link de Indicação</h4>
-                                            <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b' }}>Compartilhe este link para capturar novos leads sob este originador</p>
-                                        </div>
-                                    </div>
-
-                                    {originator ? (
-                                        <div style={{ background: 'white', padding: '2rem', borderRadius: '24px', border: '1px solid #e2e8f0', textAlign: 'center' }}>
-                                            <div style={{ width: '64px', height: '64px', background: '#f0f9ff', borderRadius: '20px', display: 'flex', alignItems: 'center', justifySelf: 'center', justifyContent: 'center', color: '#3b82f6', marginBottom: '1.5rem' }}>
-                                                <ExternalLink size={32} />
-                                            </div>
-                                            <h5 style={{ margin: '0 0 0.5rem', fontSize: '1.1rem', color: '#1e293b' }}>Seu Link Personalizado</h5>
-                                            <p style={{ margin: '0 0 1.5rem', fontSize: '0.9rem', color: '#64748b' }}>Leads cadastrados através deste link serão vinculados automaticamente a você.</p>
-                                            
-                                            <div style={{ display: 'flex', gap: '0.5rem', background: '#f1f5f9', padding: '0.5rem', borderRadius: '16px' }}>
-                                                <input
-                                                    readOnly
-                                                    value={referralUrl}
-                                                    style={{ flex: 1, border: 'none', background: 'transparent', padding: '0.5rem 1rem', fontSize: '0.9rem', color: '#475569', fontWeight: 600, outline: 'none' }}
-                                                />
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        navigator.clipboard.writeText(referralUrl);
-                                                        alert('Link copiado!');
-                                                    }}
-                                                    style={{ background: '#3b82f6', color: 'white', border: 'none', borderRadius: '12px', padding: '0.6rem 1.25rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}
-                                                >
-                                                    <Copy size={16} /> Copiar
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <div style={{ padding: '3rem', textAlign: 'center', background: '#f8fafc', borderRadius: '24px', border: '2px dashed #e2e8f0' }}>
-                                            <AlertCircle size={48} style={{ color: '#94a3b8', marginBottom: '1rem' }} />
-                                            <h5 style={{ margin: 0, color: '#64748b' }}>Salve o originador primeiro para gerar o link de indicação.</h5>
-                                        </div>
-                                    )}
+                                </div>
+                                <div style={{ minWidth: 0 }}>
+                                    <LinkIndicacaoOriginador originator={originator} />
+                                </div>
                                 </div>
                             </div>
                         )}
@@ -665,7 +634,7 @@ export default function OriginatorModal({ originator, onClose, onSave, onDelete 
                     </div>
 
                     {/* Footer Premium */}
-                    <div style={{ marginTop: '2.5rem', paddingTop: '1.5rem', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ flexShrink: 0, padding: `0.85rem clamp(1rem, 4vw, 2rem)`, borderTop: '1px solid #e2e8f0', background: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
                         <div>
                             {originator && (
                                 <button type="button" onClick={handleDelete} style={{ background: 'transparent', border: 'none', color: '#ef4444', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 700, cursor: 'pointer', padding: '0.5rem 1rem', borderRadius: '10px', transition: '0.2s' }} className="hover-danger">
@@ -673,12 +642,12 @@ export default function OriginatorModal({ originator, onClose, onSave, onDelete 
                                 </button>
                             )}
                         </div>
-                        <div style={{ display: 'flex', gap: '1rem' }}>
-                            <button type="button" onClick={onClose} style={{ padding: '0.75rem 1.5rem', background: '#f1f5f9', border: 'none', borderRadius: '14px', color: '#475569', fontWeight: 700, cursor: 'pointer' }}>
+                        <div style={{ display: 'flex', gap: '0.75rem', marginLeft: 'auto' }}>
+                            <button type="button" onClick={onClose} style={{ whiteSpace: 'nowrap', padding: '0.7rem 1.25rem', background: '#f1f5f9', border: 'none', borderRadius: '14px', color: '#475569', fontWeight: 700, cursor: 'pointer' }}>
                                 Cancelar
                             </button>
                             <button type="submit" disabled={loading} style={{ 
-                                padding: '0.75rem 2rem', background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', 
+                                whiteSpace: 'nowrap', padding: '0.7rem 1.5rem', background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', 
                                 border: 'none', borderRadius: '14px', color: 'white', fontWeight: 800, cursor: 'pointer',
                                 display: 'flex', alignItems: 'center', gap: '0.75rem', boxShadow: '0 10px 15px -3px rgba(37, 99, 235, 0.3)'
                             }}>
