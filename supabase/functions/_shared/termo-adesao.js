@@ -74,7 +74,7 @@ export const montarTextoContrato = (subscriber, distribuidora, opts = {}) => {
         (() => {
             const doc = (subscriber?.cpf_cnpj || '').replace(/\D/g, '');
             const qualificacao = doc.length === 14 && subscriber?.representante_nome
-                ? `${subscriber?.name || ''}, pessoa jurídica inscrita no CNPJ ${subscriber?.cpf_cnpj || ''}, com sede à ${fullAddress}, neste ato representada por ${subscriber.representante_nome}, CPF ${subscriber?.representante_cpf || ''}`
+                ? `${subscriber?.name || ''}, pessoa jurídica inscrita no CNPJ ${subscriber?.cpf_cnpj || ''}, com sede à ${fullAddress}, neste ato representada por ${subscriber.representante_nome}${String(subscriber?.representante_cpf || '').trim() ? `, CPF ${String(subscriber.representante_cpf).trim()}` : ''}`
                 : `${subscriber?.name || ''}, CPF/CNPJ ${subscriber?.cpf_cnpj || ''}, residente e domiciliado à ${fullAddress}`;
             return qualificacao;
         })()

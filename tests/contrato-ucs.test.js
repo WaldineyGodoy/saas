@@ -227,8 +227,13 @@ describe('avisosDoContrato com o assinante: CNPJ sem representante legal', () =>
     expect(contratoBloqueado(a)).toBe(true);
   });
 
-  test('CNPJ com nome mas sem CPF tambem bloqueia', () => {
-    expect(avisosDoContrato([uc()], cnpj({ representante_nome: 'Maria da Silva' })).map((x) => x.codigo)).toContain('sem_representante');
+  test('CNPJ com nome mas sem CPF so avisa: o envio segue liberado (o CPF dos socios a Receita oculta)', () => {
+    const a = avisosDoContrato([uc()], cnpj({ representante_nome: 'Maria da Silva' }));
+    const r = a.find((x) => x.codigo === 'representante_sem_cpf');
+    expect(r).toBeTruthy();
+    expect(r.gravidade).toBe('atencao');
+    expect(a.map((x) => x.codigo)).not.toContain('sem_representante');
+    expect(contratoBloqueado(a)).toBe(false);
   });
 
   test('CNPJ com nome e CPF: sem aviso', () => {
@@ -254,10 +259,12 @@ describe('avisosDoContrato: o aviso diz exatamente o que falta do representante'
   const cnpj = (o = {}) => ({ cpf_cnpj: '02.052.700/0001-55', representante_nome: null, representante_cpf: null, ...o });
   const msg = (a) => a.find((x) => x.codigo === 'sem_representante')?.mensagem;
 
-  test('so o nome (o caso da busca na Receita): pede o CPF e explica que a Receita o oculta', () => {
-    const m = msg(avisosDoContrato([uc()], cnpj({ representante_nome: 'Juanribe Pagliarin' })));
+  test('so o nome (o caso da busca na Receita): avisa que o termo sai sem CPF e explica que a Receita o oculta', () => {
+    const a = avisosDoContrato([uc()], cnpj({ representante_nome: 'Juanribe Pagliarin' }));
+    const m = a.find((x) => x.codigo === 'representante_sem_cpf')?.mensagem;
     expect(m).toContain('Juanribe Pagliarin');
     expect(m).toMatch(/sem CPF/i);
+    expect(m).toMatch(/sai sem o CPF|sairá sem o CPF/i);
     expect(m).toMatch(/Receita/i);
   });
 
@@ -269,9 +276,9 @@ describe('avisosDoContrato: o aviso diz exatamente o que falta do representante'
     expect(msg(avisosDoContrato([uc()], cnpj()))).toMatch(/não tem representante legal/i);
   });
 
-  test('continua bloqueando o envio nos tres casos', () => {
-    for (const o of [{}, { representante_nome: 'Juanribe Pagliarin' }, { representante_cpf: '11144477735' }]) {
-      expect(contratoBloqueado(avisosDoContrato([uc()], cnpj(o)))).toBe(true);
-    }
+  test('bloqueia o envio sem representante ou sem NOME; sem CPF so avisa', () => {
+    expect(contratoBloqueado(avisosDoContrato([uc()], cnpj()))).toBe(true);
+    expect(contratoBloqueado(avisosDoContrato([uc()], cnpj({ representante_cpf: '11144477735' })))).toBe(true);
+    expect(contratoBloqueado(avisosDoContrato([uc()], cnpj({ representante_nome: 'Juanribe Pagliarin' })))).toBe(false);
   });
 });

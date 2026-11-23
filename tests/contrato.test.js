@@ -62,3 +62,22 @@ test('Compra e venda: Cláusula 12.1 referencia apenas o Contrato de Gestão sem
 });
 
 
+
+test('CNPJ com representante sem CPF: o termo sai sem o CPF, sem buraco', () => {
+  const t = montarTextoContrato({ ...base, representante_nome: 'Ana Souza', representante_cpf: '' }, 'COSERN', { desconto: 15, diaVencimento: 20 });
+  expect(t).toContain('neste ato representada por Ana Souza ("ASSOCIADO")');
+  expect(t).not.toMatch(/CPF\s*\("ASSOCIADO"\)/);   // nada de "CPF " em branco
+  expect(t).not.toContain('residente e domiciliado');
+});
+
+test('representante sem CPF tambem quando o campo vem nulo ou so com espacos', () => {
+  for (const cpf of [null, undefined, '   ']) {
+    const t = montarTextoContrato({ ...base, representante_nome: 'Ana Souza', representante_cpf: cpf }, 'COSERN', {});
+    expect(t).toContain('neste ato representada por Ana Souza ("ASSOCIADO")');
+  }
+});
+
+test('representante com CPF continua imprimindo o CPF', () => {
+  const t = montarTextoContrato({ ...base, representante_nome: 'Ana Souza', representante_cpf: '529.982.247-25' }, 'COSERN', {});
+  expect(t).toContain('neste ato representada por Ana Souza, CPF 529.982.247-25 ("ASSOCIADO")');
+});
