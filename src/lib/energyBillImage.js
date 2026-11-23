@@ -5,7 +5,7 @@ import { completarLeitura } from './energyBillParser';
 const LADO_MAXIMO = 2000; // px; acima disso a leitura não melhora e o envio fica lento
 
 // Reduz a foto do celular (muitas vezes 4000px+ e vários MB) para JPEG.
-const reduzirFoto = (arquivo) => new Promise((resolve, reject) => {
+export const reduzirFoto = (arquivo) => new Promise((resolve, reject) => {
     const url = URL.createObjectURL(arquivo);
     const img = new Image();
     img.onload = () => {

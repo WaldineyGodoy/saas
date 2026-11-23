@@ -130,3 +130,8 @@ verify_jwt = true
 # que nao e JWT. Com verify_jwt = true o gateway barra tudo com Invalid JWT (29/10/2026).
 [functions.b2w-mcp]
 verify_jwt = false
+
+# Leitura de CNH/RG no cadastro do assinante: o portao (requireInternoOuServidor)
+# esta dentro da funcao; a leitura e paga e a imagem e dado pessoal.
+[functions.ler-documento-identidade]
+verify_jwt = true

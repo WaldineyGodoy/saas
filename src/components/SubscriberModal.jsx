@@ -12,12 +12,15 @@ import { ehDiaUtil, proximoDiaUtil, proximaOcorrenciaDoDia } from '../lib/diasUt
 import { ehPapelInterno, ehPapelAdmin } from '../lib/papeis';
 import { avaliarCpfDigitado, aplicarConsulta } from '../lib/consultaCpf';
 import { ucsParaContrato, descontoDaUc, avisosDoContrato, contratoBloqueado } from '../lib/contratoUcs';
+import { aplicarLeituraIdentidade } from '../lib/documentoIdentidade';
+import { anexarDocumentoAssinante } from '../lib/documentosAssinante';
 import { documentoEhCnpj, validarRepresentante, representanteParaGravar, representanteParaContrato, cpfConfereComReceita } from '../lib/representanteLegal';
 import { urlTermosDoContrato, linkDeAssinaturaDaSig, textoLinkContratoCrm, keywordTermos } from '../lib/contratoLink';
 import { CreditCard, Plus, Trash2, History, User, Home, Zap, X, Eye, EyeOff, Key, DollarSign, Calendar, FileText, CheckCircle, Clock, AlertCircle, Ban, TicketCheck, TicketMinus, Download, Loader2, ArrowLeft, Info, RefreshCw, Send, MessageSquare, Paperclip, MessageCircle, Copy, Pencil, Printer, Share2 } from 'lucide-react';
 import ConsumerUnitModal from './ConsumerUnitModal';
 import ContratoAdesao from './ContratoAdesao';
 import DocumentosAssinante from './subscriber/DocumentosAssinante';
+import LerDocumentoIdentidade from './subscriber/LerDocumentoIdentidade';
 import ConsultaCredito from './subscriber/ConsultaCredito';
 import AssinanteConnect from './subscriber/AssinanteConnect';
 import { montarTextoContrato, gerarPdfContratoBase64, paginasTermoAdesao } from '../lib/contrato';
@@ -183,6 +186,11 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
     const [erroDocumento, setErroDocumento] = useState('');
     const [avisoConsulta, setAvisoConsulta] = useState('');
     const ultimoCpfConsultado = useRef('');
+    // Documento (CNH/RG) lido no topo de Dados Cadastrais: anexado ao salvar.
+    const [arquivoIdentidade, setArquivoIdentidade] = useState(null);
+    // A leitura demora alguns segundos; o formulario pode mudar nesse intervalo.
+    const formDataRef = useRef(null);
+    formDataRef.current = formData;
     // Representante a partir do quadro de socios da Receita: o nome preenche o
     // campo; o CPF vem mascarado (so 6 digitos), entao fica como dica e conferencia.
     const [representanteReceita, setRepresentanteReceita] = useState(null);
@@ -1883,6 +1891,21 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
         }
     };
 
+    // Leitura de CNH/RG: preenche so o que esta vazio (ver aplicarLeituraIdentidade)
+    // e guarda o arquivo para anexar ao salvar. Devolve os avisos para a tela.
+    const aplicarDocumentoLido = async (leitura, arquivo) => {
+        const { patch, avisos, cpfAplicado, anexar } = aplicarLeituraIdentidade(formDataRef.current, leitura);
+        if (Object.keys(patch).length) setFormData(prev => ({ ...prev, ...patch }));
+        if (cpfAplicado) {
+            // O CPF veio do proprio documento: sair do campo nao deve gastar a consulta paga.
+            ultimoCpfConsultado.current = cpfAplicado;
+            setErroDocumento('');
+            setAvisoConsulta('');
+        }
+        setArquivoIdentidade(anexar ? arquivo : null);
+        return avisos;
+    };
+
     const handleDocBlur = async () => {
         const doc = formData.cpf_cnpj.replace(/\D/g, '');
         setErroDocumento('');
@@ -2075,6 +2098,17 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
                     setTemSenhaGuardada(true);
                 } catch (senhaErr) {
                     showAlert('Cliente salvo, mas a senha do portal não foi guardada: ' + senhaErr.message, 'warning');
+                }
+            }
+
+            // Documento lido no topo do cadastro: anexado agora que o assinante existe.
+            // Falha aqui nao desfaz o cadastro; a equipe anexa na aba Documentos.
+            if (arquivoIdentidade) {
+                try {
+                    await anexarDocumentoAssinante(supabase, { subscriberId: result.data.id, tipo: 'identidade', file: arquivoIdentidade });
+                    setArquivoIdentidade(null);
+                } catch (docErr) {
+                    showAlert('Cliente salvo, mas o documento lido não foi anexado: ' + (docErr?.message || docErr) + ' Anexe-o na aba Documentos.', 'warning');
                 }
             }
 
@@ -2630,6 +2664,8 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
                                             </button>
                                         </div>
                                     </div>
+
+                                    <LerDocumentoIdentidade onLeitura={aplicarDocumentoLido} arquivoNome={arquivoIdentidade?.name || ''} />
 
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                                         <div>
