@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useUI } from '../contexts/UIContext';
 import ConvidarAppButton from './ConvidarAppButton';
+import TornarParceiroPower from './subscriber/TornarParceiroPower';
 import { useBranding } from '../contexts/BrandingContext';
 import { fetchAddressByCep, fetchCpfCnpjData, consultarCpf, createAsaasCharge, manageAsaasCustomer, mergePdf, sendCombinedNotification, sendWhatsapp, createAutentiqueDocument, cancelAutentiqueDocument, shortenLink, cancelAsaasCharge, salvarSenhaPortal, semSenha } from '../lib/api';
 import { getSecurePdfUrl } from '../lib/pdfHelper';
@@ -4093,6 +4094,9 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
                             )}
                         </div>
                         <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                            {subscriber?.id && ehPapelInterno(profile?.role) && (
+                                <TornarParceiroPower assinante={subscriber} papelDeQuemClica={profile?.role} addHistory={addHistory} />
+                            )}
                             {subscriber?.id && (
                                 <ConvidarAppButton tipo="subscriber" id={subscriber.id} nome={subscriber.name} style={{ borderRadius: '10px', padding: '0.62rem 1.1rem', fontSize: '0.84rem' }} />
                             )}
