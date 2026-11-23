@@ -5,6 +5,7 @@ import { fetchAddressByCep, fetchOfferData } from '../lib/api';
 import { ehPapelInterno, ehPapelAdmin } from '../lib/papeis';
 import { anexarDocumentoAssinante } from '../lib/documentosAssinante';
 import { soDigitosUc, formatarNumeroUc } from '../lib/numeroUc';
+import { usinasParaVincular } from '../lib/usinasParaVincular';
 import './ConsumerUnitModal.css';
 import DocumentosAssinante from './subscriber/DocumentosAssinante';
 import { 
@@ -51,6 +52,8 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
     const [subscribers, setSubscribers] = useState([]);
     const [suppliers, setSuppliers] = useState([]);
     const [usinas, setUsinas] = useState([]);
+    // UCs ja vinculadas a alguma usina: base do calculo de energia disponivel.
+    const [ucsVinculadas, setUcsVinculadas] = useState([]);
     const [loading, setLoading] = useState(false);
     // Arquivo da conta lida no "Preencher pela conta": fica anexado ao assinante ao salvar a UC nova.
     const [contaArquivo, setContaArquivo] = useState(null);
@@ -815,8 +818,19 @@ Qualquer dúvida, é só responder esta mensagem.`;
     };
 
     const fetchUsinas = async () => {
-        const { data } = await supabase.from('usinas').select('id, name, status, concessionaria, cnpj_cpf, portal_credentials, modalidade, potencia_kwp').order('name');
+        const { data } = await supabase.from('usinas').select('id, name, status, concessionaria, cnpj_cpf, portal_credentials, modalidade, potencia_kwp, geracao_estimada_kwh').order('name');
         setUsinas(data || []);
+        await fetchUcsVinculadas();
+    };
+
+    // So o que a regra de capacidade le: a franquia ocupada de cada usina.
+    // Chamada de novo ao abrir a lista, porque outra pessoa pode ter vinculado
+    // UCs desde que o modal abriu.
+    const fetchUcsVinculadas = async () => {
+        const { data } = await supabase.from('consumer_units')
+            .select('id, usina_id, status, tipo_unidade, franquia')
+            .not('usina_id', 'is', null);
+        setUcsVinculadas(data || []);
     };
 
     const openTitularCredentials = () => {
@@ -1418,6 +1432,17 @@ Qualquer dúvida, é só responder esta mensagem.`;
     const subscriberName = subscribers.find(s => s.id === formData.subscriber_id)?.name || '';
 
     const currentStatusMeta = getUcStatusMeta(formData.status);
+
+    // Usinas oferecidas no vinculo: so Em Conexao e Gerando, com a energia
+    // disponivel, da que melhor encaixa a franquia desta UC para a menos adequada.
+    const termoUsina = usinaSearchTerm.toLowerCase().trim();
+    const opcoesUsina = usinasParaVincular({
+        usinas, ucs: ucsVinculadas, franquia: formData.franquia, ucAtualId: consumerUnit?.id,
+    }).filter(u => !termoUsina || (
+        u.name?.toLowerCase().includes(termoUsina) ||
+        u.cnpj_cpf?.toLowerCase().includes(termoUsina) ||
+        u.concessionaria?.toLowerCase().includes(termoUsina)
+    ));
     // O cabecalho mostrava assinante e titular em sequencia, e quando sao a
     // mesma pessoa o nome saia duas vezes.
     const nomeAssinante = subscriberName || 'Sem assinante';
@@ -2294,7 +2319,7 @@ Qualquer dúvida, é só responder esta mensagem.`;
                                                             <input
                                                                 type="text"
                                                                 value={usinaSearchTerm}
-                                                                onFocus={() => setShowUsinaDropdown(true)}
+                                                                onFocus={() => { setShowUsinaDropdown(true); fetchUcsVinculadas(); }}
                                                                 onBlur={() => setTimeout(() => setShowUsinaDropdown(false), 250)}
                                                                 onChange={e => {
                                                                     setUsinaSearchTerm(e.target.value);
@@ -2358,60 +2383,68 @@ Qualquer dúvida, é só responder esta mensagem.`;
                                                             border: '1px solid #e2e8f0',
                                                             borderRadius: '8px',
                                                             boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
-                                                            maxHeight: '200px',
+                                                            maxHeight: '320px',
                                                             overflowY: 'auto',
                                                             zIndex: 100,
                                                             marginTop: '4px'
                                                         }}>
-                                                            {usinas
-                                                                .filter(u => {
-                                                                    const term = usinaSearchTerm.toLowerCase().trim();
-                                                                    if (!term) return true;
-                                                                    return (
-                                                                        u.name?.toLowerCase().includes(term) ||
-                                                                        u.cnpj_cpf?.toLowerCase().includes(term) ||
-                                                                        u.concessionaria?.toLowerCase().includes(term)
-                                                                    );
-                                                                })
-                                                                .map(u => (
-                                                                    <div
-                                                                        key={u.id}
-                                                                        onMouseDown={() => {
-                                                                            setFormData(prev => ({ 
-                                                                                ...prev, 
-                                                                                usina_id: u.id
-                                                                            }));
-                                                                            setUsinaSearchTerm('');
-                                                                            setShowUsinaDropdown(false);
-                                                                        }}
-                                                                        style={{
-                                                                            padding: '0.75rem 1rem',
-                                                                            cursor: 'pointer',
-                                                                            borderBottom: '1px solid #f1f5f9',
-                                                                            transition: 'background 0.15s'
-                                                                        }}
-                                                                        onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
-                                                                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                                                                    >
+                                                            {opcoesUsina.map(u => (
+                                                                <div
+                                                                    key={u.id}
+                                                                    onMouseDown={() => {
+                                                                        setFormData(prev => ({
+                                                                            ...prev,
+                                                                            usina_id: u.id
+                                                                        }));
+                                                                        setUsinaSearchTerm('');
+                                                                        setShowUsinaDropdown(false);
+                                                                    }}
+                                                                    style={{
+                                                                        padding: '0.75rem 1rem',
+                                                                        cursor: 'pointer',
+                                                                        borderBottom: '1px solid #f1f5f9',
+                                                                        transition: 'background 0.15s'
+                                                                    }}
+                                                                    onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                                                                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                                                >
+                                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '1rem' }}>
                                                                         <div style={{ fontWeight: 600, color: '#1e293b', fontSize: '0.875rem' }}>{u.name}</div>
-                                                                        <div style={{ display: 'flex', gap: '1rem', color: '#64748b', fontSize: '0.75rem', marginTop: '0.2rem' }}>
-                                                                            <span>CNPJ/CPF: {u.cnpj_cpf || 'Sem CNPJ/CPF'}</span>
-                                                                            <span>Concessionária: {u.concessionaria}</span>
-                                                                        </div>
+                                                                        <span
+                                                                            title={u.disponivel === null
+                                                                                ? 'A usina não tem geração estimada cadastrada.'
+                                                                                : 'Geração estimada menos o consumo da UG e as franquias já vinculadas.'}
+                                                                            style={{
+                                                                                flexShrink: 0,
+                                                                                padding: '0.15rem 0.55rem',
+                                                                                borderRadius: '9999px',
+                                                                                fontSize: '0.75rem',
+                                                                                fontWeight: 700,
+                                                                                whiteSpace: 'nowrap',
+                                                                                ...(u.disponivel === null
+                                                                                    ? { background: '#f1f5f9', color: '#64748b' }
+                                                                                    : u.comporta
+                                                                                        ? { background: '#ecfdf5', color: '#047857' }
+                                                                                        : { background: '#fffbeb', color: '#b45309' })
+                                                                            }}
+                                                                        >
+                                                                            {u.disponivel === null
+                                                                                ? 'Sem geração estimada'
+                                                                                : u.disponivel < 0
+                                                                                    ? `Excedida em ${Math.round(-u.disponivel).toLocaleString('pt-BR')} kWh`
+                                                                                    : `Disponível: ${Math.round(u.disponivel).toLocaleString('pt-BR')} kWh`}
+                                                                        </span>
                                                                     </div>
-                                                                ))
-                                                            }
-                                                            {usinas.filter(u => {
-                                                                const term = usinaSearchTerm.toLowerCase().trim();
-                                                                if (!term) return true;
-                                                                return (
-                                                                    u.name?.toLowerCase().includes(term) ||
-                                                                    u.cnpj_cpf?.toLowerCase().includes(term) ||
-                                                                    u.concessionaria?.toLowerCase().includes(term)
-                                                                );
-                                                            }).length === 0 && (
+                                                                    <div style={{ display: 'flex', gap: '1rem', color: '#64748b', fontSize: '0.75rem', marginTop: '0.2rem' }}>
+                                                                        <span>CNPJ/CPF: {u.cnpj_cpf || 'Sem CNPJ/CPF'}</span>
+                                                                        <span>Concessionária: {u.concessionaria}</span>
+                                                                        <span>{u.status === 'em_conexao' ? 'Em Conexão' : 'Gerando'}</span>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                            {opcoesUsina.length === 0 && (
                                                                 <div style={{ padding: '1rem', color: '#64748b', fontSize: '0.85rem', textAlign: 'center' }}>
-                                                                    Nenhuma usina encontrada.
+                                                                    Nenhuma usina Em Conexão ou Gerando encontrada.
                                                                 </div>
                                                             )}
                                                         </div>
