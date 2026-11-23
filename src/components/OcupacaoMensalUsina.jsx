@@ -66,6 +66,11 @@ export default function OcupacaoMensalUsina({ resumo, compacto = false }) {
     if (!resumo || !resumo.linhas?.some((l) => l.geracao !== null)) return null;
     const { linhas, pior, corrente, mesesEmExcedente, temOverbook, ucsComPerfil, geracaoSazonal } = resumo;
 
+    // Mês de maior folga: o que mais sobra de geração depois da franquia ocupada.
+    const maiorSobra = linhas
+        .filter((l) => l.livre !== null && l.livre > 0)
+        .reduce((m, l) => (!m || l.livre > m.livre ? l : m), null);
+
     if (compacto) {
         return (
             <div style={{ marginTop: '0.4rem' }} title="Geração estimada (cinza) × franquia ocupada no mês (barra)">
@@ -73,8 +78,13 @@ export default function OcupacaoMensalUsina({ resumo, compacto = false }) {
                 <div style={{ fontSize: '0.62rem', marginTop: '0.25rem', color: temOverbook ? '#991b1b' : '#166534', fontWeight: 600 }}>
                     {temOverbook
                         ? `Overbook em ${mesesEmExcedente.length} ${mesesEmExcedente.length === 1 ? 'mês' : 'meses'} · pior ${pior.rotulo} +${kwh(pior.excedente)}`
-                        : `Cabe nos 12 meses · mais apertado ${pior?.rotulo} (${pctTxt(pior?.pct)})`}
+                        : 'Sem overbook'}
                 </div>
+                {maiorSobra && (
+                    <div style={{ fontSize: '0.62rem', marginTop: '0.1rem', color: '#166534', fontWeight: 600 }}>
+                        {`Maior sobra ${maiorSobra.rotulo}: ${kwh(maiorSobra.disponivel)} disponível · ${kwh(maiorSobra.consumoUG + maiorSobra.ocupado)} ocupado`}
+                    </div>
+                )}
             </div>
         );
     }
