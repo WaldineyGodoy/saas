@@ -290,7 +290,7 @@ export default function OriginatorModal({ originator, onClose, onSave, onDelete 
 
     return (
         <div className="modal-overlay" style={{ background: 'rgba(15, 23, 42, 0.7)', backdropFilter: 'blur(8px)' }}>
-            <div className="modal-content" style={{ maxWidth: '850px', width: 'calc(100% - 2rem)', maxHeight: 'calc(100dvh - 2rem)', display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden', border: 'none', borderRadius: '24px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}>
+            <div className="modal-content" style={{ maxWidth: '1180px', width: 'calc(100% - 2rem)', maxHeight: 'calc(100dvh - 2rem)', display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden', border: 'none', borderRadius: '24px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}>
                 {/* Header Premium */}
                 <div style={{ background: 'linear-gradient(135deg, #1e293b 0%, #334155 100%)', padding: `1.25rem 3.75rem 1.25rem clamp(1rem, 4vw, 2rem)`, position: 'relative', flexShrink: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
@@ -534,7 +534,10 @@ export default function OriginatorModal({ originator, onClose, onSave, onDelete 
                         {/* Tab Content: Indicação */}
                         {activeTab === 'indicacao' && (
                             <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                                {/* Duas colunas no modal amplo: plano e licença à esquerda, link e QR à
+                                    direita -- cabe sem rolar; em tela estreita volta a uma coluna. */}
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 400px), 1fr))', gap: '1.25rem', alignItems: 'start' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', minWidth: 0 }}>
                                     {/* Plano do Originador: vinculado aqui, junto da indicação (revisão de 12/11/2026). */}
                                     <div style={{ background: '#f0f9ff', padding: '1.25rem', borderRadius: '20px', border: '1px solid #d0e8ff' }}>
                                         <label style={{ ...labelStyle, color: '#075985' }}>Plano do Originador</label>
@@ -582,7 +585,10 @@ export default function OriginatorModal({ originator, onClose, onSave, onDelete 
                                         labelStyle={labelStyle}
                                         inputStyle={inputStyle}
                                     />
+                                </div>
+                                <div style={{ minWidth: 0 }}>
                                     <LinkIndicacaoOriginador originator={originator} />
+                                </div>
                                 </div>
                             </div>
                         )}
