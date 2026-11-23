@@ -25,9 +25,29 @@ describe('validarRepresentante: o que impede salvar', () => {
     expect(validarRepresentante({ cpf_cnpj: CNPJ, representante_nome: 'Maria da Silva Souza', representante_cpf: CPF_REP })).toBeNull();
   });
 
-  test('so o nome, ou so o CPF: pede os dois', () => {
-    expect(validarRepresentante({ cpf_cnpj: CNPJ, representante_nome: 'Maria da Silva', representante_cpf: '' })).toMatch(/nome e CPF/i);
-    expect(validarRepresentante({ cpf_cnpj: CNPJ, representante_nome: '', representante_cpf: CPF_REP })).toMatch(/nome e CPF/i);
+  test('so o nome pode salvar: e o que o preenchimento pela Receita deixa, porque o CPF dos socios vem mascarado', () => {
+    // Era recusado ("informe nome e CPF"): a propria busca na Receita preenchia o
+    // nome e a validacao impedia de salvar. O contrato e quem trava o ENVIO.
+    expect(validarRepresentante({ cpf_cnpj: CNPJ, representante_nome: 'Juanribe Pagliarin', representante_cpf: '' })).toBeNull();
+    expect(validarRepresentante({ cpf_cnpj: CNPJ, representante_nome: 'Juanribe Pagliarin' })).toBeNull();
+  });
+
+  test('so o CPF tambem pode salvar', () => {
+    expect(validarRepresentante({ cpf_cnpj: CNPJ, representante_nome: '', representante_cpf: CPF_REP })).toBeNull();
+  });
+
+  test('so o nome, mas de uma palavra so: segue recusado (nao e nome completo)', () => {
+    expect(validarRepresentante({ cpf_cnpj: CNPJ, representante_nome: 'Juanribe', representante_cpf: '' })).toMatch(/nome completo/i);
+  });
+
+  test('so o CPF, mas invalido: segue recusado', () => {
+    expect(validarRepresentante({ cpf_cnpj: CNPJ, representante_nome: '', representante_cpf: '111.444.777-36' })).toMatch(/CPF do representante/i);
+    expect(validarRepresentante({ cpf_cnpj: CNPJ, representante_nome: '', representante_cpf: '111.444' })).toMatch(/CPF do representante/i);
+  });
+
+  test('so o nome fica gravado, com o CPF nulo', () => {
+    expect(representanteParaGravar({ cpf_cnpj: CNPJ, representante_nome: 'Juanribe Pagliarin', representante_cpf: '' }))
+      .toEqual({ representante_nome: 'Juanribe Pagliarin', representante_cpf: null });
   });
 
   test('CPF invalido (digito errado, repetido, incompleto)', () => {

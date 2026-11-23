@@ -18,19 +18,20 @@ const aparar = (v) => String(v ?? '').trim().replace(/\s+/g, ' ');
 export const documentoEhCnpj = (doc) => digitos(doc).length === 14;
 
 /**
- * Mensagem de erro ao salvar, ou null. Os dois campos em branco PODEM ser
- * salvos: o cadastro nao pode ficar refem de um dado que a equipe ainda nao
- * tem, e quem barra o termo errado e o contrato (aviso que trava o envio).
- * Preenchido pela metade ou com CPF invalido, nao: isso e dado ruim gravado.
+ * Mensagem de erro ao salvar, ou null. So barra DADO RUIM: CPF invalido ou nome
+ * de uma palavra so. Em branco, ou preenchido pela metade, PODE salvar: o
+ * cadastro nao fica refem de um dado que a equipe ainda nao tem -- o caso tipico
+ * e a busca na Receita, que preenche o nome do socio-administrador mas nao o CPF
+ * (a Receita o mascara), e antes a validacao recusava salvar o proprio resultado
+ * da busca. Quem barra o termo errado e o contrato: o aviso que trava o ENVIO
+ * enquanto faltar nome ou CPF (ver `avisosDoContrato`).
  */
 export function validarRepresentante({ cpf_cnpj, representante_nome, representante_cpf } = {}) {
     if (!documentoEhCnpj(cpf_cnpj)) return null;
     const nome = aparar(representante_nome);
     const cpf = digitos(representante_cpf);
-    if (!nome && !cpf) return null;
-    if (!nome || !cpf) return 'Informe nome e CPF do representante legal (ou deixe os dois em branco).';
-    if (!validateCpf(cpf)) return 'CPF do representante legal inválido.';
-    if (nome.split(' ').length < 2) return 'Informe o nome completo do representante legal.';
+    if (cpf && !validateCpf(cpf)) return 'CPF do representante legal inválido.';
+    if (nome && nome.split(' ').length < 2) return 'Informe o nome completo do representante legal.';
     return null;
 }
 

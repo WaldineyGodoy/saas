@@ -70,16 +70,21 @@ export function avisosDoContrato(ucs, assinante) {
     const vigentes = ucsParaContrato(ucs);
     const avisos = [];
 
-    // CNPJ sem representante legal: o termo qualificaria a empresa como pessoa
-    // fisica. So avalia quando o assinante e informado (chamadas antigas, so com
-    // as UCs, seguem como eram).
-    if (assinante && documentoEhCnpj(assinante.cpf_cnpj)
-        && (!String(assinante.representante_nome || '').trim() || !String(assinante.representante_cpf || '').replace(/\D/g, ''))) {
-        avisos.push({
-            codigo: 'sem_representante',
-            gravidade: 'bloqueia',
-            mensagem: 'Este assinante é pessoa jurídica e não tem representante legal (nome e CPF). Sem ele, o termo qualifica a empresa como pessoa física ("residente e domiciliado"). Preencha na aba Dados Cadastrais antes de enviar.'
-        });
+    // CNPJ sem representante legal completo (nome E CPF): o termo qualificaria a
+    // empresa como pessoa fisica ou sairia com o CPF em branco. So avalia quando o
+    // assinante e informado (chamadas antigas, so com as UCs, seguem como eram).
+    // A mensagem diz o que falta: o nome costuma vir da Receita e o CPF nao.
+    if (assinante && documentoEhCnpj(assinante.cpf_cnpj)) {
+        const nomeRep = String(assinante.representante_nome || '').trim();
+        const cpfRep = String(assinante.representante_cpf || '').replace(/\D/g, '');
+        if (!nomeRep || !cpfRep) {
+            const faltando = !nomeRep && !cpfRep
+                ? 'Este assinante \u00e9 pessoa jur\u00eddica e n\u00e3o tem representante legal (nome e CPF). Sem ele, o termo qualifica a empresa como pessoa f\u00edsica ("residente e domiciliado"). Preencha na aba Dados Cadastrais antes de enviar.'
+                : !cpfRep
+                    ? `O representante legal (${nomeRep}) est\u00e1 sem CPF. Digite o CPF completo na aba Dados Cadastrais antes de enviar: a Receita oculta o CPF dos s\u00f3cios, ent\u00e3o ele n\u00e3o vem da consulta.`
+                    : 'O representante legal est\u00e1 sem nome. Preencha na aba Dados Cadastrais antes de enviar.';
+            avisos.push({ codigo: 'sem_representante', gravidade: 'bloqueia', mensagem: faltando });
+        }
     }
 
     if (vigentes.length === 0) {
