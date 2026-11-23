@@ -11,7 +11,7 @@ import { ehDiaUtil, proximoDiaUtil, proximaOcorrenciaDoDia } from '../lib/diasUt
 import { ehPapelInterno, ehPapelAdmin } from '../lib/papeis';
 import { avaliarCpfDigitado, aplicarConsulta } from '../lib/consultaCpf';
 import { ucsParaContrato, descontoDaUc, avisosDoContrato, contratoBloqueado } from '../lib/contratoUcs';
-import { documentoEhCnpj, validarRepresentante, representanteParaGravar, representanteParaContrato } from '../lib/representanteLegal';
+import { documentoEhCnpj, validarRepresentante, representanteParaGravar, representanteParaContrato, cpfConfereComReceita } from '../lib/representanteLegal';
 import { urlTermosDoContrato, linkDeAssinaturaDaSig, textoLinkContratoCrm, keywordTermos } from '../lib/contratoLink';
 import { CreditCard, Plus, Trash2, History, User, Home, Zap, X, Eye, EyeOff, Key, DollarSign, Calendar, FileText, CheckCircle, Clock, AlertCircle, Ban, TicketCheck, TicketMinus, Download, Loader2, ArrowLeft, Info, RefreshCw, Send, MessageSquare, Paperclip, MessageCircle, Copy, Pencil, Printer, Share2 } from 'lucide-react';
 import ConsumerUnitModal from './ConsumerUnitModal';
@@ -182,6 +182,11 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
     const [erroDocumento, setErroDocumento] = useState('');
     const [avisoConsulta, setAvisoConsulta] = useState('');
     const ultimoCpfConsultado = useRef('');
+    // Representante a partir do quadro de socios da Receita: o nome preenche o
+    // campo; o CPF vem mascarado (so 6 digitos), entao fica como dica e conferencia.
+    const [representanteReceita, setRepresentanteReceita] = useState(null);
+    const [buscandoRepresentante, setBuscandoRepresentante] = useState(false);
+    const [avisoRepresentante, setAvisoRepresentante] = useState('');
 
     const fetchOriginators = useCallback(async () => {
         const { data } = await supabase
@@ -1843,6 +1848,40 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
         }
     };
 
+    // Aplica o socio-administrador da Receita: o nome so entra se o campo estiver
+    // vazio (o que a equipe digitou vale mais), e o CPF nunca e preenchido.
+    const aplicarRepresentanteReceita = (representante) => {
+        setRepresentanteReceita(representante);
+        if (!representante) return;
+        setFormData(prev => (prev.representante_nome?.trim()
+            ? prev
+            : { ...prev, representante_nome: representante.nome }));
+    };
+
+    // Busca SO o representante, sem tocar em nome, e-mail, telefone ou endereco.
+    // O preenchimento ao sair do campo CNPJ sobrescreve esses dados com os da
+    // Receita, o que num assinante ja cadastrado apagaria o contato do cliente.
+    const buscarRepresentanteNaReceita = async () => {
+        const doc = formData.cpf_cnpj.replace(/\D/g, '');
+        if (doc.length !== 14) return;
+        setBuscandoRepresentante(true);
+        setAvisoRepresentante('');
+        try {
+            const data = await fetchCpfCnpjData(doc);
+            if (data.representante) {
+                aplicarRepresentanteReceita(data.representante);
+            } else {
+                setRepresentanteReceita(null);
+                setAvisoRepresentante('A Receita n\u00e3o indica um \u00fanico s\u00f3cio-administrador para esta empresa. Preencha o representante manualmente.');
+            }
+        } catch (error) {
+            console.error('Erro ao buscar representante', error);
+            setAvisoRepresentante('N\u00e3o foi poss\u00edvel consultar a Receita agora (a consulta tem limite por minuto). Tente de novo em instantes ou preencha manualmente.');
+        } finally {
+            setBuscandoRepresentante(false);
+        }
+    };
+
     const handleDocBlur = async () => {
         const doc = formData.cpf_cnpj.replace(/\D/g, '');
         setErroDocumento('');
@@ -1866,6 +1905,7 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
                         cidade: data.address?.municipio || prev.cidade,
                         uf: data.address?.uf || prev.uf
                     }));
+                    aplicarRepresentanteReceita(data.representante);
                 }
             } catch (error) {
                 console.error('Erro buscar doc', error);
@@ -2662,6 +2702,28 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
                                                         onChange={e => setFormData({ ...formData, representante_cpf: maskCpfCnpj(e.target.value.replace(/\D/g, '').slice(0, 11)) })}
                                                         style={{ ...subInputStyle, fontVariantNumeric: 'tabular-nums' }}
                                                     />
+                                                    {representanteReceita?.cpfMascarado && cpfConfereComReceita(formData.representante_cpf, representanteReceita.cpfMascarado) === false && (
+                                                        <div role="alert" style={{ marginTop: '0.3rem', fontSize: '0.74rem', fontWeight: 600, color: '#92400e' }}>
+                                                            Não confere com o CPF do sócio na Receita ({representanteReceita.cpfMascarado}). Confira o número, ou se outra pessoa assina pela empresa.
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', marginTop: '-0.35rem' }}>
+                                                    <button
+                                                        type="button"
+                                                        onClick={buscarRepresentanteNaReceita}
+                                                        disabled={buscandoRepresentante}
+                                                        style={{ padding: '0.38rem 0.75rem', background: '#ffffff', color: '#1d4ed8', border: '1px solid #bfdbfe', borderRadius: '8px', fontWeight: 700, cursor: buscandoRepresentante ? 'wait' : 'pointer', fontSize: '0.76rem' }}
+                                                    >
+                                                        {buscandoRepresentante ? 'Consultando a Receita...' : 'Buscar s\u00f3cio-administrador na Receita'}
+                                                    </button>
+                                                    {representanteReceita && (
+                                                        <span style={{ fontSize: '0.74rem', color: '#475569' }}>
+                                                            Receita: <strong>{representanteReceita.nome}</strong>{representanteReceita.qualificacao ? ` (${representanteReceita.qualificacao})` : ''}
+                                                            {representanteReceita.cpfMascarado ? <> — CPF <span style={{ fontVariantNumeric: 'tabular-nums' }}>{representanteReceita.cpfMascarado}</span>. A Receita oculta o CPF: digite-o completo.</> : null}
+                                                        </span>
+                                                    )}
+                                                    {avisoRepresentante && <span style={{ fontSize: '0.74rem', color: '#92400e' }}>{avisoRepresentante}</span>}
                                                 </div>
                                             </>
                                         )}

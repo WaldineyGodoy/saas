@@ -93,3 +93,93 @@ describe('representanteParaContrato: o que o termo imprime', () => {
     expect(JSON.stringify([sub, form])).toBe(copia);
   });
 });
+
+import { escolherRepresentante, formatarCpfMascarado, cpfConfereComReceita } from '../src/lib/representanteLegal';
+
+// Formato real do cnpj.ws (publica.cnpj.ws/cnpj/02052700000155), MULTI TV, 23/11/2026.
+// Na MULTI TV o administrador e o primeiro socio; a ordem inversa e testada abaixo.
+const SOCIO_ADM = { nome: 'JUANRIBE PAGLIARIN', cpf_cnpj_socio: '***454978**', tipo: 'Pessoa Física', qualificacao_socio: { descricao: 'Sócio-Administrador ' } };
+const SOCIO = { nome: 'DEISE DE MELLO FERRAZ PAGLIARIN', cpf_cnpj_socio: '***312798**', tipo: 'Pessoa Física', qualificacao_socio: { descricao: 'Sócio' } };
+
+describe('formatarCpfMascarado: o CPF que a Receita deixa ver', () => {
+  test('cnpj.ws entrega ***454978** (so os 6 do meio): formata como CPF', () => {
+    expect(formatarCpfMascarado('***454978**')).toBe('***.454.978-**');
+  });
+  test('ja formatado (CPFHub) fica igual', () => {
+    expect(formatarCpfMascarado('***.456.789-**')).toBe('***.456.789-**');
+  });
+  test.each(['', null, undefined, '12345', 'abc', '***', '12345678901'])('%j nao e CPF mascarado: vazio', (v) => {
+    expect(formatarCpfMascarado(v)).toBe('');
+  });
+});
+
+describe('cpfConfereComReceita: confere os 6 digitos do meio', () => {
+  test('CPF digitado com os mesmos 6 digitos: confere', () => {
+    // 454.978 no meio
+    expect(cpfConfereComReceita('123.454.978-09', '***.454.978-**')).toBe(true);
+    expect(cpfConfereComReceita('12345497809', '***454978**')).toBe(true);
+  });
+  test('digitos diferentes: nao confere', () => {
+    expect(cpfConfereComReceita('111.444.777-35', '***.454.978-**')).toBe(false);
+  });
+  test('CPF incompleto ou sem mascara da Receita: nao da para dizer (nulo), nunca falso alarme', () => {
+    expect(cpfConfereComReceita('123.454', '***.454.978-**')).toBeNull();
+    expect(cpfConfereComReceita('', '***.454.978-**')).toBeNull();
+    expect(cpfConfereComReceita('12345497809', '')).toBeNull();
+    expect(cpfConfereComReceita('12345497809', null)).toBeNull();
+  });
+});
+
+describe('escolherRepresentante: quem assina pela empresa, a partir do QSA', () => {
+  test('o sócio-administrador, mesmo quando nao e o primeiro da lista (o codigo antigo pegava sempre o primeiro)', () => {
+    const r = escolherRepresentante([SOCIO, SOCIO_ADM]);
+    expect(r).toEqual({ nome: 'Juanribe Pagliarin', cpfMascarado: '***.454.978-**', qualificacao: 'Sócio-Administrador' });
+  });
+
+  test('a MULTI TV: administrador primeiro na lista', () => {
+    expect(escolherRepresentante([SOCIO_ADM, SOCIO]).nome).toBe('Juanribe Pagliarin');
+  });
+
+  test('o nome vem em caixa de nome proprio, com particulas em minuscula', () => {
+    expect(escolherRepresentante([{ ...SOCIO_ADM, nome: 'MARIA DE FATIMA DOS SANTOS' }]).nome).toBe('Maria de Fatima dos Santos');
+  });
+
+  test('"Administrador" puro e "Diretor-Presidente"? so administrador conta como assinante legal', () => {
+    expect(escolherRepresentante([SOCIO, { ...SOCIO_ADM, qualificacao_socio: { descricao: 'Administrador' } }]).nome).toBe('Juanribe Pagliarin');
+  });
+
+  test('sem administrador, um unico socio pessoa fisica: e ele', () => {
+    expect(escolherRepresentante([SOCIO]).nome).toBe('Deise de Mello Ferraz Pagliarin');
+  });
+
+  test('sem administrador e varios socios: nao chuta quem assina', () => {
+    expect(escolherRepresentante([SOCIO, { ...SOCIO, nome: 'OUTRO SOCIO DA SILVA' }])).toBeNull();
+  });
+
+  test('socio pessoa juridica nao pode ser representante (precisa de CPF)', () => {
+    const pj = { nome: 'HOLDING LTDA', cpf_cnpj_socio: '12345678000190', tipo: 'Pessoa Jurídica', qualificacao_socio: { descricao: 'Sócio-Administrador' } };
+    expect(escolherRepresentante([pj])).toBeNull();
+    expect(escolherRepresentante([pj, SOCIO_ADM]).nome).toBe('Juanribe Pagliarin');
+  });
+
+  test('varios administradores: o primeiro, que e a ordem da Receita', () => {
+    const a2 = { ...SOCIO_ADM, nome: 'SEGUNDO ADMINISTRADOR' };
+    expect(escolherRepresentante([SOCIO_ADM, a2]).nome).toBe('Juanribe Pagliarin');
+  });
+
+  test('aceita a qualificacao como texto solto (outro formato de fonte)', () => {
+    expect(escolherRepresentante([{ ...SOCIO_ADM, qualificacao_socio: 'Sócio-Administrador' }]).nome).toBe('Juanribe Pagliarin');
+  });
+
+  test('sem CPF mascarado na fonte, devolve o nome e a dica vazia', () => {
+    expect(escolherRepresentante([{ ...SOCIO_ADM, cpf_cnpj_socio: '' }]).cpfMascarado).toBe('');
+  });
+
+  test.each([[null], [undefined], [[]], ['x'], [{}]])('lista invalida %j: nulo', (v) => {
+    expect(escolherRepresentante(v)).toBeNull();
+  });
+
+  test('socio sem nome e ignorado', () => {
+    expect(escolherRepresentante([{ ...SOCIO_ADM, nome: '' }])).toBeNull();
+  });
+});

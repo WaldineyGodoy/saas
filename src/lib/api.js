@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { escolherRepresentante } from './representanteLegal';
 
 /**
  * Senha de portal de concessionária.
@@ -80,6 +81,10 @@ export const fetchCpfCnpjData = async (doc) => {
                     cidade: est.cidade?.nome
                 },
                 legal_partner: socio ? { nome: socio.nome, cpf: socio.cpf_cnpj_socio } : { nome: '', cpf: '' },
+                // Quem assina pela empresa: o socio-administrador (nao o primeiro da
+                // lista). O CPF vem mascarado pela Receita, entao so a dica. O
+                // `legal_partner` acima segue como estava: o cadastro de fornecedor o usa.
+                representante: escolherRepresentante(data.socios),
                 raw: data
             };
         } catch (error) {
