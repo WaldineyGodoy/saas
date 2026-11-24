@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 import { valorDoCodigoDeBarras } from '../../lib/codigoBarras';
+import { pagarContaPorPix } from '../../lib/pixConcessionaria';
 import { createAsaasCharge } from '../../lib/api';
 import InvoiceFormModal from '../../components/InvoiceFormModal';
 import InvoiceHistoryModal from '../../components/InvoiceHistoryModal';
@@ -8,7 +9,7 @@ import StandaloneAnalysisModal from '../../components/StandaloneAnalysisModal';
 import ReadingCalendarModal from '../../components/ReadingCalendarModal';
 import ConsumerUnitModal from '../../components/ConsumerUnitModal';
 import ScraperQueueModal from '../../components/ScraperQueueModal';
-import { Search, Filter, Plus, FileText, CheckCircle, AlertCircle, Clock, CreditCard, Trash2, Ban, History, Layout, List, Info, Calendar as CalendarIcon, TicketCheck, TicketMinus, Download, CheckCircle2, X, Zap, BarChart2, Printer, Link as LinkIcon, Hourglass, Bot, UserX, Eye, EyeOff } from 'lucide-react';
+import { Search, Filter, Plus, FileText, CheckCircle, AlertCircle, Clock, CreditCard, Trash2, Ban, History, Layout, List, Info, Calendar as CalendarIcon, TicketCheck, TicketMinus, Download, CheckCircle2, X, Zap, BarChart2, Printer, Link as LinkIcon, Hourglass, Bot, UserX, Eye, EyeOff, QrCode } from 'lucide-react';
 import { useUI } from '../../contexts/UIContext';
 import InvoiceSummaryModal from '../../components/InvoiceSummaryModal';
 import { useAuth } from '../../contexts/AuthContext';
@@ -1272,6 +1273,66 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
         }
     };
 
+    // Depois que a Asaas aceitou o pagamento à concessionária (boleto ou Pix):
+    // marca a conta como paga e lança a liquidação no Livro Razão.
+    const registrarContaPaga = async (inv, valor, mensagemOk) => {
+        const { error: updateError } = await supabase
+            .from('invoices')
+            .update({ energy_bill_status: 'pago' })
+            .eq('id', inv.id);
+
+        if (updateError) throw updateError;
+
+        const { error: ledgerError } = await supabase.rpc('liquidate_concessionaria_payment', {
+            p_invoice_id: inv.id,
+            p_amount: valor
+        });
+
+        if (ledgerError) {
+            console.error('Erro ao registrar no ledger:', ledgerError);
+            // Não travamos o fluxo aqui pois o pagamento já foi feito, mas avisamos o admin
+            showAlert('Pagamento concluído, mas houve um erro ao registrar no Livro Razão.', 'warning');
+        } else {
+            showAlert(mensagemOk, 'success');
+        }
+
+        fetchInvoices();
+    };
+
+    // Pix pelo QR "PAGUE COM PIX" da conta. Liquida a qualquer hora, inclusive
+    // em fim de semana — o boleto de conta vencida só passa em dia útil até 22h.
+    const handlePayBillPix = async (inv) => {
+        const utilityValue = Number(inv.valor_concessionaria) || 0;
+        if (utilityValue <= 0) {
+            showAlert('Conta sem valor apurado. Confira a fatura antes de pagar.', 'warning');
+            return;
+        }
+
+        setPayingId(inv.id);
+        try {
+            const r = await pagarContaPorPix({ supabase, invoice: inv, showConfirm });
+            if (r.cancelado) return;
+
+            if (r.pendente) {
+                showAlert(
+                    'O Pix foi aceito pela Asaas, mas aguarda autorização no aplicativo da Asaas. '
+                    + 'A conta segue pendente no CRM: depois de autorizar, marque-a como paga.',
+                    'warning'
+                );
+                fetchInvoices();
+                return;
+            }
+
+            await registrarContaPaga(inv, utilityValue, 'Pix enviado à concessionária e liquidado no Livro Razão!');
+        } catch (error) {
+            console.error('Erro ao pagar conta por Pix:', error);
+            showAlert('Erro no pagamento por Pix: ' + error.message, 'error');
+            fetchInvoices();
+        } finally {
+            setPayingId(null);
+        }
+    };
+
     const handlePayBill = async (inv) => {
         // O que se paga a concessionaria e a CONTA INTEIRA.
         //
@@ -1317,29 +1378,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
             if (error) throw error;
 
             if (data?.data?.id || data?.success) {
-                // Marcar como pago no CRM
-                const { error: updateError } = await supabase
-                    .from('invoices')
-                    .update({ energy_bill_status: 'pago' })
-                    .eq('id', inv.id);
-                
-                if (updateError) throw updateError;
-
-                // Registrar liquidação no Ledger (Livro Razão)
-                const { error: ledgerError } = await supabase.rpc('liquidate_concessionaria_payment', {
-                    p_invoice_id: inv.id,
-                    p_amount: utilityValue
-                });
-
-                if (ledgerError) {
-                    console.error('Erro ao registrar no ledger:', ledgerError);
-                    // Não travamos o fluxo aqui pois o pagamento já foi feito, mas avisamos o admin
-                    showAlert('Pagamento concluído, mas houve um erro ao registrar no Livro Razão.', 'warning');
-                } else {
-                    showAlert('Pagamento agendado e liquidado no Livro Razão!', 'success');
-                }
-                
-                fetchInvoices();
+                await registrarContaPaga(inv, utilityValue, 'Pagamento agendado e liquidado no Livro Razão!');
             } else {
                 throw new Error(data?.message || 'Falha ao processar pagamento');
             }
@@ -2119,6 +2158,40 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                                         >
                                                             <CreditCard size={12} /> {payingId === inv.id ? 'PROCESSANDO...' : 'PAGAR CONTA'}
                                                         </button>
+                                                    )}
+
+                                                    {/* Pix pelo QR da conta: paga a qualquer hora */}
+                                                    {!isEnergyBillPaid(ebStatus) && inv.concessionaria_pdf_url && !inv.pix_concessionaria_transacao_id && (
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handlePayBillPix(inv);
+                                                            }}
+                                                            disabled={payingId === inv.id}
+                                                            title="Pagar pelo QR Code Pix impresso na conta (funciona fora do horário bancário)"
+                                                            style={{
+                                                                marginTop: '0.25rem',
+                                                                padding: '0.38rem',
+                                                                background: 'white',
+                                                                color: '#0f766e',
+                                                                border: '1px solid #5eead4',
+                                                                borderRadius: '6px',
+                                                                fontSize: '0.68rem',
+                                                                fontWeight: 700,
+                                                                cursor: payingId === inv.id ? 'default' : 'pointer',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                gap: '0.3rem'
+                                                            }}
+                                                        >
+                                                            <QrCode size={12} /> {payingId === inv.id ? 'PROCESSANDO...' : 'PAGAR COM PIX'}
+                                                        </button>
+                                                    )}
+                                                    {!isEnergyBillPaid(ebStatus) && inv.pix_concessionaria_transacao_id && (
+                                                        <div style={{ marginTop: '0.25rem', fontSize: '0.64rem', color: '#b45309', textAlign: 'center' }}>
+                                                            Pix enviado ({inv.pix_concessionaria_status || '—'})
+                                                        </div>
                                                     )}
                                                     
                                                     {isEnergyBillPaid(ebStatus) && (
@@ -3351,6 +3424,19 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                                                     ) : ['auto_consumo_remoto', 'geracao_compartilhada'].includes(inv.consumer_units?.modalidade) ? (
                                                                         <span style={{ display: 'inline-block', width: '100%', color: '#64748b', background: '#f1f5f9', padding: '0.22rem 0.4rem', borderRadius: '6px', fontSize: '0.64rem', fontWeight: 700, border: '1px solid #e2e8f0' }}>S/ CÓDIGO</span>
                                                                     ) : null}
+                                                                    {/* Pix pelo QR da conta: paga a qualquer hora */}
+                                                                    {!isEnergyBillPaid(inv.energy_bill_status) && !['parcelada', 'contestada'].includes(inv.energy_bill_status)
+                                                                        && inv.concessionaria_pdf_url && !inv.pix_concessionaria_transacao_id
+                                                                        && ['auto_consumo_remoto', 'geracao_compartilhada'].includes(inv.consumer_units?.modalidade) && (
+                                                                        <button
+                                                                            onClick={() => handlePayBillPix(inv)}
+                                                                            disabled={payingId === inv.id}
+                                                                            title="Pagar pelo QR Code Pix impresso na conta (funciona fora do horário bancário)"
+                                                                            style={{ width: '100%', marginTop: '0.2rem', background: 'white', color: '#0f766e', border: '1px solid #5eead4', padding: '0.22rem 0.45rem', borderRadius: '6px', fontSize: '0.62rem', fontWeight: 800, cursor: 'pointer' }}
+                                                                        >
+                                                                            {payingId === inv.id ? '...' : 'PIX'}
+                                                                        </button>
+                                                                    )}
                                                                 </div>
                                                             </div>
                                                         </td>

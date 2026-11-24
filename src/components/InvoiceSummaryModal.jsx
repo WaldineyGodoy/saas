@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { deriveReadingStatus } from '../lib/readingStatus';
-import { X, FileText, CreditCard, ExternalLink, Info, CheckCircle2, AlertCircle, Pencil, Trash2, Save, RotateCcw, Clock, Loader2, Search, Link as LinkIcon } from 'lucide-react';
+import { X, FileText, CreditCard, ExternalLink, Info, CheckCircle2, AlertCircle, Pencil, Trash2, Save, RotateCcw, Clock, Loader2, Search, Link as LinkIcon, QrCode } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { valorDoCodigoDeBarras } from '../lib/codigoBarras';
+import { pagarContaPorPix } from '../lib/pixConcessionaria';
 import { getSecurePdfUrl } from '../lib/pdfHelper';
 import { createAsaasCharge, cancelAsaasCharge, mergePdf, sendCombinedNotification } from '../lib/api';
 import HistoryTimeline, { CollapsibleSection } from './HistoryTimeline';
@@ -439,6 +440,65 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
             console.error('Erro no pagamento:', error);
             setPaymentStatus('error');
             showAlert(`Falha no pagamento: ${error.message}`, 'error');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Pix pelo QR "PAGUE COM PIX" da conta. A Edge Function pagar-conta-pix
+    // confere valor, codigo de barras e CNPJ do recebedor antes de pagar.
+    const handlePayPix = async () => {
+        const utilityValue = Number(invoice.valor_concessionaria) || 0;
+        if (utilityValue <= 0) {
+            showAlert('Conta sem valor apurado. Confira a fatura antes de pagar.', 'warning');
+            return;
+        }
+
+        setLoading(true);
+        setPaymentStatus(null);
+        try {
+            const r = await pagarContaPorPix({ supabase, invoice, showConfirm });
+            if (r.cancelado) return;
+
+            if (r.pendente) {
+                showAlert(
+                    'O Pix foi aceito pela Asaas, mas aguarda autorização no aplicativo da Asaas. '
+                    + 'A conta segue pendente no CRM: depois de autorizar, marque-a como paga.',
+                    'warning'
+                );
+                if (onPaymentSuccess) onPaymentSuccess();
+                return;
+            }
+
+            const { error: updateError } = await supabase
+                .from('invoices')
+                .update({
+                    // Mesma regra do boleto: so' energy_bill_status. `status`
+                    // e `asaas_status` sao a cobranca AO ASSINANTE.
+                    energy_bill_status: 'pago',
+                    reading_status: 'success',
+                    reading_checked_at: new Date().toISOString()
+                })
+                .eq('id', invoice.id);
+            if (updateError) throw updateError;
+
+            const { error: ledgerError } = await supabase.rpc('liquidate_concessionaria_payment', {
+                p_invoice_id: invoice.id,
+                p_amount: utilityValue
+            });
+            if (ledgerError) {
+                console.error('Erro ao registrar no ledger:', ledgerError);
+                showAlert('Pix concluído, mas houve um erro ao registrar no Livro Razão.', 'warning');
+            }
+
+            setEnergyStatus('pago');
+            setPaymentStatus('success');
+            if (onPaymentSuccess) onPaymentSuccess();
+            setTimeout(() => { onClose(); }, 3000);
+        } catch (error) {
+            console.error('Erro no pagamento por Pix:', error);
+            setPaymentStatus('error');
+            showAlert(`Falha no pagamento por Pix: ${error.message}`, 'error');
         } finally {
             setLoading(false);
         }
@@ -1977,8 +2037,38 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                             // Pagar a conta da concessionaria move dinheiro
                                             // e grava em `invoices`: nao e' acao de
                                             // fornecedor nem de assinante.
+                                            // Pix pelo QR "PAGUE COM PIX" da conta: paga a
+                                            // qualquer hora, inclusive fora do horario bancario.
+                                            const pixButton = (podeEscrever && invoice.concessionaria_pdf_url
+                                                && !invoice.pix_concessionaria_transacao_id
+                                                && !['parcelada', 'contestada', 'inconsistente_pago', 'contestada_pago'].includes(energyStatus)) ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={handlePayPix}
+                                                    disabled={loading || paymentStatus === 'success'}
+                                                    title="Pagar pelo QR Code Pix impresso na conta"
+                                                    style={{
+                                                        display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
+                                                        padding: '0.35rem 0.75rem', borderRadius: '6px',
+                                                        border: '1px solid #5eead4', background: 'white', color: '#0f766e',
+                                                        fontSize: '0.75rem', fontWeight: 700,
+                                                        cursor: loading ? 'not-allowed' : 'pointer'
+                                                    }}
+                                                >
+                                                    {loading ? 'Carregando...' : <><QrCode size={13} /> Pagar com Pix</>}
+                                                </button>
+                                            ) : null;
+                                            if (invoice.pix_concessionaria_transacao_id) {
+                                                return (
+                                                    <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#b45309' }}>
+                                                        Pix enviado ({invoice.pix_concessionaria_status || '—'})
+                                                    </span>
+                                                );
+                                            }
                                             if (invoice.linha_digitavel && podeEscrever) {
                                                 return (
+                                                    <span style={{ display: 'inline-flex', gap: '0.4rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                                                    {pixButton}
                                                     <button
                                                         type="button"
                                                         onClick={handlePay}
@@ -2003,9 +2093,10 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                                     >
                                                         {loading ? 'Carregando...' : <><CreditCard size={13} /> Pagar Conta</>}
                                                     </button>
+                                                    </span>
                                                 );
                                             }
-                                            return null;
+                                            return pixButton;
                                         })()
                                     )}
                                 </div>

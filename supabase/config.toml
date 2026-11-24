@@ -47,6 +47,10 @@ verify_jwt = false
 [functions.pay-asaas-bill]
 verify_jwt = true
 
+# Paga conta de concessionaria pelo QR Pix da conta. requireAdmin dentro.
+[functions.pagar-conta-pix]
+verify_jwt = true
+
 [functions.cancel-autentique-document]
 verify_jwt = true
 
