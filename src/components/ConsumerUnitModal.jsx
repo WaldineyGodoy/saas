@@ -1156,17 +1156,29 @@ Qualquer dúvida, é só responder esta mensagem.`;
                         if (!payload.plano_assinatura_id) {
                             throw new Error('Escolha o plano de assinatura da UC: durante a troca de titularidade ela fica "Em Transf. de Titularidade", que exige plano.');
                         }
-                        const nomeUC = subscribers.find(sub => sub.id === payload.titular_fatura_id)?.name || 'titular da UC';
-                        const nomeUG = subscribers.find(sub => sub.id === ug.titular_fatura_id)?.name || 'titular da UG';
-                        const ok = await showConfirm(
-                            `A conta de energia desta UC está em ${nomeUC} e a UG ${ug.numero_uc} da usina ${usinaAlvo.name} está em ${nomeUG}. Em autoconsumo remoto a UC só pode ser vinculada depois da troca de titularidade. Salvar a UC e iniciar a troca agora?`,
-                            'Troca de titularidade necessária',
-                            'Salvar e iniciar TT',
-                            'Voltar'
-                        );
-                        if (!ok) { setLoading(false); return; }
-                        usinaParaTT = payload.usina_id;
-                        payload.usina_id = null;
+                        // Já há TT aberta nesta UC (ex.: bloqueada por débito): não abre outra,
+                        // o banco permite uma só. A UC segue sem usina até a TT concluir.
+                        const { data: ttAberta } = consumerUnit?.id ? await supabase
+                            .from('uc_transferencias_titularidade').select('status')
+                            .eq('uc_id', consumerUnit.id)
+                            .not('status', 'in', '(concluida,recusada,cancelada)')
+                            .limit(1) : { data: null };
+                        if (ttAberta?.length) {
+                            await showAlert(`Esta UC já tem uma troca de titularidade em andamento (${String(ttAberta[0].status).replace(/_/g, ' ')}). A usina será vinculada quando ela concluir. Acompanhe ou destrave pelo painel "Troca de titularidade". Os demais dados serão salvos.`, 'info');
+                            payload.usina_id = null;
+                        } else {
+                            const nomeUC = subscribers.find(sub => sub.id === payload.titular_fatura_id)?.name || 'titular da UC';
+                            const nomeUG = subscribers.find(sub => sub.id === ug.titular_fatura_id)?.name || 'titular da UG';
+                            const ok = await showConfirm(
+                                `A conta de energia desta UC está em ${nomeUC} e a UG ${ug.numero_uc} da usina ${usinaAlvo.name} está em ${nomeUG}. Em autoconsumo remoto a UC só pode ser vinculada depois da troca de titularidade. Salvar a UC e iniciar a troca agora?`,
+                                'Troca de titularidade necessária',
+                                'Salvar e iniciar TT',
+                                'Voltar'
+                            );
+                            if (!ok) { setLoading(false); return; }
+                            usinaParaTT = payload.usina_id;
+                            payload.usina_id = null;
+                        }
                     }
                 }
             }
