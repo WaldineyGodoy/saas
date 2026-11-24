@@ -21,13 +21,19 @@
  * Débito na UG: o portal mostra um aviso ao Iniciar. O robô clica Finalizar e
  * REPORTA o débito (bloqueada_por_debito); nunca retenta sozinho.
  *
- * O "Cadastrar" protocola de verdade, então é sempre confirmado por uma pessoa
- * no terminal, com o resumo do que vai ser enviado. Sem confirmação, nada é
+ * O "Cadastrar" protocola de verdade. Por padrão é confirmado por uma pessoa no
+ * terminal, com o resumo do que vai ser enviado. Sem confirmação, nada é
  * enviado e a TT volta para 'erro' com o motivo, à espera de nova tentativa.
+ *
+ * Com --auto-enviar (23/11/2026, pedido do dono: a TT segue sozinha ao pôr a UC
+ * em TT) o robô clica o Cadastrar sem ninguém no terminal, MAS só se todas as
+ * conferências objetivas passarem (ver `avaliarEnvioAutomatico`). Qualquer
+ * dúvida para antes do envio e deixa a TT em 'erro' com o motivo.
  *
  * Uso:
  *   node tt_filler.js                 # todas as TTs em 'a_iniciar'
  *   node tt_filler.js --tt <uuid>     # só uma
+ *   node tt_filler.js --auto-enviar   # sem confirmação humana, só se as conferências passarem
  *   node tt_filler.js --tt <uuid> --ate-resumo   # ensaio: para no passo 4, não envia
  */
 
@@ -47,6 +53,7 @@ const MEUS_IMOVEIS = '#/home/meus-imoveis';
 const args = process.argv.slice(2);
 const argTt = args.includes('--tt') ? args[args.indexOf('--tt') + 1] : null;
 const ATE_RESUMO = args.includes('--ate-resumo');
+const AUTO_ENVIAR = args.includes('--auto-enviar');
 
 // ------------------------------------------------------------------ utilidades
 
@@ -537,6 +544,37 @@ async function ucNaLista(page, numeroUC) {
 
 // ------------------------------------------------------------------ orquestração
 
+/**
+ * Conferências que substituem a pessoa no modo --auto-enviar. Devolve a lista de
+ * motivos que impedem o envio (vazia = pode enviar). Função pura, testável.
+ *  - o endereço mascarado do portal confere com o cadastro da UC cedente;
+ *  - o Resumo mostra a UC cedente e o nome do cessionário (titular da UG);
+ *  - um vencimento foi escolhido.
+ * (Débito na UG e dia de faturamento já param o robô antes, nos passos 1 e 2;
+ * o titular da UG = cessionário é checado em `credencialDaUG`.)
+ */
+function avaliarEnvioAutomatico(r) {
+    const motivos = [];
+    if (!r?.endereco?.ok) motivos.push('o endereço do portal não confere com o cadastro da UC');
+    if (!r?.resumoTemUC) motivos.push('o Resumo não mostra a UC cedente');
+    if (!r?.resumoTemCessionario) motivos.push('o Resumo não cita o cessionário');
+    if (!r?.vencimento) motivos.push('nenhum vencimento foi escolhido');
+    return motivos;
+}
+
+function confirmarAutomatico(tt) {
+    return async (r) => {
+        const motivos = avaliarEnvioAutomatico(r);
+        console.log(`
+[TT] Conferência automática — UC ${tt.numero_uc_origem} → ${tt.cessionario.name} (UG ${tt.ug.numero_uc})`);
+        console.log(`     protocolo ${r.protocolo || '(não lido)'} | endereço ${r.endereco.tela} | vencimento ${r.vencimento} | e-mail ${r.email}`);
+        for (const a of r.endereco.achados) console.log(`     ${a.ok ? 'OK ' : 'DIVERGE'} ${a.item}`);
+        if (motivos.length) throw new ParadaTT(`Envio automático barrado, nada foi enviado: ${motivos.join('; ')}.`);
+        console.log('     Todas as conferências passaram: o robô clica Cadastrar.');
+        return true;
+    };
+}
+
 function confirmarNoTerminal(tt) {
     return async (r) => {
         console.log('\n================ CONFERÊNCIA ANTES DE ENVIAR ================');
@@ -586,7 +624,7 @@ async function processar(browser, tt) {
             throw new ParadaTT('Débito na UG.', { debito: abertura });
         }
 
-        const r = await preencherWizard(page, tt, confirmarNoTerminal(tt));
+        const r = await preencherWizard(page, tt, AUTO_ENVIAR ? confirmarAutomatico(tt) : confirmarNoTerminal(tt));
         if (r.ensaio) {
             console.log(`   [TT] Ensaio parou no Resumo (protocolo ${r.protocolo}). Nada enviado.`);
             await rpc('fn_tt_registrar_erro', { p_tt_id: tt.id, p_erro: `Ensaio (--ate-resumo) até o passo 4; nada enviado. Protocolo do rascunho: ${r.protocolo}` });
@@ -664,7 +702,7 @@ async function main() {
     }
     const tts = await carregarTTs();
     if (!tts.length) { console.log('Nenhuma TT a executar.'); return; }
-    console.log(`${tts.length} TT(s) a executar${ATE_RESUMO ? ' (ENSAIO até o Resumo)' : ''}.`);
+    console.log(`${tts.length} TT(s) a executar${ATE_RESUMO ? ' (ENSAIO até o Resumo)' : AUTO_ENVIAR ? ' (envio automático)' : ''}.`);
     const browser = await chromium.launch(neoenergia.launchOptions());
     try {
         // Uma por vez, na ordem: a confirmação de cada envio é feita por uma pessoa.
@@ -679,4 +717,4 @@ if (require.main === module) {
     main().catch((e) => { console.error(e); process.exit(1); });
 }
 
-module.exports = { conferirEndereco, vencimentoPreferido, valorDoDebito, numeroMudaNaTT };
+module.exports = { conferirEndereco, vencimentoPreferido, valorDoDebito, numeroMudaNaTT, avaliarEnvioAutomatico };
