@@ -133,6 +133,11 @@ export default function SubscriberSignup() {
     const paramConcessionaria = searchParams.get('concessionaria') || '';
     const paramConsumo = searchParams.get('consumo') || '';
     const paramRetomar = searchParams.get('retomar') || '';
+    // Plano escolhido no comparativo da home (?plano=<id>&plano_nome=). Vai em
+    // cada UC como plano_assinatura_id: a RPC confere se o plano é vigente e se
+    // atende a distribuidora da UC, e grava o desconto do plano.
+    const paramPlano = uuidOuNulo(searchParams.get('plano'));
+    const paramPlanoNome = paramPlano ? (searchParams.get('plano_nome') || '').trim() : '';
 
     // 'carregando' | 'expirado' | 'dados' | 'documentos' | 'contrato' |
     // 'enviado' | 'assinado' | 'pendente_equipe'
@@ -429,7 +434,8 @@ export default function SubscriberSignup() {
                     complemento: uc.complemento,
                     bairro: uc.bairro,
                     cidade: uc.cidade,
-                    uf: uc.uf
+                    uf: uc.uf,
+                    ...(paramPlano ? { plano_assinatura_id: paramPlano } : {})
                 })),
                 p_dia_vencimento: diaVencimento,
                 p_representante_nome: ehCnpj ? formData.representante_nome.trim() : null,
@@ -677,6 +683,11 @@ export default function SubscriberSignup() {
                     <div className="px-5 pt-5 flex items-center gap-2">
                         <Zap className="text-orange-500 fill-orange-500" size={20} />
                         <h2 className="text-lg font-bold">Sua economia com a B2W Energia</h2>
+                        {paramPlanoNome && (
+                            <span className="ml-auto text-xs font-bold uppercase tracking-wide text-orange-600 bg-orange-50 border border-orange-200 rounded-full px-3 py-1">
+                                {paramPlanoNome}
+                            </span>
+                        )}
                     </div>
                     <div className="grid grid-cols-2">
                         <div className="p-5">
