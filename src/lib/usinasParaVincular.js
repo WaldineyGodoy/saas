@@ -1,4 +1,4 @@
-import { calcularCapacidade } from './capacidade.js';
+import { calcularCapacidade, capacidadeMensal } from './capacidade.js';
 
 /**
  * Quais usinas oferecer ao vincular uma UC, e em que ordem.
@@ -35,9 +35,14 @@ const numero = (v) => {
  * @param {number|string} p.franquia  franquia da UC que está sendo vinculada
  * @param {string} [p.ucAtualId]      a própria UC, se já existe: sua franquia não conta
  *                                    contra a usina onde ela já está
- * @returns {Array<object>} cada usina com `disponivel` (kWh ou null) e `comporta` (bool ou null)
+ * @param {Object} [p.geracaoMensal]  {usinaId: {"01":kwh,...}} da fn_geracao_estimada_mensal;
+ *                                    sem ele a geração do ano é plana (os 12 meses iguais)
+ * @returns {Array<object>} cada usina com `disponivel` (kWh ou null), `comporta` (bool ou null)
+ *   e o retrato do ano: `menorMes` / `maiorMes` ({mes, rotulo, livre}) e `mediaLivre` — a
+ *   energia livre mês a mês (geração estimada − consumo da UG − franquias que ocupam).
+ *   `menorMes.livre` negativo é overbook naquele mês. Tudo null sem geração estimada.
  */
-export function usinasParaVincular({ usinas = [], ucs = [], franquia = 0, ucAtualId = null } = {}) {
+export function usinasParaVincular({ usinas = [], ucs = [], franquia = 0, ucAtualId = null, geracaoMensal = {} } = {}) {
     const alvo = numero(franquia);
     const porUsina = new Map();
     for (const uc of ucs || []) {
@@ -54,7 +59,22 @@ export function usinasParaVincular({ usinas = [], ucs = [], franquia = 0, ucAtua
                 && Number.isFinite(Number(bruta));
             const { livre } = calcularCapacidade({ ucs: porUsina.get(u.id) || [], geracao: mensuravel ? bruta : null });
             const disponivel = mensuravel ? livre : null;
-            return { ...u, disponivel, comporta: disponivel === null ? null : disponivel >= alvo };
+            const ano = mensuravel
+                ? capacidadeMensal(u, porUsina.get(u.id) || [], geracaoMensal?.[u.id] ?? null)
+                    .filter((l) => l.livre !== null)
+                : [];
+            const extremo = (a, b) => (b.livre < a.livre ? b : a);
+            const menor = ano.length ? ano.reduce(extremo) : null;
+            const maior = ano.length ? ano.reduce((a, b) => (b.livre > a.livre ? b : a)) : null;
+            const pick = (l) => (l ? { mes: l.mes, rotulo: l.rotulo, livre: l.livre } : null);
+            return {
+                ...u,
+                disponivel,
+                comporta: disponivel === null ? null : disponivel >= alvo,
+                menorMes: pick(menor),
+                maiorMes: pick(maior),
+                mediaLivre: ano.length ? ano.reduce((acc, l) => acc + l.livre, 0) / ano.length : null,
+            };
         });
 
     const nome = (u) => String(u.name || '');

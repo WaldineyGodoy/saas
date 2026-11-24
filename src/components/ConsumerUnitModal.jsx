@@ -5,7 +5,8 @@ import { fetchAddressByCep, fetchOfferData } from '../lib/api';
 import { ehPapelInterno, ehPapelAdmin } from '../lib/papeis';
 import { anexarDocumentoAssinante } from '../lib/documentosAssinante';
 import { soDigitosUc, formatarNumeroUc } from '../lib/numeroUc';
-import { usinasParaVincular } from '../lib/usinasParaVincular';
+import { usinasParaVincular, STATUS_USINA_VINCULAVEL } from '../lib/usinasParaVincular';
+import { carregarGeracaoMensal } from '../lib/capacidade';
 import './ConsumerUnitModal.css';
 import DocumentosAssinante from './subscriber/DocumentosAssinante';
 import { 
@@ -23,7 +24,7 @@ import InvoiceFormModal from './InvoiceFormModal';
 import ManualInvoiceUploadModal from './ManualInvoiceUploadModal';
 import PreencherUcPelaConta from './PreencherUcPelaConta';
 import { contaParaUc } from '../lib/energyBillParser';
-import { gravarHistoricoConsumo } from '../lib/historicoConsumo';
+import { gravarHistoricoConsumo, medianaDoPerfil } from '../lib/historicoConsumo';
 import HistoricoConsumo from './HistoricoConsumo';
 import { sendWhatsapp } from '../lib/api';
 import { useBranding } from '../contexts/BrandingContext';
@@ -54,6 +55,10 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
     const [usinas, setUsinas] = useState([]);
     // UCs ja vinculadas a alguma usina: base do calculo de energia disponivel.
     const [ucsVinculadas, setUcsVinculadas] = useState([]);
+    // Geracao estimada mes a mes de cada usina oferecida (fn_geracao_estimada_mensal).
+    const [geracaoMensalPorUsina, setGeracaoMensalPorUsina] = useState({});
+    // Mediana do consumo da propria UC, apurada do historico de 12 meses.
+    const [consumoMedianoUc, setConsumoMedianoUc] = useState(null);
     const [loading, setLoading] = useState(false);
     // Arquivo da conta lida no "Preencher pela conta": fica anexado ao assinante ao salvar a UC nova.
     const [contaArquivo, setContaArquivo] = useState(null);
@@ -821,6 +826,11 @@ Qualquer dúvida, é só responder esta mensagem.`;
         const { data } = await supabase.from('usinas').select('id, name, status, concessionaria, cnpj_cpf, portal_credentials, modalidade, potencia_kwp, geracao_estimada_kwh').order('name');
         setUsinas(data || []);
         await fetchUcsVinculadas();
+        // Perfil mensal so das usinas que a lista oferece. Sem a RPC, a geracao
+        // fica plana (os 12 meses iguais) e a tela segue funcionando.
+        const oferecidas = (data || []).filter(u => STATUS_USINA_VINCULAVEL.includes(u.status));
+        const pares = await Promise.all(oferecidas.map(async u => [u.id, await carregarGeracaoMensal(supabase, u.id)]));
+        setGeracaoMensalPorUsina(Object.fromEntries(pares.filter(([, g]) => g)));
     };
 
     // So o que a regra de capacidade le: a franquia ocupada de cada usina.
@@ -828,7 +838,7 @@ Qualquer dúvida, é só responder esta mensagem.`;
     // UCs desde que o modal abriu.
     const fetchUcsVinculadas = async () => {
         const { data } = await supabase.from('consumer_units')
-            .select('id, usina_id, status, tipo_unidade, franquia')
+            .select('id, usina_id, status, tipo_unidade, franquia, historico_consumo')
             .not('usina_id', 'is', null);
         setUcsVinculadas(data || []);
     };
@@ -1428,6 +1438,22 @@ Qualquer dúvida, é só responder esta mensagem.`;
         ...invoices.map(inv => inv.mes_referencia ? inv.mes_referencia.split('-')[0] : null).filter(Boolean)
     ])).sort((a, b) => Number(b) - Number(a));
 
+    // Mediana do consumo da UC (mesma fonte do bloco Historico de Consumo):
+    // a coluna gravada pelo banco, ou a mediana do perfil se ela ainda nao existe.
+    useEffect(() => {
+        let vivo = true;
+        setConsumoMedianoUc(null);
+        if (!consumerUnit?.id) return undefined;
+        (async () => {
+            const { data } = await supabase.from('consumer_units')
+                .select('historico_consumo, consumo_mediano_kwh').eq('id', consumerUnit.id).maybeSingle();
+            if (!vivo || !data) return;
+            const m = data.consumo_mediano_kwh ?? medianaDoPerfil(data.historico_consumo);
+            setConsumoMedianoUc(m !== null && m !== undefined && Number(m) > 0 ? Number(m) : null);
+        })();
+        return () => { vivo = false; };
+    }, [consumerUnit?.id, invoices.length]);
+
     // Find subscriber name for header
     const subscriberName = subscribers.find(s => s.id === formData.subscriber_id)?.name || '';
 
@@ -1438,6 +1464,7 @@ Qualquer dúvida, é só responder esta mensagem.`;
     const termoUsina = usinaSearchTerm.toLowerCase().trim();
     const opcoesUsina = usinasParaVincular({
         usinas, ucs: ucsVinculadas, franquia: formData.franquia, ucAtualId: consumerUnit?.id,
+        geracaoMensal: geracaoMensalPorUsina,
     }).filter(u => !termoUsina || (
         u.name?.toLowerCase().includes(termoUsina) ||
         u.cnpj_cpf?.toLowerCase().includes(termoUsina) ||
@@ -2313,6 +2340,21 @@ Qualquer dúvida, é só responder esta mensagem.`;
 
                                                 {/* Usina Vinculada Field */}
                                                 <div style={{ position: 'relative', marginTop: '0.5rem' }}>
+                                                    <div
+                                                        title="Mediana dos 12 meses de consumo da UC, lidos das contas de energia."
+                                                        style={{
+                                                            display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '1rem',
+                                                            padding: '0.5rem 0.75rem', marginBottom: '0.6rem', borderRadius: '8px',
+                                                            background: '#f8fafc', border: '1px solid #e2e8f0', fontSize: '0.8rem', color: '#475569'
+                                                        }}
+                                                    >
+                                                        <span>Consumo mediano apurado da UC</span>
+                                                        <strong style={{ color: consumoMedianoUc ? '#0f172a' : '#94a3b8', whiteSpace: 'nowrap' }}>
+                                                            {consumoMedianoUc
+                                                                ? `${Math.round(consumoMedianoUc).toLocaleString('pt-BR')} kWh/mês`
+                                                                : 'sem histórico — envie a conta'}
+                                                        </strong>
+                                                    </div>
                                                     <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Usina Vinculada</label>
                                                     <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                                                         <div style={{ position: 'relative', flex: 1 }}>
@@ -2440,6 +2482,31 @@ Qualquer dúvida, é só responder esta mensagem.`;
                                                                         <span>Concessionária: {u.concessionaria}</span>
                                                                         <span>{u.status === 'em_conexao' ? 'Em Conexão' : 'Gerando'}</span>
                                                                     </div>
+                                                                    {u.menorMes && u.maiorMes && (() => {
+                                                                        const kwh = (v) => `${Math.round(v).toLocaleString('pt-BR')} kWh`;
+                                                                        const media = `Média: ${kwh(u.mediaLivre)}`;
+                                                                        const semVariacao = Math.round(u.menorMes.livre) === Math.round(u.maiorMes.livre);
+                                                                        return (
+                                                                            <div
+                                                                                title="Energia livre mês a mês: geração estimada menos o consumo da UG e as franquias vinculadas. Negativo é overbook."
+                                                                                style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem 1rem', fontSize: '0.75rem', marginTop: '0.25rem' }}
+                                                                            >
+                                                                                {semVariacao ? (
+                                                                                    <span style={{ color: '#475569' }}>Igual em todos os meses: <strong>{kwh(u.menorMes.livre)}</strong></span>
+                                                                                ) : (
+                                                                                    <>
+                                                                                        <span style={{ color: u.menorMes.livre < 0 ? '#b91c1c' : '#b45309' }}>
+                                                                                            Menor ({u.menorMes.rotulo}): <strong>{u.menorMes.livre < 0 ? `overbook de ${kwh(-u.menorMes.livre)}` : kwh(u.menorMes.livre)}</strong>
+                                                                                        </span>
+                                                                                        <span style={{ color: '#047857' }}>
+                                                                                            Maior ({u.maiorMes.rotulo}): <strong>{kwh(u.maiorMes.livre)}</strong>
+                                                                                        </span>
+                                                                                    </>
+                                                                                )}
+                                                                                <span style={{ color: '#475569' }}>{semVariacao ? media : <strong>{media}</strong>}</span>
+                                                                            </div>
+                                                                        );
+                                                                    })()}
                                                                 </div>
                                                             ))}
                                                             {opcoesUsina.length === 0 && (
