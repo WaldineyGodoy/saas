@@ -7,6 +7,30 @@ const corsHeaders = {
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// Data de hoje no fuso de Brasilia, em YYYY-MM-DD.
+//
+// Antes era new Date().toISOString(), que e' UTC: a partir das 21h de Brasilia
+// a data ja' virava o dia seguinte, e a Asaas recebia um agendamento para
+// amanha. Numa sexta as 21h30, isso virava sabado — dia em que conta vencida
+// de concessionaria nao se paga.
+function hojeEmBrasilia(agora: Date = new Date()): string {
+    return new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit'
+    }).format(agora)
+}
+
+// Todos os erros que a Asaas devolveu, nao so' o primeiro.
+//
+// Em 12/09/2026 a Asaas recusou um pagamento com dois erros, e o CRM mostrou
+// so' o primeiro ("so' ate as 22 horas", as 17h18) — que era enganoso. O
+// motivo real estava no segundo: sabado nao e' dia util.
+function descreverErrosAsaas(errors: unknown, status: number): string {
+    if (!Array.isArray(errors) || errors.length === 0) return `Erro ${status}`
+    return errors
+        .map((e) => e?.description ?? e?.code ?? 'erro sem descricao')
+        .join(' | ')
+}
+
 serve(async (req) => {
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders })
@@ -72,7 +96,7 @@ serve(async (req) => {
 
         const billPayload = {
             identificationField: identification,
-            scheduleDate: scheduleDate || new Date().toISOString().split('T')[0],
+            scheduleDate: scheduleDate || hojeEmBrasilia(),
             description: cleanDescription,
             value: value ? Number(value) : undefined,
             dueDate: dueDate || undefined
@@ -99,7 +123,7 @@ serve(async (req) => {
 
         if (!response.ok || data.errors) {
             console.error('Asaas Error:', data.errors);
-            const errorMsg = data.errors ? data.errors[0].description : `Erro ${response.status}`;
+            const errorMsg = descreverErrosAsaas(data.errors, response.status);
             throw new Error(`Asaas Bill Payment Failed: ${errorMsg}`);
         }
 
