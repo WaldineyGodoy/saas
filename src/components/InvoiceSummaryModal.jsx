@@ -160,6 +160,9 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
     );
 
     const [paymentStatus, setPaymentStatus] = useState(null); // 'success' | 'error'
+    // Qual forma de pagamento esta em curso, para so' o botao clicado dizer
+    // "Processando..." enquanto o outro apenas fica desabilitado.
+    const [pagandoPor, setPagandoPor] = useState(null); // 'boleto' | 'pix' | null
     const [isEditing, setIsEditing] = useState(false);
     const [editData, setEditData] = useState(null);
 
@@ -380,6 +383,7 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
         if (!confirmed) return;
 
         setLoading(true);
+        setPagandoPor('boleto');
         setPaymentStatus(null);
 
         try {
@@ -442,6 +446,7 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
             showAlert(`Falha no pagamento: ${error.message}`, 'error');
         } finally {
             setLoading(false);
+            setPagandoPor(null);
         }
     };
 
@@ -455,6 +460,7 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
         }
 
         setLoading(true);
+        setPagandoPor('pix');
         setPaymentStatus(null);
         try {
             const r = await pagarContaPorPix({ supabase, invoice, showConfirm });
@@ -501,6 +507,7 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
             showAlert(`Falha no pagamento por Pix: ${error.message}`, 'error');
         } finally {
             setLoading(false);
+            setPagandoPor(null);
         }
     };
 
@@ -1420,8 +1427,11 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                 justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)'
             }}>
                 <div className="modal-content" style={{
-                    backgroundColor: 'white', borderRadius: '20px', width: '90%', maxWidth: '900px',
-                    maxHeight: '90vh', overflowY: 'auto', position: 'relative', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)'
+                    // Mais largo para os blocos irem lado a lado: os dois status,
+                    // as quatro datas numa linha e os dois valores. Abaixo de
+                    // ~900px a grade volta a empilhar (auto-fit).
+                    backgroundColor: 'white', borderRadius: '20px', width: 'min(1240px, 96vw)',
+                    maxHeight: '94vh', overflowY: 'auto', position: 'relative', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)'
                 }}>
                     <div style={{ position: 'absolute', top: '1.5rem', right: '1.5rem', display: 'flex', gap: '0.75rem', zIndex: 10, alignItems: 'center' }}>
                         {onOpenSandbox && (
@@ -1493,12 +1503,14 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                             </div>
                         </div>
 
+                        {/* Os dois status lado a lado: conta de energia (o que a B2W deve
+                            a concessionaria) e fatura do assinante (o que ele deve a B2W). */}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: '1rem', marginBottom: '1.5rem', alignItems: 'stretch' }}>
                         {/* Status da Conta de Energia (Bloco 1) */}
                         <div style={{ 
                             background: '#f1f5f9', 
                             padding: '1rem', 
                             borderRadius: '16px', 
-                            marginBottom: '1.5rem',
                             border: '1px solid #e2e8f0'
                         }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
@@ -1615,7 +1627,6 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                             background: '#f8fafc', 
                             padding: '1rem', 
                             borderRadius: '16px', 
-                            marginBottom: '1.5rem',
                             border: '1px solid #e2e8f0'
                         }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
@@ -1623,7 +1634,7 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                 {updatingFaturaStatus && <span style={{ fontSize: '0.7rem', color: '#3b82f6' }}>Salvando...</span>}
                             </div>
                             
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '0.25rem', background: 'white', padding: '0.25rem', borderRadius: '12px', marginBottom: '1rem' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.25rem', background: 'white', padding: '0.25rem', borderRadius: '12px', marginBottom: '1rem' }}>
                                 {[
                                     { id: 'sem_faturamento', label: 'Sem Faturamento', color: '#2563eb' },
                                     { id: 'a_vencer', label: 'A Vencer', color: '#854d0e' },
@@ -1686,9 +1697,10 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                 </div>
                             </div>
                         </div>
+                        </div>
     
-                        {/* Grid de Valores */}
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+                        {/* Datas: vencimento, referencia e as duas leituras numa linha */}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
                             <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
                                 <div style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>Vencimento</div>
                                 {isEditing ? (
@@ -1722,10 +1734,6 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                     </div>
                                 )}
                             </div>
-                        </div>
-
-                        {/* Grid de Leituras */}
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
                             <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
                                 <div style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>Leitura Anterior</div>
                                 {isEditing ? (
@@ -1934,173 +1942,189 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                             );
                         })()}
 
-                        {/* VALOR DA CONTA DE ENERGIA (ANTIGO TOTAL CONCESSIONÁRIA) */}
-                        <div style={{ 
-                            padding: '1.25rem', 
-                            borderRadius: '16px', 
+                        {/* Os dois valores lado a lado: o que a B2W paga a concessionaria e o
+                            que o assinante paga a B2W. Nunca se misturam (PRODUCT.md). */}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: '1rem', alignItems: 'stretch' }}>
+                        {/* VALOR DA CONTA DE ENERGIA (CONCESSIONÁRIA) */}
+                        <div style={{
+                            padding: '1.25rem',
+                            borderRadius: '16px',
                             background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
                             border: '1px solid #e2e8f0',
                             boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
-                            display: 'flex', 
-                            flexDirection: 'column', 
-                            gap: '0.75rem',
-                            marginBottom: '1rem'
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '1rem'
                         }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                {/* Left Side: Label and View Pdf Button */}
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                    <span style={{ fontSize: '0.9rem', fontWeight: 800, color: branding?.primary_color || '#003366', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-                                        VALOR DA CONTA DE ENERGIA (CONCESSIONÁRIA)
-                                    </span>
-                                    
-                                    {!isEditing && (
-                                        <button 
-                                            type="button"
-                                            onClick={handleViewPdf}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '1rem' }}>
+                                <span style={{ fontSize: '0.9rem', fontWeight: 800, color: branding?.primary_color || '#003366', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                                    Valor da conta de energia (concessionária)
+                                </span>
+                                <span style={{ fontSize: '1.4rem', fontWeight: 900, color: branding?.primary_color || '#003366', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                                    {isEditing ? (
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            value={editData.valor_concessionaria}
+                                            onChange={e => handleEditChange('valor_concessionaria', e.target.value)}
                                             style={{
-                                                alignSelf: 'flex-start',
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: '0.35rem',
-                                                padding: '0.35rem 0.7rem',
+                                                width: '120px',
+                                                border: '1px solid #cbd5e1',
                                                 borderRadius: '6px',
-                                                border: '1.5px solid #cbd5e1',
-                                                background: 'white',
-                                                color: '#475569',
-                                                fontSize: '0.75rem',
-                                                fontWeight: 700,
-                                                cursor: 'pointer',
-                                                transition: 'all 0.2s',
-                                                boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                                                textAlign: 'right',
+                                                padding: '0.4rem',
+                                                fontSize: '1.1rem',
+                                                fontWeight: 'bold',
+                                                color: branding?.primary_color || '#003366'
                                             }}
-                                            onMouseEnter={e => { e.currentTarget.style.borderColor = branding?.primary_color || '#003366'; e.currentTarget.style.color = branding?.primary_color || '#003366'; }}
-                                            onMouseLeave={e => { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.color = '#475569'; }}
-                                        >
-                                            <ExternalLink size={13} /> Visualizar Conta
-                                        </button>
+                                        />
+                                    ) : (
+                                        // O valor da conta e um FATO: esta impresso no PDF da
+                                        // concessionaria e confere com o codigo de barras. Nao se
+                                        // recalcula. (Um "conserto de exibicao" antigo trocava a
+                                        // conta pela soma das parcelas e escondia erro de extracao:
+                                        // UC 7030765324, 08/2026, R$ 6.021,32 no lugar de R$ 1.954,82.)
+                                        formatCurrency(Number(invoice.valor_concessionaria) || 0)
                                     )}
-                                </div>
+                                </span>
+                            </div>
 
-                                {/* Right Side: Value and Pay Button */}
-                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.5rem' }}>
-                                    <span style={{ fontSize: '1.4rem', fontWeight: 900, color: branding?.primary_color || '#003366' }}>
-                                        {isEditing ? (
-                                            <input 
-                                                type="number" 
-                                                step="0.01"
-                                                value={editData.valor_concessionaria} 
-                                                onChange={e => handleEditChange('valor_concessionaria', e.target.value)} 
-                                                style={{ 
-                                                    width: '120px', 
-                                                    border: '1px solid #cbd5e1', 
-                                                    borderRadius: '6px', 
-                                                    textAlign: 'right', 
-                                                    padding: '0.4rem',
-                                                    fontSize: '1.1rem',
-                                                    fontWeight: 'bold',
-                                                    color: branding?.primary_color || '#003366'
-                                                }} 
-                                            />
-                                        ) : (
-                                            // O valor da conta e um FATO: esta impresso no PDF da
-                                            // concessionaria e confere com o codigo de barras. Nao se
-                                            // recalcula.
-                                            //
-                                            // Aqui havia um "conserto de exibicao" que, quando o
-                                            // consumo apurado ficava maior que a conta, trocava a conta
-                                            // pela soma das parcelas. Em vez de corrigir, escondia erro
-                                            // de extracao: a UC 7030765324 (08/2026) tinha
-                                            // consumo_reais em R$ 5.629,97 e esta secao exibia
-                                            // R$ 6.021,32 no lugar dos R$ 1.954,82 reais da conta.
-                                            // Quem conferisse contra o PDF via numeros diferentes.
-                                            //
-                                            // Divergencia agora aparece como alerta na composicao, que
-                                            // e onde ela deve ser resolvida.
-                                            formatCurrency(Number(invoice.valor_concessionaria) || 0)
-                                        )}
-                                    </span>
+                            {!isEditing && (
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                                    <button
+                                        type="button"
+                                        onClick={handleViewPdf}
+                                        style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '0.35rem',
+                                            padding: '0.45rem 0.8rem',
+                                            borderRadius: '8px',
+                                            border: '1.5px solid #cbd5e1',
+                                            background: 'white',
+                                            color: '#475569',
+                                            fontSize: '0.78rem',
+                                            fontWeight: 700,
+                                            cursor: 'pointer',
+                                            transition: 'border-color 0.2s, color 0.2s'
+                                        }}
+                                        onMouseEnter={e => { e.currentTarget.style.borderColor = branding?.primary_color || '#003366'; e.currentTarget.style.color = branding?.primary_color || '#003366'; }}
+                                        onMouseLeave={e => { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.color = '#475569'; }}
+                                    >
+                                        <ExternalLink size={14} /> Visualizar Conta
+                                    </button>
 
-                                    {!isEditing && (
-                                        (() => {
-                                            if (energyStatus === 'pago') {
-                                                return (
-                                                    <span style={{ 
-                                                        display: 'inline-flex', alignItems: 'center', gap: '0.25rem',
-                                                        padding: '0.3rem 0.6rem', borderRadius: '6px',
-                                                        background: '#dcfce7', color: '#15803d', border: '1px solid #bbf7d0',
-                                                        fontSize: '0.72rem', fontWeight: 700
-                                                    }}>
-                                                        <CheckCircle2 size={13} /> Pago
-                                                    </span>
-                                                );
-                                            }
-                                            // Pagar a conta da concessionaria move dinheiro
-                                            // e grava em `invoices`: nao e' acao de
-                                            // fornecedor nem de assinante.
-                                            // Pix pelo QR "PAGUE COM PIX" da conta: paga a
-                                            // qualquer hora, inclusive fora do horario bancario.
-                                            const pixButton = (podeEscrever && invoice.concessionaria_pdf_url
-                                                && !invoice.pix_concessionaria_transacao_id
-                                                && !['parcelada', 'contestada', 'inconsistente_pago', 'contestada_pago'].includes(energyStatus)) ? (
-                                                <button
-                                                    type="button"
-                                                    onClick={handlePayPix}
-                                                    disabled={loading || paymentStatus === 'success'}
-                                                    title="Pagar pelo QR Code Pix impresso na conta"
-                                                    style={{
-                                                        display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
-                                                        padding: '0.35rem 0.75rem', borderRadius: '6px',
-                                                        border: '1px solid #5eead4', background: 'white', color: '#0f766e',
-                                                        fontSize: '0.75rem', fontWeight: 700,
-                                                        cursor: loading ? 'not-allowed' : 'pointer'
-                                                    }}
-                                                >
-                                                    {loading ? 'Carregando...' : <><QrCode size={13} /> Pagar com Pix</>}
-                                                </button>
-                                            ) : null;
-                                            if (invoice.pix_concessionaria_transacao_id) {
-                                                return (
-                                                    <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#b45309' }}>
-                                                        Pix enviado ({invoice.pix_concessionaria_status || '—'})
-                                                    </span>
-                                                );
-                                            }
-                                            if (invoice.linha_digitavel && podeEscrever) {
-                                                return (
-                                                    <span style={{ display: 'inline-flex', gap: '0.4rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                                                    {pixButton}
+                                    {(() => {
+                                        if (energyStatus === 'pago') {
+                                            return (
+                                                <span style={{
+                                                    display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
+                                                    padding: '0.4rem 0.7rem', borderRadius: '8px',
+                                                    background: '#dcfce7', color: '#15803d', border: '1px solid #bbf7d0',
+                                                    fontSize: '0.78rem', fontWeight: 700
+                                                }}>
+                                                    <CheckCircle2 size={14} /> Conta paga
+                                                </span>
+                                            );
+                                        }
+
+                                        // Pix ja enviado: a trava da Edge Function nao deixa pagar de
+                                        // novo, entao a tela mostra o estado em vez dos botoes.
+                                        if (invoice.pix_concessionaria_transacao_id) {
+                                            const st = invoice.pix_concessionaria_status;
+                                            const rotulo = st === 'DONE' ? 'Pix pago'
+                                                : st === 'AWAITING_CRITICAL_ACTION_AUTHORIZATION' ? 'Pix aguardando autorização no app da Asaas'
+                                                : st === 'SCHEDULED' ? 'Pix agendado'
+                                                : 'Pix em processamento na Asaas';
+                                            return (
+                                                <span style={{
+                                                    display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
+                                                    padding: '0.4rem 0.7rem', borderRadius: '8px',
+                                                    background: '#fffbeb', color: '#92400e', border: '1px solid #fde68a',
+                                                    fontSize: '0.78rem', fontWeight: 700
+                                                }}>
+                                                    <Clock size={14} /> {rotulo}
+                                                </span>
+                                            );
+                                        }
+
+                                        // Pagar a conta da concessionaria move dinheiro e grava em
+                                        // `invoices`: nao e acao de fornecedor nem de assinante.
+                                        if (!podeEscrever) return null;
+
+                                        const podeBoleto = !!invoice.linha_digitavel;
+                                        // Pix pelo QR "PAGUE COM PIX" da conta: liquida a qualquer
+                                        // hora. Boleto de conta vencida so passa em dia util ate 22h.
+                                        const podePix = !!invoice.concessionaria_pdf_url
+                                            && !['parcelada', 'contestada', 'inconsistente_pago', 'contestada_pago'].includes(energyStatus);
+                                        if (!podeBoleto && !podePix) return null;
+
+                                        const travado = loading || paymentStatus === 'success';
+                                        const botao = {
+                                            display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
+                                            padding: '0.5rem 0.95rem', borderRadius: '8px',
+                                            fontSize: '0.8rem', fontWeight: 700,
+                                            cursor: travado ? 'not-allowed' : 'pointer',
+                                            transition: 'background 0.2s, border-color 0.2s'
+                                        };
+
+                                        return (
+                                            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                                                {podePix && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={handlePayPix}
+                                                        disabled={travado}
+                                                        title="Paga pelo QR Code impresso na conta. Funciona a qualquer dia e hora."
+                                                        style={{
+                                                            ...botao,
+                                                            border: '1.5px solid #10b981',
+                                                            background: pagandoPor === 'pix' ? '#ecfdf5' : 'white',
+                                                            color: '#047857',
+                                                            opacity: travado && pagandoPor !== 'pix' ? 0.5 : 1
+                                                        }}
+                                                        onMouseEnter={e => { if (!travado) e.currentTarget.style.background = '#ecfdf5'; }}
+                                                        onMouseLeave={e => { if (!travado) e.currentTarget.style.background = 'white'; }}
+                                                    >
+                                                        {pagandoPor === 'pix'
+                                                            ? <><Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> Lendo QR...</>
+                                                            : <><QrCode size={14} /> Pagar com Pix</>}
+                                                    </button>
+                                                )}
+                                                {podeBoleto && (
                                                     <button
                                                         type="button"
                                                         onClick={handlePay}
-                                                        disabled={loading || paymentStatus === 'success'}
+                                                        disabled={travado}
+                                                        title="Paga pela linha digitável. Conta vencida só em dia útil, até as 22h."
                                                         style={{
-                                                            display: 'inline-flex',
-                                                            alignItems: 'center',
-                                                            gap: '0.35rem',
-                                                            padding: '0.35rem 0.75rem',
-                                                            borderRadius: '6px',
-                                                            border: 'none',
+                                                            ...botao,
+                                                            border: '1.5px solid transparent',
                                                             background: paymentStatus === 'success' ? '#22c55e' : '#10b981',
                                                             color: 'white',
-                                                            fontSize: '0.75rem',
-                                                            fontWeight: 700,
-                                                            cursor: loading ? 'not-allowed' : 'pointer',
-                                                            transition: 'all 0.2s',
-                                                            boxShadow: '0 2px 4px rgba(16, 185, 129, 0.2)'
+                                                            boxShadow: '0 2px 4px rgba(16, 185, 129, 0.2)',
+                                                            opacity: travado && pagandoPor !== 'boleto' && paymentStatus !== 'success' ? 0.5 : 1
                                                         }}
-                                                        onMouseEnter={e => { if(!loading) e.currentTarget.style.background = '#059669'; }}
-                                                        onMouseLeave={e => { if(!loading) e.currentTarget.style.background = '#10b981'; }}
+                                                        onMouseEnter={e => { if (!travado) e.currentTarget.style.background = '#059669'; }}
+                                                        onMouseLeave={e => { if (!travado) e.currentTarget.style.background = '#10b981'; }}
                                                     >
-                                                        {loading ? 'Carregando...' : <><CreditCard size={13} /> Pagar Conta</>}
+                                                        {pagandoPor === 'boleto'
+                                                            ? <><Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> Processando...</>
+                                                            : <><CreditCard size={14} /> Pagar Conta</>}
                                                     </button>
-                                                    </span>
-                                                );
-                                            }
-                                            return pixButton;
-                                        })()
-                                    )}
+                                                )}
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
-                            </div>
+                            )}
+
+                            {!isEditing && podeEscrever && energyStatus !== 'pago' && !invoice.pix_concessionaria_transacao_id
+                                && invoice.concessionaria_pdf_url && invoice.linha_digitavel && (
+                                <p style={{ margin: 0, fontSize: '0.74rem', lineHeight: 1.5, color: '#64748b', textAlign: 'right' }}>
+                                    Pix paga a qualquer dia e hora. O boleto de conta vencida só passa em dia útil, até as 22h.
+                                </p>
+                            )}
                         </div>
 
                         {/* VALOR DO ASSINANTE (BOLETO) */}
@@ -2300,6 +2324,7 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                     )}
                                 </div>
                             </div>
+                        </div>
                         </div>
 
                         <hr style={{ margin: '1.5rem 0', border: 'none', borderTop: '2px solid #f1f5f9' }} />
