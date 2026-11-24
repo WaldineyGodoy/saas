@@ -113,3 +113,42 @@ test('empate no disponível desempata pelo nome', () => {
     const usinas = [usina('b', 1000, { name: 'Beta' }), usina('a', 1000, { name: 'Alfa' })];
     assert.deepEqual(ids(usinasParaVincular({ usinas, ucs: [], franquia: 500 })), ['a', 'b']);
 });
+
+const SAZONAL = { '01': 1200, '02': 1200, '03': 1200, '04': 1200, '05': 1000, '06': 800, '07': 800, '08': 1000, '09': 1100, '10': 1100, '11': 1300, '12': 1300 }; // soma = 12 × 1100
+
+test('mês de menor e de maior energia livre e a média do ano (geração sazonal)', () => {
+    const r = usinasParaVincular({
+        usinas: [usina('a', 1100)],
+        ucs: [benef('a', 900)],
+        franquia: 100,
+        geracaoMensal: { a: SAZONAL },
+    })[0];
+    // livre = geração do mês − 900
+    assert.equal(r.menorMes.rotulo, 'Jun');
+    assert.equal(r.menorMes.livre, -100); // jun gera 800 < 900 ocupados: overbook
+    assert.equal(r.maiorMes.livre, 400);  // nov/dez geram 1300
+    assert.ok(['Nov', 'Dez'].includes(r.maiorMes.rotulo));
+    const soma = Object.values(SAZONAL).reduce((x, y) => x + y, 0);
+    assert.equal(soma, 13200);
+    assert.equal(r.mediaLivre, 200); // 1100 de média − 900
+});
+
+test('sem perfil mensal a geração é plana: menor = maior = média', () => {
+    const r = usinasParaVincular({ usinas: [usina('a', 1000)], ucs: [benef('a', 300)], franquia: 100 })[0];
+    assert.equal(r.menorMes.livre, 700);
+    assert.equal(r.maiorMes.livre, 700);
+    assert.equal(r.mediaLivre, 700);
+});
+
+test('o retrato do ano não conta a franquia da própria UC ao editar', () => {
+    const minha = benef('a', 400, { id: 'minha-uc' });
+    const r = usinasParaVincular({ usinas: [usina('a', 1000)], ucs: [minha, benef('a', 300)], franquia: 400, ucAtualId: 'minha-uc' })[0];
+    assert.equal(r.mediaLivre, 700);
+});
+
+test('usina sem geração estimada não tem retrato do ano', () => {
+    const r = usinasParaVincular({ usinas: [usina('a', null)], ucs: [], franquia: 100 })[0];
+    assert.equal(r.menorMes, null);
+    assert.equal(r.maiorMes, null);
+    assert.equal(r.mediaLivre, null);
+});
