@@ -8,7 +8,7 @@ Limites de caracteres de cada campo indicados entre parênteses.
 | Campo | Valor |
 |---|---|
 | Nome do app (30) | B2W Energia |
-| Pacote / Bundle ID | `br.com.b2wenergia.app` (iOS e Android) |
+| Pacote / Bundle ID | Android: `com.b2wenergia.app` (o mesmo do app criado no Play Console) · iOS: `br.com.b2wenergia.app` |
 | Categoria principal | **Utilidades** (Apple) · **Ferramentas** (Google) |
 | Categoria secundária (Apple) | Finanças |
 | Classificação etária | 4+ (Apple) · Livre (Google, questionário IARC: sem violência, sem conteúdo adulto, sem compras dentro do app) |

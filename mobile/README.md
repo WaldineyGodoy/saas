@@ -60,7 +60,7 @@ npx eas-cli@latest submit --platform ios      # App Store Connect
 npx eas-cli@latest submit --platform android  # Google Play
 ```
 
-Identificadores: `br.com.b2wenergia.app` (iOS e Android). Defina as variáveis `EXPO_PUBLIC_*`
+Identificadores: `com.b2wenergia.app` (Android, Play Store) e `br.com.b2wenergia.app` (iOS). Defina as variáveis `EXPO_PUBLIC_*`
 como *EAS environment variables* para os builds de nuvem.
 
 ## Nova UC pela conta de luz (termo aditivo)
