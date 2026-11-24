@@ -2,7 +2,7 @@
   "expo": {
     "name": "B2W Energia",
     "slug": "b2w-energia",
-    "version": "7.2.0",
+    "version": "7.2.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -51,7 +51,7 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "br.com.b2wenergia.app",
+      "package": "com.b2wenergia.app",
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.ACCESS_COARSE_LOCATION"
