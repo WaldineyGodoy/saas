@@ -1163,7 +1163,14 @@ Qualquer dúvida, é só responder esta mensagem.`;
                             .eq('uc_id', consumerUnit.id)
                             .not('status', 'in', '(concluida,recusada,cancelada)')
                             .limit(1) : { data: null };
-                        if (ttAberta?.length) {
+                        const { data: emAtraso } = ttAberta?.length ? { data: null } : await supabase
+                            .rpc('fn_tt_contas_em_atraso', { p_uc_id: consumerUnit?.id || null, p_usina_id: payload.usina_id });
+                        if (emAtraso?.length) {
+                            const mm = (d) => (d ? `${String(d).slice(5, 7)}/${String(d).slice(0, 4)}` : '—');
+                            const linhas = emAtraso.slice(0, 6).map(c => `• UC ${c.uc_numero} (${c.titular || 's/ titular'}) · ${mm(c.mes_referencia)} · ${c.status}`).join('\n');
+                            await showAlert(`A troca de titularidade não foi iniciada: há ${emAtraso.length} conta(s) de energia em atraso no CRM para o titular da UG, a usina ou a UC. A concessionária barraria a TT por débito.\n${linhas}${emAtraso.length > 6 ? '\n…' : ''}\nRegularize e inicie pelo painel "Troca de titularidade". Os demais dados serão salvos sem usina.`, 'warning');
+                            payload.usina_id = null;
+                        } else if (ttAberta?.length) {
                             await showAlert(`Esta UC já tem uma troca de titularidade em andamento (${String(ttAberta[0].status).replace(/_/g, ' ')}). A usina será vinculada quando ela concluir. Acompanhe ou destrave pelo painel "Troca de titularidade". Os demais dados serão salvos.`, 'info');
                             payload.usina_id = null;
                         } else {
