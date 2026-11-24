@@ -1,6 +1,6 @@
 {
   "name": "b2w-energia-mobile",
-  "version": "1.0.0",
+  "version": "7.2.0",
   "main": "index.ts",
   "dependencies": {
     "@expo-google-fonts/inter": "^0.4.2",

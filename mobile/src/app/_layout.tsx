@@ -1,6 +1,6 @@
-import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold } from '@expo-google-fonts/inter';
-import { JetBrainsMono_500Medium, JetBrainsMono_600SemiBold } from '@expo-google-fonts/jetbrains-mono';
-import { Manrope_700Bold, Manrope_800ExtraBold } from '@expo-google-fonts/manrope';
+import {
+  Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold, Inter_800ExtraBold,
+} from '@expo-google-fonts/inter';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useFonts } from 'expo-font';
 import * as Linking from 'expo-linking';
@@ -8,12 +8,14 @@ import { Stack, type Href } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { useColorScheme } from 'react-native';
+import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { BotaoVoltar } from '../components/BotaoVoltar';
 import { AuthProvider, useAuth } from '../contexts/AuthContext';
 import { extrairIndicador, guardarIndicacaoPendente } from '../lib/indicacao';
-import { aplicarEsquema, colors, fonts, type Esquema } from '../theme/tokens';
+import {
+  carregarEsquemaSalvo, colors, configurarTipografia, definirEsquema, fonts, useEsquema,
+} from '../theme/tokens';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -26,10 +28,16 @@ const comVoltar = (title: string, destino: Href) => ({
 function RootStack() {
   const { session, loading } = useAuth();
   const [fontsLoaded, fontError] = useFonts({
-    Manrope_700Bold, Manrope_800ExtraBold, Inter_400Regular, Inter_500Medium, Inter_600SemiBold,
-    JetBrainsMono_500Medium, JetBrainsMono_600SemiBold,
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
+    Inter_800ExtraBold,
   });
-  // Fonte que falha não pode travar o app em tela branca: segue com a do sistema.
+  // Se a fonte personalizada Inter falhar, ativa fallback nativo:
+  // SF Pro Display / SF Pro Text no iOS e Roboto no Android.
+  const plataforma = Platform.OS === 'ios' ? 'ios' : Platform.OS === 'android' ? 'android' : 'web';
+  configurarTipografia(plataforma, Boolean(fontsLoaded && !fontError));
   const ready = (fontsLoaded || !!fontError) && !loading;
 
   useEffect(() => {
@@ -87,9 +95,12 @@ function RootStack() {
 }
 
 export default function RootLayout() {
-  // Tema do celular (decisao do dono, 05/10/2026). Sem preferencia, escuro.
-  const esquema: Esquema = useColorScheme() === 'light' ? 'light' : 'dark';
-  aplicarEsquema(esquema);
+  const [esquema] = useEsquema();
+  useEffect(() => {
+    carregarEsquemaSalvo().then((salvo) => {
+      if (salvo) definirEsquema(salvo);
+    });
+  }, []);
   const [qc] = useState(
     () => new QueryClient({ defaultOptions: { queries: { staleTime: 60_000, retry: 1 } } }),
   );
@@ -97,7 +108,7 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <QueryClientProvider client={qc}>
         <AuthProvider>
-          <StatusBar style="light" />
+          <StatusBar style={esquema === 'light' ? 'dark' : 'light'} />
           {/* key: troca de tema redesenha o app inteiro com a paleta nova */}
           <RootStack key={esquema} />
         </AuthProvider>
