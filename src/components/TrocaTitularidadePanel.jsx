@@ -33,7 +33,9 @@ const EVENTOS = {
     erro: 'Erro na execução',
     cancelada: 'TT cancelada',
     recusada: 'TT recusada pela concessionária',
-    concluida: 'TT concluída'
+    concluida: 'TT concluída',
+    auditoria_aberta: 'Auditoria aberta: o CRM não tinha conta em atraso',
+    auditoria_resolvida: 'Auditoria concluída'
 };
 
 const label = { display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#475569', marginBottom: '0.4rem' };
@@ -56,6 +58,7 @@ export default function TrocaTitularidadePanel({ uc, usinas, subscribers, onUcAt
     const [rateio, setRateio] = useState(null);
     const [carregando, setCarregando] = useState(true);
     const [agindo, setAgindo] = useState(false);
+    const [notaAuditoria, setNotaAuditoria] = useState('');
 
     // Iniciar
     const [usinaId, setUsinaId] = useState('');
@@ -154,6 +157,12 @@ export default function TrocaTitularidadePanel({ uc, usinas, subscribers, onUcAt
         if (!ok) return;
         const r = await rpc('fn_iniciar_tt', { p_uc_id: uc.id, p_usina_id: usinaId }, 'TT criada. O robô protocola o pedido no portal.');
         if (r.ok) setUsinaId('');
+    };
+
+    const resolverAuditoria = async () => {
+        if (!notaAuditoria.trim()) { showAlert('Descreva o que a auditoria apurou antes de concluir.', 'warning'); return; }
+        const r = await rpc('fn_tt_auditoria_resolver', { p_tt_id: tt.id, p_nota: notaAuditoria }, 'Auditoria concluída.');
+        if (r.ok) setNotaAuditoria('');
     };
 
     const retentar = async () => {
@@ -262,6 +271,24 @@ export default function TrocaTitularidadePanel({ uc, usinas, subscribers, onUcAt
                             </div>
                             <div>A concessionária não aceita a TT enquanto houver débito. O processo foi finalizado e o robô não tenta de novo sozinho. Quite o débito e peça nova tentativa.</div>
                             {tt.debito_detalhe && <div style={{ marginTop: '0.4rem', color: '#be123c' }}>{tt.debito_detalhe}</div>}
+                        </div>
+                    )}
+
+                    {tt.auditoria_aberta_em && !tt.auditoria_resolvida_em && (
+                        <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '8px', padding: '0.8rem', fontSize: '0.82rem', color: '#92400e', lineHeight: 1.5 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 700 }}>
+                                <AlertCircle size={15} /> Auditoria aberta desde {fmtData(tt.auditoria_aberta_em)}
+                            </div>
+                            <div>{tt.auditoria_motivo}</div>
+                            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.6rem', flexWrap: 'wrap' }}>
+                                <input type="text" value={notaAuditoria} onChange={e => setNotaAuditoria(e.target.value)} placeholder="O que a auditoria apurou e o que foi feito" style={{ ...campo, flex: '1 1 260px' }} />
+                                <button type="button" disabled={agindo} onClick={resolverAuditoria} style={botao('#d97706', false)}>Concluir auditoria</button>
+                            </div>
+                        </div>
+                    )}
+                    {tt.auditoria_resolvida_em && (
+                        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.6rem 0.8rem', fontSize: '0.8rem', color: '#475569' }}>
+                            <b>Auditoria concluída em {fmtData(tt.auditoria_resolvida_em)}:</b> {tt.auditoria_nota}
                         </div>
                     )}
 
