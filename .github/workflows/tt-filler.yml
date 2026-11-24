@@ -1,0 +1,75 @@
+name: Troca de Titularidade (TT) na Agência Virtual
+
+# Protocola sozinho as TTs que estão em 'a_iniciar' (scraper/tt_filler.js
+# --auto-enviar). Nasceu em 23/11/2026, a pedido do dono: pôr a UC em TT no CRM
+# basta, ninguém precisa rodar o robô na mão.
+#
+# QUEM DISPARA: o banco, não este arquivo. Um gatilho em
+# `uc_transferencias_titularidade` chama `fn_disparar_tt()` (que aciona este
+# workflow pela API do GitHub, como o faturista) assim que uma TT fica pronta, e
+# o pg_cron `tt-rede-seguranca` refaz o disparo se alguma ficar esquecida.
+# Não reintroduza `schedule:` aqui: o agendador do GitHub já parou de disparar
+# sem aviso (ver scraper.yml).
+#
+# O runner é este (e não uma Edge Function) pelo mesmo motivo do faturista: o
+# Chromium precisa de Xvfb e `headless: false` para passar pelo WAF (Akamai).
+#
+# Duas execuções ao mesmo tempo não protocolam a mesma TT duas vezes:
+# `fn_tt_reivindicar` é atômica e o `concurrency` abaixo enfileira as execuções.
+on:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Motivo do disparo'
+        required: false
+        default: 'Manual trigger'
+
+concurrency:
+  group: tt-filler
+  cancel-in-progress: false
+
+jobs:
+  tt:
+    name: Protocolar TTs a_iniciar
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        working-directory: scraper
+        run: npm install
+
+      - name: Install Playwright Chromium
+        working-directory: scraper
+        run: npx playwright install chromium --with-deps
+
+      - name: Install Xvfb
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+
+      - name: Run TT filler (dentro do display virtual)
+        working-directory: scraper
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          HEADLESS: 'false'   # obrigatório: headless real é bloqueado pelo portal
+          SLOW_MO: '0'
+        run: xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" node tt_filler.js --auto-enviar
+
+      - name: Upload Debug Screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tt-debug-screenshots
+          path: scraper/downloads/debug/
+          if-no-files-found: ignore
+          retention-days: 14
