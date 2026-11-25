@@ -516,7 +516,7 @@ module.exports = {
      *   { resultado: 'conta_minima',   ref, valor }
      *   { resultado: 'parcelada',      ref, valor }   // existe, sem download aqui
      *   { resultado: 'falha_download', ref, erro }
-     *   { resultado: 'nao_disponivel' }
+     *   { resultado: 'nao_disponivel', refsVistas[] }  // referências que estavam na tela
      * Lança em erro estrutural (UC não encontrada, botão ausente).
      */
     async capturarFatura(page, uc, mesRefAlvo, ctx) {
@@ -838,7 +838,7 @@ module.exports = {
         }
 
         log(`   [Faturista] Referência ${mesRefAlvo} não encontrada. Disponíveis na tela: ${refsVistas.length ? refsVistas.join(', ') : '(nenhuma)'}`);
-        return { resultado: 'nao_disponivel' };
+        return { resultado: 'nao_disponivel', refsVistas: [...new Set(refsVistas)] };
     },
 
     /** Derruba a sessão do titular antes de logar com o próximo. */

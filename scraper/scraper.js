@@ -32,6 +32,32 @@ function mesAnterior(mesRef) {
     return `${String(m).padStart(2, '0')}/${a}`;
 }
 
+const valorMes = (ref) => { const [m, a] = ref.split('/').map(Number); return a * 12 + m; };
+
+/**
+ * "Hoje é dia de leitura, mas a fatura ainda não foi postada no portal."
+ * + o que estava na tela + o que dali ainda falta no CRM. O começo da frase
+ * não muda: é por ele que telas e bots reconhecem a situação.
+ *
+ * "Fora do CRM" só olha os 2 meses anteriores ao alvo: contas antigas pagas
+ * sem PDF guardado são normais e virariam ruído.
+ */
+async function mensagemNaoPostada(uc, refsVistas) {
+    const base = `Hoje é dia de leitura, mas a fatura ainda não foi postada no portal. Procurou ${uc.mesRefAlvo}`;
+    if (!refsVistas.length) return `${base}; nenhuma conta na tela.`;
+
+    const ordenadas = [...refsVistas].sort((a, b) => valorMes(b) - valorMes(a));
+    const piso = valorMes(uc.mesRefAlvo) - 2;
+    const faltando = [];
+    for (const ref of ordenadas) {
+        if (ref === uc.mesRefAlvo || valorMes(ref) < piso || valorMes(ref) > valorMes(uc.mesRefAlvo)) continue;
+        if (!(await contaJaGuardada(uc.id, ref))) faltando.push(ref);
+    }
+    const tela = ordenadas.slice(0, 6).join(', ') + (ordenadas.length > 6 ? ` e mais ${ordenadas.length - 6}` : '');
+    return `${base}; na tela: ${tela}.`
+        + (faltando.length ? ` NA TELA E FORA DO CRM: ${faltando.join(', ')}.` : '');
+}
+
 /** Mês inteiro anterior à ativação da UC: não há conta a buscar. */
 function antesDaAtivacao(mesRef, dataAtivacao) {
     if (!dataAtivacao) return false;
@@ -609,7 +635,12 @@ async function run() {
 
                             } else {
                                 console.log('   Fatura não disponível no portal ainda.');
-                                await updateUCStatus(uc.id, 'not_available', 'Hoje é dia de leitura, mas a fatura ainda não foi postada no portal.');
+                                // O que estava na tela vai junto para o CRM. Até 25/11/2026 só
+                                // "não postada" chegava ao banco, e o bot Leiturista não tinha
+                                // como saber que a 10/2026 estava no portal enquanto o robô
+                                // procurava 11/2026. Só leitura: nada aqui grava em invoices.
+                                const msg = await mensagemNaoPostada(uc, r.refsVistas || []);
+                                await updateUCStatus(uc.id, 'not_available', msg);
                             }
                         } catch (ucErr) {
                             console.error(`   Erro UC ${uc.numero_uc}: ${ucErr.message}`);
