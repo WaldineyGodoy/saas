@@ -23,6 +23,46 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY
 const DOWNLOAD_DIR = './downloads';
 const DEBUG_DIR = './downloads/debug';
 
+/** "10/2026" -> "09/2026" */
+function mesAnterior(mesRef) {
+    const [mm, yyyy] = String(mesRef || '').split('/').map(Number);
+    if (!mm || !yyyy) return null;
+    const m = mm === 1 ? 12 : mm - 1;
+    const a = mm === 1 ? yyyy - 1 : yyyy;
+    return `${String(m).padStart(2, '0')}/${a}`;
+}
+
+/** Mês inteiro anterior à ativação da UC: não há conta a buscar. */
+function antesDaAtivacao(mesRef, dataAtivacao) {
+    if (!dataAtivacao) return false;
+    const [mm, yyyy] = mesRef.split('/').map(Number);
+    const fimDoMes = new Date(Date.UTC(yyyy, mm, 0)).toISOString().slice(0, 10);
+    return fimDoMes < String(dataAtivacao).slice(0, 10);
+}
+
+/**
+ * Duas razões para não voltar ao portal: o PDF já está guardado, OU a
+ * conta foi parcelada. No parcelamento a fatura some da lista de
+ * débitos baixáveis, então insistir a cada 7 dias até desistir aos 60
+ * só gasta sessão e pinta a UC de vermelho no Calendário.
+ */
+async function contaJaGuardada(ucId, mesRef) {
+    const [mm, yyyy] = mesRef.split('/');
+    const inicioMes = `${yyyy}-${mm}-01`;
+    // Date.UTC evita depender do fuso da máquina: mes_referencia é uma coluna DATE.
+    // Number(mm) já aponta para o mês seguinte (o construtor é 0-indexed).
+    const fimMes = new Date(Date.UTC(Number(yyyy), Number(mm), 1)).toISOString().slice(0, 10);
+    const { data } = await supabase
+        .from('invoices')
+        .select('id, concessionaria_pdf_url, energy_bill_status')
+        .eq('uc_id', ucId)
+        .gte('mes_referencia', inicioMes)
+        .lt('mes_referencia', fimMes)
+        .or('concessionaria_pdf_url.not.is.null,energy_bill_status.eq.parcelada')
+        .limit(1);
+    return data && data.length > 0 ? data[0] : null;
+}
+
 async function run() {
     console.log('Iniciando Faturista (Modo CRM/Calendário)...');
 
@@ -147,6 +187,7 @@ async function run() {
             dia_leitura,
             dia_vencimento,
             status,
+            data_ativacao,
             data_desligamento,
             acompanhar_conta_ate,
             last_scraping_status,
@@ -280,6 +321,15 @@ async function run() {
         }
         // MODO JANELA: cada UC tem seu próprio mês-alvo (derivado da data da leitura)
         // e sua própria elegibilidade. No modo manual (TARGET_DAYS) segue o mês global.
+        //
+        // CONTA ATRASADA DO MÊS ANTERIOR: o alvo é sempre a ÚLTIMA leitura, então
+        // quando a concessionária publica uma conta depois da leitura seguinte, ela
+        // nunca mais era procurada. Em 25/11/2026 dez UCs (Guanabara e Brigitte,
+        // contas parceladas pela Cosern) tinham 10/2026 postada no portal e o robô
+        // procurava 11/2026. Agora o mês anterior vai junto quando falta no CRM.
+        // No modo janela o anterior só pega carona quando o atual está elegível:
+        // procurá-lo sozinho gravaria last_scraping_at e empurraria a busca do
+        // mês atual para a próxima retentativa de 7 dias.
         if (modoJanela) {
             if (!uc.dia_leitura) {
                 console.log(`[Janela] UC ${uc.numero_uc}: sem dia_leitura cadastrado. Pulando.`);
@@ -305,35 +355,27 @@ async function run() {
             uc.mesRefAlvo = currentMesRef;
         }
 
-        const [mm, yyyy] = uc.mesRefAlvo.split('/');
-        const inicioMes = `${yyyy}-${mm}-01`;
-        // Date.UTC evita depender do fuso da máquina: mes_referencia é uma coluna DATE,
-        // a comparação não pode variar conforme o TZ do runner.
-        // Number(mm) já aponta para o mês seguinte (o construtor é 0-indexed).
-        const fimMes = new Date(Date.UTC(Number(yyyy), Number(mm), 1)).toISOString().slice(0, 10);
+        // Anterior primeiro: a última passada é a que fica no status da UC.
+        const anterior = mesAnterior(uc.mesRefAlvo);
+        const refs = [];
+        if (anterior && !antesDaAtivacao(anterior, uc.data_ativacao)) {
+            refs.push({ ref: anterior, atrasada: true });
+        }
+        refs.push({ ref: uc.mesRefAlvo, atrasada: false });
 
-        // Duas razões para não voltar ao portal: o PDF já está guardado, OU a
-        // conta foi parcelada. No parcelamento a fatura some da lista de
-        // débitos baixáveis, então insistir a cada 7 dias até desistir aos 60
-        // só gasta sessão e pinta a UC de vermelho no Calendário.
-        const { data: existingInvoices } = await supabase
-            .from('invoices')
-            .select('id, concessionaria_pdf_url, energy_bill_status')
-            .eq('uc_id', uc.id)
-            .gte('mes_referencia', inicioMes)
-            .lt('mes_referencia', fimMes)
-            .or('concessionaria_pdf_url.not.is.null,energy_bill_status.eq.parcelada')
-            .limit(1);
-
-        if (existingInvoices && existingInvoices.length > 0) {
-            const motivo = existingInvoices[0].concessionaria_pdf_url ? 'já existe' : 'parcelada pela concessionária';
-            console.log(`[Código] UC ${uc.numero_uc}: Fatura [${uc.mesRefAlvo}] ${motivo}. Pulando scrape.`);
-            if (existingInvoices[0].concessionaria_pdf_url && uc.last_scraping_status !== 'success') {
-                await updateUCStatus(uc.id, 'success', 'Fatura detectada via consulta de banco de dados.');
+        for (const { ref, atrasada } of refs) {
+            const existente = await contaJaGuardada(uc.id, ref);
+            if (existente) {
+                if (atrasada) continue; // o normal: a conta anterior já está no CRM
+                const motivo = existente.concessionaria_pdf_url ? 'já existe' : 'parcelada pela concessionária';
+                console.log(`[Código] UC ${uc.numero_uc}: Fatura [${ref}] ${motivo}. Pulando scrape.`);
+                if (existente.concessionaria_pdf_url && uc.last_scraping_status !== 'success') {
+                    await updateUCStatus(uc.id, 'success', 'Fatura detectada via consulta de banco de dados.');
+                }
+            } else {
+                console.log(`[Código] UC ${uc.numero_uc}: Fatura [${ref}] pendente${atrasada ? ' (mês anterior, ainda não está no CRM)' : ''}. Adicionando à fila do Agente.`);
+                ucsToScrape.push({ ...uc, mesRefAlvo: ref, contaAtrasada: atrasada });
             }
-        } else {
-            console.log(`[Código] UC ${uc.numero_uc}: Fatura [${uc.mesRefAlvo}] pendente. Adicionando à fila do Agente.`);
-            ucsToScrape.push(uc);
         }
     }
 
