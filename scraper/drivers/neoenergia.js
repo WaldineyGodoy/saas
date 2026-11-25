@@ -57,6 +57,27 @@ async function irPara(page, rota) {
     await page.waitForTimeout(3000);
 }
 
+/**
+ * O spinner de carregamento do portal às vezes não some mais e cobre a tela
+ * inteira: em 25/11/2026 ele travou depois da 3ª UC e as 14 buscas seguintes
+ * morreram em "locator.click: Timeout" no botão Pesquisar, a sessão toda
+ * perdida. Espera ele sumir; se não sumir, recarrega a página e espera de
+ * novo. Se nem assim, falha só esta UC com uma mensagem clara.
+ */
+async function esperarSpinner(page, log, tentativas = 2) {
+    const spinner = page.locator('app-spinner .loading-spinner');
+    for (let t = 0; t <= tentativas; t++) {
+        const sumiu = await spinner.first().waitFor({ state: 'hidden', timeout: 20000 })
+            .then(() => true).catch(() => false);
+        if (sumiu) return;
+        if (t === tentativas) break;
+        log(`   [Faturista] Spinner do portal travado. Recarregando a página (${t + 1}/${tentativas})...`);
+        await page.reload({ waitUntil: 'domcontentloaded' }).catch(() => {});
+        await page.waitForTimeout(5000);
+    }
+    throw new Error('Portal travado: o carregamento não terminou nem após recarregar a página.');
+}
+
 /** "1.234,56" | "1234.56" | "1234,56" -> Number */
 function parseValor(raw) {
     if (!raw) return 0;
@@ -525,6 +546,7 @@ module.exports = {
             // Fase 3: Busca de UC em meus-imoveis (Reset explícito para cada UC)
             await irPara(page, ROTAS.meusImoveis);
             await page.waitForTimeout(3000);
+            await esperarSpinner(page, log);
 
             const ucSearchInput = page.locator('input[placeholder*="Unidade Consumidora"]').first();
             await ucSearchInput.waitFor({ state: 'visible', timeout: 15000 });
