@@ -372,6 +372,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete, init
 
     // Options Lists (ordem do ciclo; cores iguais as do Kanban de usinas)
     const statusOptions = [
+        { value: 'prospectado', label: 'Prospectado', color: '#0e7490', bg: '#cffafe' },
         { value: 'pre_operacao', label: 'Pré-Operação', color: '#6d28d9', bg: '#ede9fe' },
         { value: 'em_conexao', label: 'Em Conexão', color: '#9a3412', bg: '#ffedd5' },
         { value: 'gerando', label: 'Gerando', color: '#166534', bg: '#dcfce7' },
