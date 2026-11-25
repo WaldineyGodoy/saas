@@ -3,7 +3,8 @@ import { HardHat, Pause, Play } from 'lucide-react';
 import {
     textoItem, resumoCronograma, diasAte, formatarData, hojeISO,
     iniciarCronograma, alterarInicio, suspenderCronograma, retomarCronograma,
-    previsaoParaGravar, diasSuspensoAtual, diasSuspensosTotal
+    previsaoParaGravar, diasSuspensoAtual, diasSuspensosTotal,
+    anterioresPendentes, concluirAnteriores, ETAPAS_OBRA
 } from '../lib/cronogramaObra';
 
 // Cronograma da obra na aba Planta do modal da usina. Edita
@@ -55,10 +56,24 @@ export default function CronogramaObraUsina({ value, onChange }) {
         if ('previsto_para' in patch) novo.previsto_para = previsaoParaGravar(cronograma, patch.previsto_para);
         // Ao concluir sem data, assume hoje.
         if (patch.status === 'concluido' && !novo.concluido_em) novo.concluido_em = hojeISO();
-        onChange({
+        let proximo = {
             ...cronograma,
             itens: { ...(cronograma.itens || {}), [itemId]: novo }
-        });
+        };
+        // Ao concluir uma etapa, oferece concluir as anteriores ainda pendentes,
+        // com a data de hoje (a data desta alteração).
+        if (patch.status === 'concluido' && gravado.status !== 'concluido') {
+            const pendentes = anterioresPendentes(proximo, itemId);
+            if (pendentes.length) {
+                const nomes = ETAPAS_OBRA.flatMap(e => e.itens).filter(d => pendentes.includes(d.id)).map(d => `• ${d.label}`);
+                const ok = window.confirm(
+                    `Há ${pendentes.length} etapa(s) anterior(es) ainda não concluída(s):\n\n${nomes.join('\n')}\n\n`
+                    + `Marcar também como concluída(s) em ${formatarData(hojeISO())}?`
+                );
+                if (ok) proximo = concluirAnteriores(proximo, itemId, hojeISO());
+            }
+        }
+        onChange(proximo);
     };
 
     const inicio = resumo.inicioGeracao;

@@ -130,6 +130,23 @@ export const previsaoParaGravar = (cronograma, isoEfetivo) => {
 
 const todosItens = () => ETAPAS_OBRA.flatMap(e => e.itens);
 
+/** Ids dos itens ANTERIORES a itemId (ordem do catálogo) que ainda não estão concluídos. */
+export const anterioresPendentes = (cronograma, itemId) => {
+    const ordem = todosItens().map(d => d.id);
+    const pos = ordem.indexOf(itemId);
+    if (pos <= 0) return [];
+    return ordem.slice(0, pos).filter(id => itemDoCronograma(cronograma, id).status !== 'concluido');
+};
+
+/** Marca como concluídos, na data informada, os itens anteriores a itemId ainda pendentes. */
+export const concluirAnteriores = (cronograma, itemId, data = hojeISO()) => {
+    const pendentes = anterioresPendentes(cronograma, itemId);
+    if (!pendentes.length) return cronograma;
+    const itens = { ...(cronograma?.itens || {}) };
+    pendentes.forEach(id => { itens[id] = { ...(itens[id] || {}), status: 'concluido', concluido_em: data }; });
+    return { ...cronograma, itens };
+};
+
 /**
  * Inicia a obra: previsão de cada item não concluído = início + prazo do item.
  * Situação e % dos itens são mantidos.

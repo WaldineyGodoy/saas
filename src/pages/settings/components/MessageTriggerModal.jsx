@@ -97,6 +97,7 @@ export default function MessageTriggerModal({ isOpen, onClose, onSave, trigger }
             { id: 'inativo', label: 'Inativo' }
         ],
         power_plant: [
+            { id: 'prospectado', label: 'Prospectado' },
             { id: 'pre_operacao', label: 'Pré-Operação' },
             { id: 'em_conexao', label: 'Em Conexão' },
             { id: 'gerando', label: 'Gerando' },

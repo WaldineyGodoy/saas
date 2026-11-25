@@ -25,6 +25,7 @@ import { useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 
 const KANBAN_STATUSES = [
+    { status: 'prospectado', label: 'Prospectado', color: '#0e7490', bg: '#cffafe' },
     { status: 'pre_operacao', label: 'Pré-Operação', color: '#6d28d9', bg: '#ede9fe' },
     { status: 'em_conexao', label: 'Em Conexão', color: '#9a3412', bg: '#ffedd5' },
     { status: 'gerando', label: 'Gerando', color: '#166534', bg: '#dcfce7' },
