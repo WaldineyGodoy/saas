@@ -3,7 +3,7 @@ import { ocupaFranquia, resumoCapacidadeMensal } from '../lib/capacidade';
 import OcupacaoMensalUsina from './OcupacaoMensalUsina';
 import { useGeracaoMensal } from '../hooks/useGeracaoMensal';
 
-// Kanban "Construção" da lista de usinas: só usinas em Pré-Operação, em colunas
+// Kanban "Construção" da lista de usinas: usinas em Prospectado e Pré-Operação, em colunas
 // pelas macroetapas do cronograma da obra (aba Planta). A coluna vem da fase
 // atual (primeira etapa não concluída), então não há arrastar: para mover, atualize
 // o cronograma. A etapa 3 é a ligação à rede da concessionária durante a obra; o
@@ -46,6 +46,11 @@ function CardConstrucao({ usina, onClick }) {
                 <span style={{ padding: '0.2rem 0.6rem', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 'bold', background: cfg.fundo, color: cfg.cor }}>
                     {etapa ? etapa.selo : 'OBRA CONCLUÍDA'}
                 </span>
+                {usina.status === 'prospectado' && (
+                    <span style={{ padding: '0.2rem 0.6rem', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 'bold', background: '#cffafe', color: '#0e7490' }}>
+                        PROSPECTADO
+                    </span>
+                )}
                 {resumo.suspensa && (
                     <span style={{ padding: '0.2rem 0.6rem', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 'bold', background: '#fee2e2', color: '#991b1b' }}>
                         SUSPENSA
@@ -105,13 +110,14 @@ function CardConstrucao({ usina, onClick }) {
 }
 
 export default function KanbanConstrucaoUsinas({ usinas, onCardClick }) {
-    const emObra = (usinas || []).filter(u => u.status === 'pre_operacao');
+    const STATUS_EM_OBRA = ['prospectado', 'pre_operacao'];
+    const emObra = (usinas || []).filter(u => STATUS_EM_OBRA.includes(u.status));
     const porEtapa = (id) => emObra.filter(u => (resumoCronograma(u.cronograma_obra).atual?.etapa.id || 'geracao') === id);
 
     return (
         <>
             <p style={{ margin: '0 0 0.75rem', fontSize: '0.8rem', color: '#64748b' }}>
-                Usinas em Pré-Operação pela fase atual do cronograma da obra (aba Planta). A etapa 3 é a ligação à rede
+                Usinas em Prospectado e Pré-Operação pela fase atual do cronograma da obra (aba Planta). A etapa 3 é a ligação à rede
                 da concessionária; o status "Em Conexão" do Kanban Operação é a entrada da usina pronta no sistema B2W.
             </p>
             <div className="kanban-box">
