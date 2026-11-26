@@ -1,6 +1,9 @@
 import type { Session } from '@supabase/supabase-js';
 import { useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import {
+  ativarBiometria, atualizarTokenBiometria, biometriaAtiva, conferirBiometria, desativarBiometria, lerTokenBiometria,
+} from '../lib/biometria';
 import { DEMO } from '../lib/demo';
 import { supabase } from '../lib/supabase';
 
@@ -16,6 +19,11 @@ type AuthValue = {
   /** Apaga o login e abre pedido de cancelamento para a equipe (Edge Function excluir-conta-app). */
   excluirConta: () => Promise<string | null>;
   signOut: () => Promise<void>;
+  /** Face ID / digital: confere a biometria e abre a sessao com o token guardado. */
+  entrarComBiometria: (motivo: string) => Promise<string | null>;
+  /** Liga a biometria para o login atual (confere antes). null = ligada. */
+  ligarBiometria: (motivo: string) => Promise<string | null>;
+  desligarBiometria: () => Promise<void>;
   /** Login novo pela própria pessoa (cadastro aberto, 06/10/2026). Manda o
    *  código de 6 dígitos para o e-mail; a sessão só abre ao confirmar. */
   criarConta: (dados: { nome: string; celular: string; email: string; senha: string }) => Promise<string | null>;
@@ -58,6 +66,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     const { data } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s);
+      // O Supabase gira o refresh token: a biometria precisa sempre do mais novo.
+      if (s?.refresh_token) void atualizarTokenBiometria(s.refresh_token);
       // Troca de usuario nao pode herdar cache do anterior.
       if (!s) qc.clear();
     });
@@ -104,6 +114,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return msg || 'Não foi possível excluir a conta agora. Tente de novo.';
         }
         await supabase.auth.signOut().catch(() => {});
+        await desativarBiometria();
         qc.clear();
         return null;
       },
@@ -142,11 +153,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
       async signOut() {
         if (DEMO) return;
+        // Com biometria ativa, sai so deste aparelho: o token guardado continua
+        // valendo para o proximo "Entrar com Face ID".
+        if (await biometriaAtiva()) {
+          await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+          qc.clear();
+          return;
+        }
         // Sem rede ou com a sessão já expirada no servidor, o signOut global
         // falha; sair do aparelho tem que funcionar mesmo assim.
         const { error } = await supabase.auth.signOut().catch((e) => ({ error: e }));
         if (error) await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
         qc.clear();
+      },
+      async entrarComBiometria(motivo) {
+        if (DEMO) return null;
+        const token = await lerTokenBiometria();
+        if (!token) return 'Entre com a senha para ativar a biometria de novo.';
+        if (!(await conferirBiometria(motivo))) return null; // cancelou: fica na tela de senha, sem erro
+        const { error } = await supabase.auth.refreshSession({ refresh_token: token });
+        if (error) {
+          await desativarBiometria();
+          return /network|fetch/i.test(error.message)
+            ? 'Sem conexão. Verifique sua internet.'
+            : 'Seu acesso por biometria expirou. Entre com a senha para ativar de novo.';
+        }
+        return null;
+      },
+      async ligarBiometria(motivo) {
+        if (DEMO) return null;
+        const { data } = await supabase.auth.getSession();
+        if (!data.session) return 'Entre com a senha antes de ativar.';
+        if (!(await conferirBiometria(motivo))) return 'Biometria não confirmada.';
+        await ativarBiometria(data.session.refresh_token, data.session.user.email);
+        return null;
+      },
+      async desligarBiometria() {
+        await desativarBiometria();
       },
     }),
     [session, loading, qc, redefinindo],

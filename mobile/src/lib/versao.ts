@@ -10,4 +10,4 @@
  * Vale o maior nível que a versão tiver (layout + correção = X). Subir um
  * nível zera os da direita: 1.6.1 -> 2.0.0 (X), 1.7.0 (Y) ou 1.6.2 (Z).
  */
-export const NOVIDADES_DA_VERSAO = 'Tela da UC redesenhada: consumo do mês e conta projetada na concessionária, fatura atual com a B2W, economia gerada e histórico da injeção com a variação do consumo. Usinas: escolha o mês.';
+export const NOVIDADES_DA_VERSAO = 'Entre com Face ID ou digital (ative em Mais). Tela da UC redesenhada: conta na concessionária, economia gerada e fatura atual, com detalhamento ao tocar. Usinas: escolha o mês.';

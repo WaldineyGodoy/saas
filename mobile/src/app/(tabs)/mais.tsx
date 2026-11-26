@@ -1,11 +1,12 @@
 import { router } from 'expo-router';
 import Constants from 'expo-constants';
 import * as WebBrowser from 'expo-web-browser';
-import { useState } from 'react';
-import { Linking, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Linking, Switch, Text, View } from 'react-native';
 import { Button, Card, ListItem, Row, Screen, SectionLabel, SeletorTema } from '../../components/ui';
 import { useAuth } from '../../contexts/AuthContext';
 import { usePerfil } from '../../lib/api';
+import { biometriaAtiva, nomeBiometria } from '../../lib/biometria';
 import { avisar, confirmar } from '../../lib/dialogo';
 import { iniciais } from '../../lib/format';
 import { PRIVACIDADE_URL } from '../../lib/links';
@@ -18,8 +19,30 @@ const PAPEL: Record<string, string> = {
 };
 
 export default function Mais() {
-  const { signOut, session, excluirConta } = useAuth();
+  const { signOut, session, excluirConta, ligarBiometria, desligarBiometria } = useAuth();
   const [excluindo, setExcluindo] = useState(false);
+  // Face ID / digital: so aparece quando o aparelho tem biometria cadastrada.
+  const [bio, setBio] = useState<{ nome: string; ativa: boolean } | null>(null);
+  const [mudandoBio, setMudandoBio] = useState(false);
+  useEffect(() => {
+    (async () => {
+      const nome = await nomeBiometria();
+      if (nome) setBio({ nome, ativa: await biometriaAtiva() });
+    })();
+  }, []);
+  const alternarBio = async (ligar: boolean) => {
+    if (!bio) return;
+    setMudandoBio(true);
+    if (ligar) {
+      const falha = await ligarBiometria(`Ativar ${bio.nome} no B2W Energia`);
+      if (falha) avisar('Não foi possível ativar', falha);
+      else setBio({ ...bio, ativa: true });
+    } else {
+      await desligarBiometria();
+      setBio({ ...bio, ativa: false });
+    }
+    setMudandoBio(false);
+  };
   const { data: perfil } = usePerfil();
   const sair = () => confirmar('Sair da conta', 'Deseja sair do app?', 'Sair', signOut);
 
@@ -58,6 +81,26 @@ export default function Mais() {
       </Card>
       <SectionLabel title="Visualização (Tema)" />
       <SeletorTema />
+      {bio && (
+        <>
+          <SectionLabel title="Segurança" />
+          <ListItem
+            icon={bio.nome === 'Face ID' || bio.nome === 'reconhecimento facial' ? 'face' : 'fingerprint'}
+            iconColor={colors.accentEnergy}
+            title={`Entrar com ${bio.nome}`}
+            subtitle={bio.ativa ? 'Ligado neste aparelho. A senha nunca fica guardada.' : 'Entre sem digitar a senha.'}
+            right={
+              <Switch
+                value={bio.ativa}
+                disabled={mudandoBio}
+                onValueChange={alternarBio}
+                trackColor={{ true: colors.primary, false: colors.borderStrong }}
+                accessibilityLabel={`Entrar com ${bio.nome}`}
+              />
+            }
+          />
+        </>
+      )}
       <SectionLabel title="Conecte & ganhe" />
       <ListItem icon="diversity-3" iconColor={colors.primary} title="Home Connect" subtitle="Indique assinantes e ganhe cashback" onPress={() => router.push('/connect/home')} />
       <ListItem icon="electric-car" iconColor={colors.accentConnect} title="Drive Connect" subtitle="Sua rede de recargas" onPress={() => router.push('/connect/drive')} />

@@ -2,7 +2,7 @@ import { router } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { LinearGradient } from 'expo-linear-gradient';
 import type { ReactNode } from 'react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -10,6 +10,8 @@ import { Campo } from '../../components/Campo';
 import { FundoLogin } from '../../components/FundoLogin';
 import { Icon, type IconName } from '../../components/ui';
 import { useAuth } from '../../contexts/AuthContext';
+import { biometriaAtiva, emailDaBiometria, jaPerguntouBiometria, marcarPerguntouBiometria, nomeBiometria } from '../../lib/biometria';
+import { avisar, perguntar } from '../../lib/dialogo';
 import { envOk } from '../../lib/env';
 import { PRIVACIDADE_URL } from '../../lib/links';
 import { space, type } from '../../theme/tokens';
@@ -111,18 +113,66 @@ function Botao({
 }
 
 export default function Login() {
-  const { signIn } = useAuth();
+  const { signIn, entrarComBiometria, ligarBiometria } = useAuth();
   const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
   const [erro, setErro] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
+  // Face ID / digital: nome do recurso no aparelho e se ja esta ligado para este login.
+  const [bio, setBio] = useState<{ nome: string; ativa: boolean } | null>(null);
+  const [entrandoBio, setEntrandoBio] = useState(false);
+  const tentouBio = useRef(false);
+
+  const entrarBio = async (nome: string) => {
+    setErro(null);
+    setEntrandoBio(true);
+    const e = await entrarComBiometria(`Entrar no B2W Energia com ${nome}`);
+    setEntrandoBio(false);
+    if (e) {
+      setErro(e);
+      setBio((b) => (b ? { ...b, ativa: false } : b));
+    }
+  };
+
+  useEffect(() => {
+    (async () => {
+      const nome = await nomeBiometria();
+      if (!nome) return;
+      const ativa = await biometriaAtiva();
+      setBio({ nome, ativa });
+      if (ativa) {
+        const salvo = await emailDaBiometria();
+        if (salvo) setEmail((e) => e || salvo);
+        // Abre o Face ID sozinho uma vez, ao chegar na tela.
+        if (!tentouBio.current) {
+          tentouBio.current = true;
+          void entrarBio(nome);
+        }
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const entrar = async () => {
     if (!email || !senha) return setErro('Informe e-mail e senha.');
     setEnviando(true);
-    setErro(await signIn(email, senha));
+    const e = await signIn(email, senha);
+    setErro(e);
     setEnviando(false);
+    // Primeiro login com senha num aparelho com biometria: oferece uma vez.
+    if (!e && bio && !bio.ativa && !(await jaPerguntouBiometria())) {
+      await marcarPerguntouBiometria();
+      perguntar(
+        `Entrar com ${bio.nome}?`,
+        `Na próxima vez, entre sem digitar a senha. Você pode desligar em Mais.`,
+        'Ativar',
+        async () => {
+          const falha = await ligarBiometria(`Ativar ${bio.nome} no B2W Energia`);
+          if (falha) avisar('Não foi possível ativar', falha);
+        },
+      );
+    }
   };
 
   const esqueci = () => router.push({ pathname: '/recuperar-senha', params: email ? { email } : {} });
@@ -172,6 +222,10 @@ export default function Login() {
               ) : null}
               <View style={{ gap: 4, marginTop: 2 }}>
                 <Botao tipo="primario" label="Entrar" icon="login" onPress={entrar} loading={enviando} />
+                {bio?.ativa ? (
+                  <Botao tipo="vidro" label={`Entrar com ${bio.nome}`} icon={bio.nome === 'Face ID' || bio.nome === 'reconhecimento facial' ? 'face' : 'fingerprint'}
+                    onPress={() => entrarBio(bio.nome)} loading={entrandoBio} />
+                ) : null}
                 <Botao tipo="texto" label="Esqueci minha senha" onPress={esqueci} />
               </View>
             </Placa>

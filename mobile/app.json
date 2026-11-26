@@ -71,6 +71,12 @@
       "expo-router",
       "expo-font",
       "expo-secure-store",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Use o Face ID para entrar no app B2W Energia sem digitar a senha."
+        }
+      ],
       "expo-web-browser",
       [
         "expo-location",

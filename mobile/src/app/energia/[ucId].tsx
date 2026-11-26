@@ -1,6 +1,6 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import type { ReactNode } from 'react';
-import { Text, View } from 'react-native';
+import { useState, type ReactNode } from 'react';
+import { LayoutAnimation, Platform, Pressable, Text, UIManager, View } from 'react-native';
 import { BarChart } from '../../components/BarChart';
 import { PagarFatura } from '../../components/PagarFatura';
 import { Badge, Button, Card, Divider, Empty, ErrorState, Icon, KeyValue, Loading, Row, Screen, SectionLabel } from '../../components/ui';
@@ -14,35 +14,52 @@ const fmtTarifa = (v: number) => `R$ ${v.toFixed(5).replace('.', ',')}/kWh`;
 // Valor no meio da frase nao pode quebrar entre "R$" e o numero.
 const semQuebra = (s: string) => s.replace(/\s/g, ' ');
 
-/** Bloco de leitura: titulo, a quantidade em kWh que o abre, as parcelas e o total. */
-function Bloco({ titulo, legenda, kwh, kwhRotulo, children, total, totalRotulo, totalCor }: {
+if (Platform.OS === 'android') UIManager.setLayoutAnimationEnabledExperimental?.(true);
+
+/**
+ * Bloco recolhivel. Recolhido mostra so o que importa (o total); aberto, a
+ * quantidade em kWh e as parcelas que somam esse total. O toque e no
+ * cabecalho inteiro.
+ */
+function Bloco({ titulo, legenda, kwh, kwhRotulo, children, total, totalCor }: {
   titulo: string;
   legenda: string;
   kwh: number;
   kwhRotulo: string;
   children: ReactNode;
   total: string;
-  totalRotulo: string;
   totalCor: string;
 }) {
+  const [aberto, setAberto] = useState(false);
+  const alternar = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.create(200, 'easeOut', 'opacity'));
+    setAberto((a) => !a);
+  };
   return (
-    <Card style={{ gap: 2 }}>
-      <Row style={{ justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
-        <View style={{ flex: 1, gap: 2 }}>
-          <Text style={[type.headlineSm, { color: colors.onSurface }]}>{titulo}</Text>
-          <Text style={[type.bodySm, { color: colors.inkSecondary }]}>{legenda}</Text>
+    <Card style={{ paddingVertical: 0, paddingHorizontal: 0 }}>
+      <Pressable
+        onPress={alternar}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: aberto }}
+        accessibilityHint={aberto ? 'Recolhe o detalhamento' : 'Mostra o detalhamento'}
+        style={({ pressed }) => ({ padding: 16, opacity: pressed ? 0.85 : 1 })}
+      >
+        <Row style={{ justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={[type.headlineSm, { color: colors.onSurface }]}>{titulo}</Text>
+            <Text style={[type.bodySm, { color: colors.inkSecondary }]}>{legenda}</Text>
+          </View>
+          <Text style={[type.metric, { color: totalCor }]}>{total}</Text>
+          <Icon name={aberto ? 'expand-less' : 'expand-more'} size={22} color={colors.inkMuted} />
+        </Row>
+      </Pressable>
+      {aberto && (
+        <View style={{ paddingHorizontal: 16, paddingBottom: 12 }}>
+          <Divider />
+          <KeyValue k={kwhRotulo} v={`${fmtKwh(kwh)} kWh`} />
+          {children}
         </View>
-        <View style={{ alignItems: 'flex-end' }}>
-          <Text style={[type.metric, { color: colors.onSurface }]}>
-            {fmtKwh(kwh)}
-            <Text style={{ fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.onSurfaceVariant }}> kWh</Text>
-          </Text>
-          <Text style={[type.bodySm, { color: colors.inkMuted }]}>{kwhRotulo}</Text>
-        </View>
-      </Row>
-      <View style={{ marginTop: 8 }}>{children}</View>
-      <Divider />
-      <KeyValue k={totalRotulo} v={total} bold vColor={totalCor} />
+      )}
     </Card>
   );
 }
@@ -97,18 +114,9 @@ export default function UcDetalhe() {
             ) : null}
           </Row>
 
-          <Bloco titulo="Consumo do mês" legenda="Na concessionária, sem a B2W" kwh={r.consumoKwh} kwhRotulo="consumidos"
-            totalRotulo="Conta projetada na concessionária" total={semTarifa ? '—' : fmtBRL(r.contaProjetada)} totalCor={colors.onSurface}>
+          <Bloco titulo="Consumo do mês" legenda="Conta na concessionária, sem a B2W" kwh={r.consumoKwh} kwhRotulo="Consumo"
+            total={semTarifa ? '—' : fmtBRL(r.contaProjetada)} totalCor={colors.onSurface}>
             <KeyValue k="Energia compensada (tarifa cheia)" v={fmtBRL(r.compensadaCheia)} />
-            {r.naoCompensada > 0 && <KeyValue k="Consumo não compensado" v={fmtBRL(r.naoCompensada)} />}
-            <KeyValue k="Iluminação pública" v={fmtBRL(r.iluminacao)} />
-            {r.outros > 0 && <KeyValue k="Outros lançamentos" v={fmtBRL(r.outros)} />}
-            {r.parcelamento > 0 && <KeyValue k="Parcelamento" v={fmtBRL(r.parcelamento)} />}
-          </Bloco>
-
-          <Bloco titulo="Fatura atual" legenda="Com a B2W" kwh={r.compensadoKwh} kwhRotulo="compensados"
-            totalRotulo="Valor da fatura" total={fmtBRL(r.valorFatura)} totalCor={colors.primaryLight}>
-            <KeyValue k="Energia compensada com desconto" v={fmtBRL(r.compensadaComDesconto)} />
             {r.naoCompensada > 0 && <KeyValue k="Consumo não compensado" v={fmtBRL(r.naoCompensada)} />}
             <KeyValue k="Iluminação pública" v={fmtBRL(r.iluminacao)} />
             {r.outros > 0 && <KeyValue k="Outros lançamentos" v={fmtBRL(r.outros)} />}
@@ -135,6 +143,15 @@ export default function UcDetalhe() {
               Diferença entre a energia compensada na tarifa cheia ({semQuebra(fmtBRL(r.compensadaCheia))}) e com o desconto B2W ({semQuebra(fmtBRL(r.compensadaComDesconto))}).
             </Text>
           </View>
+
+          <Bloco titulo="Fatura atual" legenda="Valor da fatura, com a B2W" kwh={r.compensadoKwh} kwhRotulo="Energia compensada"
+            total={fmtBRL(r.valorFatura)} totalCor={colors.primaryLight}>
+            <KeyValue k="Energia compensada com desconto" v={fmtBRL(r.compensadaComDesconto)} />
+            {r.naoCompensada > 0 && <KeyValue k="Consumo não compensado" v={fmtBRL(r.naoCompensada)} />}
+            <KeyValue k="Iluminação pública" v={fmtBRL(r.iluminacao)} />
+            {r.outros > 0 && <KeyValue k="Outros lançamentos" v={fmtBRL(r.outros)} />}
+            {r.parcelamento > 0 && <KeyValue k="Parcelamento" v={fmtBRL(r.parcelamento)} />}
+          </Bloco>
 
           {hist.length > 1 && (
             <Card style={{ gap: 12 }}>
