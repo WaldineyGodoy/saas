@@ -9,7 +9,7 @@ import { useBranding } from '../contexts/BrandingContext';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import './InvoicesModal.css';
-import { Download, Loader2, Info, Clock, RefreshCw } from 'lucide-react';
+import { Download, Loader2, Info, Clock, RefreshCw, X, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
 import HistoryTimeline from './HistoryTimeline';
 import * as pdfjsLib from 'pdfjs-dist';
 // Explicitly load the worker for pdfjs
@@ -1419,115 +1419,280 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
         }
     };
 
+    const invInputStyle = {
+        width: '100%',
+        padding: '0.68rem 0.9rem',
+        border: '1px solid #cbd5e1',
+        borderRadius: '10px',
+        fontSize: '0.9rem',
+        color: '#0f172a',
+        fontWeight: 600,
+        backgroundColor: '#f8fafc',
+        outline: 'none',
+        boxSizing: 'border-box',
+        fontVariantNumeric: 'tabular-nums',
+        transition: 'all 0.15s ease'
+    };
+
+    const invLabelStyle = {
+        display: 'block',
+        fontSize: '0.74rem',
+        fontWeight: 700,
+        color: '#475569',
+        marginBottom: '0.4rem',
+        textTransform: 'uppercase',
+        letterSpacing: '0.03em'
+    };
+
+    const invCardStyle = {
+        background: '#ffffff',
+        padding: '1.25rem 1.4rem',
+        borderRadius: '14px',
+        border: '1px solid #e2e8f0',
+        boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04)'
+    };
+
+    const formattedMesRef = (() => {
+        if (!formData.mes_referencia || !formData.mes_referencia.includes('-')) return formData.mes_referencia || '—';
+        const [y, m] = formData.mes_referencia.split('-');
+        const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+        return `${months[parseInt(m, 10) - 1] || m}/${y}`;
+    })();
+
+    const compRatioPct = (() => {
+        const tot = Number(formData.consumo_kwh) || 0;
+        const comp = Number(formData.consumo_compensado) || 0;
+        if (tot <= 0) return null;
+        return Math.min(100, Math.round((comp / tot) * 100));
+    })();
+
     return (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, backdropFilter: 'blur(4px)' }}>
-            <div style={{ background: '#f8fafc', borderRadius: '12px', width: '95%', maxWidth: '920px', maxHeight: '95vh', overflowY: 'auto', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}>
+        <div style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.68)',
+            display: 'flex', justifyContent: 'center', alignItems: 'center',
+            zIndex: 1000, backdropFilter: 'blur(6px)', padding: '1rem'
+        }}>
+            <style>{`
+                @keyframes invFadeIn {
+                    from { opacity: 0; transform: translateY(6px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
+                .inv-input:focus {
+                    border-color: #2563eb !important;
+                    background-color: #ffffff !important;
+                    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12) !important;
+                }
+                .inv-grid-2 {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+                    gap: 1.25rem;
+                    align-items: start;
+                }
+                .inv-grid-3 {
+                    display: grid;
+                    grid-template-columns: repeat(3, 1fr);
+                    gap: 1rem;
+                }
+                .custom-tabs-scroll::-webkit-scrollbar { height: 5px; }
+                .custom-tabs-scroll::-webkit-scrollbar-track { background: #f1f5f9; }
+                .custom-tabs-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 99px; }
+                @media (max-width: 900px) {
+                    .inv-grid-2, .inv-grid-3 {
+                        grid-template-columns: 1fr;
+                    }
+                }
+            `}</style>
 
-                {/* Header */}
-                <div style={{ padding: '1.5rem', background: 'white', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTopLeftRadius: '12px', borderTopRightRadius: '12px', position: 'relative' }}>
-                    <style>{`
-                        @keyframes fadeInOut {
-                            0% { opacity: 0; transform: translate(-50%, -60%); }
-                            15% { opacity: 1; transform: translate(-50%, -50%); }
-                            85% { opacity: 1; transform: translate(-50%, -50%); }
-                            100% { opacity: 0; transform: translate(-50%, -40%); }
-                        }
-                        .custom-tabs-scroll::-webkit-scrollbar {
-                            height: 5px;
-                        }
-                        .custom-tabs-scroll::-webkit-scrollbar-track {
-                            background: #f1f5f9;
-                        }
-                        .custom-tabs-scroll::-webkit-scrollbar-thumb {
-                            background: #cbd5e1;
-                            border-radius: 99px;
-                        }
-                        .custom-tabs-scroll::-webkit-scrollbar-thumb:hover {
-                            background: #94a3b8;
-                        }
-                    `}</style>
-                    {showSuccess && (
-                        <div style={{
-                            position: 'absolute',
-                            top: '50%',
-                            left: '50%',
-                            transform: 'translate(-50%, -50%)',
-                            background: 'white',
-                            color: '#1e293b',
-                            padding: '1.5rem 2.5rem',
-                            borderRadius: '24px',
-                            border: '1px solid #e2e8f0',
-                            fontWeight: 800,
-                            zIndex: 100,
-                            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            gap: '1rem',
-                            animation: 'slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
-                        }}>
-                            <div style={{ background: '#22c55e', color: 'white', borderRadius: '50%', padding: '12px', display: 'flex' }}>
-                                <CheckCircle2 size={32} />
-                            </div>
-                            <div style={{ textAlign: 'center' }}>
-                                <div style={{ fontSize: '1.2rem', marginBottom: '0.25rem' }}>Sucesso!</div>
-                                <div style={{ fontSize: '0.9rem', color: '#64748b', fontWeight: 500 }}>Fatura salva com sucesso.</div>
-                            </div>
-                        </div>
-                    )}
-                    <div>
-                        <h3 style={{ fontSize: '1.25rem', color: '#1e293b', fontWeight: 'bold' }}>Fatura</h3>
-                        <p style={{ color: '#64748b', fontSize: '0.9rem' }}>Após processamento da Conta de Energia Concessionária</p>
-                    </div>
-                    <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#94a3b8' }}>&times;</button>
-{extraActions && extraActions(invoice)}
-                </div>
-
-                {/* Status Selection - Premium Pipeline Style */}
-                {canManageStatus && (
-                    <div style={{ 
-                        padding: '1.25rem 1.5rem', 
-                        background: '#f8fafc', 
-                        borderBottom: '1px solid #e2e8f0',
+            <div style={{
+                background: '#f8fafc',
+                borderRadius: '16px',
+                width: '96vw',
+                maxWidth: '1180px',
+                height: '90vh',
+                maxHeight: '90vh',
+                overflow: 'hidden',
+                border: '1px solid rgba(255, 255, 255, 0.14)',
+                boxShadow: '0 25px 50px -12px rgba(15, 23, 42, 0.38)',
+                display: 'flex',
+                flexDirection: 'column',
+                position: 'relative'
+            }}>
+                {showSuccess && (
+                    <div style={{
+                        position: 'absolute',
+                        top: '50%',
+                        left: '50%',
+                        transform: 'translate(-50%, -50%)',
+                        background: '#ffffff',
+                        color: '#0f172a',
+                        padding: '1.5rem 2.25rem',
+                        borderRadius: '16px',
+                        border: '1px solid #bbf7d0',
+                        fontWeight: 800,
+                        zIndex: 150,
+                        boxShadow: '0 20px 40px -10px rgba(15, 23, 42, 0.3)',
                         display: 'flex',
                         flexDirection: 'column',
-                        gap: '0.75rem'
+                        alignItems: 'center',
+                        gap: '0.75rem',
+                        animation: 'invFadeIn 0.2s ease-out'
                     }}>
-                        <div style={{ 
-                            display: 'flex', 
-                            alignItems: 'center', 
-                            justifyContent: 'space-between'
+                        <div style={{ background: '#16a34a', color: 'white', borderRadius: '50%', padding: '10px', display: 'flex' }}>
+                            <CheckCircle2 size={28} />
+                        </div>
+                        <div style={{ textAlign: 'center' }}>
+                            <div style={{ fontSize: '1.1rem', marginBottom: '0.15rem' }}>Sucesso!</div>
+                            <div style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 500 }}>Fatura salva com sucesso.</div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Pinned Authority Header */}
+                <div style={{
+                    padding: '1.1rem 1.75rem',
+                    background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+                    borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    gap: '1rem',
+                    flexWrap: 'wrap',
+                    color: '#ffffff',
+                    flexShrink: 0
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.95rem', minWidth: 0 }}>
+                        <div style={{
+                            width: '44px',
+                            height: '44px',
+                            borderRadius: '12px',
+                            background: 'rgba(59, 130, 246, 0.18)',
+                            border: '1px solid rgba(96, 165, 250, 0.35)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: '#60a5fa',
+                            flexShrink: 0
                         }}>
-                            <label style={{ 
-                                fontSize: '0.75rem', 
-                                color: '#64748b', 
-                                fontWeight: 800, 
-                                textTransform: 'uppercase', 
-                                letterSpacing: '0.05em',
+                            <FileText size={22} />
+                        </div>
+                        <div style={{ minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+                                <h3 style={{ margin: 0, fontSize: '1.2rem', color: '#ffffff', fontWeight: 800, letterSpacing: '-0.02em' }}>
+                                    {invoice ? 'Fatura de Energia' : 'Nova Fatura'}
+                                </h3>
+                                <span style={{
+                                    padding: '0.18rem 0.65rem',
+                                    borderRadius: '999px',
+                                    background: 'rgba(56, 189, 248, 0.18)',
+                                    border: '1px solid rgba(56, 189, 248, 0.35)',
+                                    color: '#7dd3fc',
+                                    fontSize: '0.73rem',
+                                    fontWeight: 700,
+                                    fontVariantNumeric: 'tabular-nums'
+                                }}>
+                                    Ref. {formattedMesRef}
+                                </span>
+                                {selectedUc?.numero_uc && (
+                                    <span style={{
+                                        padding: '0.18rem 0.65rem',
+                                        borderRadius: '999px',
+                                        background: 'rgba(255, 255, 255, 0.08)',
+                                        border: '1px solid rgba(255, 255, 255, 0.16)',
+                                        color: '#e2e8f0',
+                                        fontSize: '0.73rem',
+                                        fontWeight: 700,
+                                        fontVariantNumeric: 'tabular-nums'
+                                    }}>
+                                        UC {selectedUc.numero_uc}
+                                    </span>
+                                )}
+                            </div>
+                            <p style={{ margin: '0.2rem 0 0 0', color: '#94a3b8', fontSize: '0.8rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {selectedUc
+                                    ? (selectedUc.subscribers?.name || selectedUc.titular_conta || 'Unidade Consumidora selecionada')
+                                    : 'Apuração após processamento da conta da concessionária'}
+                            </p>
+                        </div>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.85rem',
+                            background: 'rgba(255, 255, 255, 0.06)',
+                            border: '1px solid rgba(255, 255, 255, 0.12)',
+                            borderRadius: '10px',
+                            padding: '0.38rem 0.85rem',
+                            fontVariantNumeric: 'tabular-nums'
+                        }}>
+                            <div>
+                                <div style={{ fontSize: '0.62rem', textTransform: 'uppercase', color: '#94a3b8', fontWeight: 700 }}>Fatura Assinante</div>
+                                <div style={{ fontSize: '0.88rem', fontWeight: 800, color: '#4ade80' }}>{formData.valor_a_pagar || 'R$ 0,00'}</div>
+                            </div>
+                            <div style={{ width: '1px', height: '24px', background: 'rgba(255, 255, 255, 0.12)' }} />
+                            <div>
+                                <div style={{ fontSize: '0.62rem', textTransform: 'uppercase', color: '#94a3b8', fontWeight: 700 }}>Economia</div>
+                                <div style={{ fontSize: '0.86rem', fontWeight: 700, color: '#38bdf8' }}>{formData.economia_reais || 'R$ 0,00'}</div>
+                            </div>
+                        </div>
+
+                        {extraActions && extraActions(invoice)}
+
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            aria-label="Fechar modal"
+                            style={{
+                                background: 'rgba(255, 255, 255, 0.08)',
+                                border: '1px solid rgba(255, 255, 255, 0.12)',
+                                width: '38px',
+                                height: '38px',
+                                borderRadius: '10px',
+                                cursor: 'pointer',
+                                color: '#e2e8f0',
                                 display: 'flex',
                                 alignItems: 'center',
-                                gap: '0.5rem'
-                            }}>
-                                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#2563eb' }}></div>
-                                Status Atual da Fatura
-                            </label>
-                            <span style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 500 }}>
-                                Clique para alterar o status
-                            </span>
-                        </div>
-                        
-                        <div style={{ 
-                            display: 'flex', 
-                            gap: '0.6rem', 
-                            flexWrap: 'wrap',
-                            justifyContent: 'flex-start'
+                                justifyContent: 'center'
+                            }}
+                        >
+                            <X size={20} />
+                        </button>
+                    </div>
+                </div>
+
+                {/* Status Pipeline Strip */}
+                {canManageStatus && (
+                    <div style={{
+                        padding: '0.7rem 1.75rem',
+                        background: '#f8fafc',
+                        borderBottom: '1px solid #e2e8f0',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '0.85rem',
+                        flexWrap: 'wrap',
+                        flexShrink: 0
+                    }}>
+                        <span style={{
+                            fontSize: '0.72rem',
+                            color: '#475569',
+                            fontWeight: 800,
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.04em',
+                            whiteSpace: 'nowrap'
                         }}>
+                            Status da Fatura:
+                        </span>
+
+                        <div style={{ display: 'flex', gap: '0.45rem', flexWrap: 'wrap', flex: 1, justifyContent: 'flex-start' }}>
                             {[
-                                { id: 'ag_emissao_boleto', label: 'Sem Faturamento', icon: FileText, color: '#2563eb', bg: '#eff6ff' },
-                                { id: 'a_vencer', label: 'A Vencer', icon: Calculator, color: '#0284c7', bg: '#f0f9ff' },
-                                { id: 'confirmado', label: 'Confirmado', icon: CheckCircle2, color: '#0891b2', bg: '#ecfeff' },
-                                { id: 'pago', label: 'Pago', icon: CheckCircle, color: '#059669', bg: '#ecfdf5' },
-                                { id: 'atrasado', label: 'Atrasado', icon: AlertCircle, color: '#dc2626', bg: '#fef2f2' }
+                                { id: 'ag_emissao_boleto', label: 'Sem Faturamento', icon: FileText, color: '#1d4ed8', bg: '#eff6ff', border: '#93c5fd' },
+                                { id: 'a_vencer', label: 'A Vencer', icon: Calculator, color: '#0369a1', bg: '#f0f9ff', border: '#7dd3fc' },
+                                { id: 'confirmado', label: 'Confirmado', icon: CheckCircle2, color: '#0e7490', bg: '#ecfeff', border: '#67e8f9' },
+                                { id: 'pago', label: 'Pago', icon: CheckCircle, color: '#15803d', bg: '#f0fdf4', border: '#86efac' },
+                                { id: 'atrasado', label: 'Atrasado', icon: AlertCircle, color: '#b91c1c', bg: '#fef2f2', border: '#fca5a5' }
                             ].map((s) => {
                                 const isActive = formData.status === s.id;
                                 return (
@@ -1536,27 +1701,22 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
                                         type="button"
                                         onClick={() => setFormData({ ...formData, status: s.id })}
                                         style={{
-                                            flex: '1 1 auto',
-                                            minWidth: '130px',
-                                            padding: '0.6rem 0.8rem',
-                                            borderRadius: '10px',
-                                            border: '1px solid',
-                                            borderColor: isActive ? s.color : '#e2e8f0',
-                                            background: isActive ? s.bg : 'white',
+                                            padding: '0.4rem 0.78rem',
+                                            borderRadius: '8px',
+                                            border: `1px solid ${isActive ? s.border : '#e2e8f0'}`,
+                                            background: isActive ? s.bg : '#ffffff',
                                             color: isActive ? s.color : '#64748b',
-                                            fontWeight: isActive ? 700 : 500,
-                                            fontSize: '0.8rem',
+                                            fontWeight: isActive ? 700 : 600,
+                                            fontSize: '0.78rem',
                                             cursor: 'pointer',
-                                            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                                            display: 'flex',
+                                            transition: 'all 0.15s',
+                                            display: 'inline-flex',
                                             alignItems: 'center',
-                                            justifyContent: 'center',
-                                            gap: '0.5rem',
-                                            boxShadow: isActive ? `0 4px 6px -1px ${s.color}20` : 'none',
-                                            transform: isActive ? 'translateY(-1px)' : 'none'
+                                            gap: '0.4rem',
+                                            whiteSpace: 'nowrap'
                                         }}
                                     >
-                                        <s.icon size={14} strokeWidth={isActive ? 2.5 : 2} />
+                                        <s.icon size={14} strokeWidth={isActive ? 2.4 : 2} />
                                         {s.label}
                                     </button>
                                 );
@@ -1565,92 +1725,135 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
                     </div>
                 )}
 
-                {/* Tabs Navigation */}
-                <div 
+                {/* Pinned Tabs Navigation */}
+                <div
                     className="custom-tabs-scroll"
                     style={{
                         display: 'flex',
+                        alignItems: 'center',
                         borderBottom: '1px solid #e2e8f0',
-                        background: 'white',
-                        padding: '0 1.25rem',
+                        background: '#ffffff',
+                        padding: '0.55rem 1.75rem',
                         flexWrap: 'nowrap',
                         overflowX: 'auto',
                         width: '100%',
-                        gap: '0.25rem',
-                        scrollbarWidth: 'thin'
+                        gap: '0.35rem',
+                        scrollbarWidth: 'thin',
+                        flexShrink: 0,
+                        boxSizing: 'border-box'
                     }}
                 >
                     {[
-                        { id: 'geral', label: 'Identificação', icon: <Info size={18} /> },
-                        { id: 'consumo', label: 'Consumo', icon: <Zap size={18} /> },
-                        { id: 'financeiro', label: 'Financeiro', icon: <DollarSign size={18} /> },
-                        { id: 'resumo', label: 'Conta de Energia', icon: <FileText size={18} /> },
-                        { id: 'resumo_fatura', label: 'Resumo da Fatura', icon: <Calculator size={18} /> },
-                        ...((invoice || localInvoiceId) ? [{ id: 'historico', label: 'Histórico', icon: <Clock size={18} /> }] : [])
-                    ].map(tab => (
-                        <button
-                            key={tab.id}
-                            type="button"
-                            onClick={() => setActiveTab(tab.id)}
-                            style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '0.6rem',
-                                padding: '1rem 0.85rem',
-                                border: 'none',
-                                background: 'none',
-                                cursor: 'pointer',
-                                fontSize: '0.9rem',
-                                fontWeight: activeTab === tab.id ? '700' : '500',
-                                color: activeTab === tab.id ? '#2563eb' : '#64748b',
-                                borderBottom: activeTab === tab.id ? '3px solid #2563eb' : '3px solid transparent',
-                                transition: 'all 0.2s ease-in-out',
-                                whiteSpace: 'nowrap',
-                                flexShrink: 0,
-                                outline: 'none',
-                                opacity: activeTab === tab.id ? 1 : 0.8
-                            }}
-                            onMouseOver={e => {
-                                if (activeTab !== tab.id) {
-                                    e.currentTarget.style.color = '#2563eb';
-                                    e.currentTarget.style.opacity = '1';
-                                }
-                            }}
-                            onMouseOut={e => {
-                                if (activeTab !== tab.id) {
-                                    e.currentTarget.style.color = '#64748b';
-                                    e.currentTarget.style.opacity = '0.8';
-                                }
-                            }}
-                        >
-                            {tab.icon}
-                            {tab.label}
-                        </button>
-                    ))}
+                        { id: 'geral', label: 'Identificação', icon: Info, badge: null },
+                        { id: 'consumo', label: 'Consumo', icon: Zap, badge: formData.consumo_kwh ? `${formData.consumo_kwh} kWh` : null },
+                        { id: 'financeiro', label: 'Financeiro', icon: DollarSign, badge: null },
+                        { id: 'resumo', label: 'Conta de Energia', icon: FileText, badge: null },
+                        { id: 'resumo_fatura', label: 'Resumo da Fatura', icon: Calculator, badge: null },
+                        ...((invoice || localInvoiceId) ? [{ id: 'historico', label: 'Histórico', icon: Clock, badge: null }] : [])
+                    ].map(tab => {
+                        const isActive = activeTab === tab.id;
+                        const Icon = tab.icon;
+                        return (
+                            <button
+                                key={tab.id}
+                                type="button"
+                                onClick={() => setActiveTab(tab.id)}
+                                style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '0.48rem',
+                                    padding: '0.5rem 0.9rem',
+                                    borderRadius: '10px',
+                                    border: `1px solid ${isActive ? '#bfdbfe' : 'transparent'}`,
+                                    background: isActive ? '#eff6ff' : 'transparent',
+                                    cursor: 'pointer',
+                                    fontSize: '0.84rem',
+                                    fontWeight: isActive ? 700 : 600,
+                                    color: isActive ? '#1d4ed8' : '#475569',
+                                    transition: 'all 0.15s ease',
+                                    whiteSpace: 'nowrap',
+                                    flexShrink: 0,
+                                    outline: 'none'
+                                }}
+                            >
+                                <Icon size={16} color={isActive ? '#2563eb' : '#64748b'} />
+                                <span>{tab.label}</span>
+                                {tab.badge && (
+                                    <span style={{
+                                        padding: '0.08rem 0.45rem',
+                                        borderRadius: '999px',
+                                        fontSize: '0.68rem',
+                                        fontWeight: 700,
+                                        fontVariantNumeric: 'tabular-nums',
+                                        background: isActive ? '#dbeafe' : '#f1f5f9',
+                                        color: isActive ? '#1e40af' : '#64748b'
+                                    }}>
+                                        {tab.badge}
+                                    </span>
+                                )}
+                            </button>
+                        );
+                    })}
                 </div>
 
-                <form onSubmit={handleSubmit} style={{ padding: '2rem' }}>
+                {/* Form wrapping Scrollable Body + Pinned Footer */}
+                <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+                    <div style={{ flex: 1, overflowY: 'auto', padding: '1.35rem 1.75rem' }}>
 
-                    {/* Tab Content */}
-                    <div style={{ minHeight: '350px' }}>
+                        {/* ==================== SEÇÃO 1: IDENTIFICAÇÃO ==================== */}
                         {activeTab === 'geral' && (
-                            <div style={{ animation: 'fadeIn 0.3s ease' }}>
-                                <style>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }`}</style>
-                                {/* UC Search Field */}
-                                <div style={{ marginBottom: '2rem', position: 'relative' }}>
-                                    <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.6rem', color: '#475569', fontWeight: 600 }}>Unidade Consumidora</label>
+                            <div style={{ animation: 'invFadeIn 0.2s ease-out', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                                {/* Unidade Consumidora */}
+                                <div style={{ ...invCardStyle, position: 'relative' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem', paddingBottom: '0.65rem', borderBottom: '1px solid #f1f5f9' }}>
+                                        <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                                            <Zap size={17} color="#2563eb" /> Unidade Consumidora (UC)
+                                        </h4>
+                                        {selectedUc && (
+                                            <span style={{ fontSize: '0.72rem', fontWeight: 700, padding: '0.18rem 0.6rem', borderRadius: '999px', background: '#f1f5f9', color: '#475569' }}>
+                                                Modalidade: {subscriberBillingMode === 'consolidada' ? 'Consolidada' : 'Individualizada'}
+                                            </span>
+                                        )}
+                                    </div>
+
                                     {(invoice || localInvoiceId) ? (
-                                        // Read-only when editing an existing invoice
-                                        <div style={{ width: '100%', padding: '0.85rem', border: '1px solid #cbd5e1', borderRadius: '10px', fontSize: '1rem', background: '#f8fafc', color: '#475569', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                                            <span style={{ fontWeight: 700, color: '#0f172a' }}>{selectedUc?.numero_uc} &mdash; {selectedUc?.titular_conta || selectedUc?.identification}</span>
-                                            {selectedUc?.subscribers?.name && <span style={{ fontSize: '0.8rem', color: '#64748b' }}>{selectedUc.subscribers.name}</span>}
+                                        <div style={{
+                                            width: '100%',
+                                            padding: '0.9rem 1.1rem',
+                                            border: '1px solid #e2e8f0',
+                                            borderRadius: '10px',
+                                            background: '#f8fafc',
+                                            display: 'flex',
+                                            justifyContent: 'space-between',
+                                            alignItems: 'center',
+                                            flexWrap: 'wrap',
+                                            gap: '0.75rem',
+                                            boxSizing: 'border-box'
+                                        }}>
+                                            <div>
+                                                <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.96rem', fontVariantNumeric: 'tabular-nums' }}>
+                                                    UC {selectedUc?.numero_uc} &mdash; {selectedUc?.titular_conta || selectedUc?.identification}
+                                                </div>
+                                                {selectedUc?.subscribers?.name && (
+                                                    <div style={{ fontSize: '0.82rem', color: '#64748b', marginTop: '0.15rem' }}>
+                                                        Assinante: <strong style={{ color: '#334155' }}>{selectedUc.subscribers.name}</strong>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            {selectedUc?.concessionaria && (
+                                                <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#1e40af', background: '#eff6ff', border: '1px solid #bfdbfe', padding: '0.2rem 0.6rem', borderRadius: '8px' }}>
+                                                    {selectedUc.concessionaria}
+                                                </span>
+                                            )}
                                         </div>
                                     ) : (
-                                        <>
+                                        <div style={{ position: 'relative' }}>
+                                            <label style={invLabelStyle}>Pesquisar e Selecionar UC *</label>
                                             <div style={{ position: 'relative' }}>
                                                 <input
                                                     type="text"
-                                                    placeholder="Pesquisar por UC, assinante ou Identificação da fatura..."
+                                                    className="inv-input"
+                                                    placeholder="Pesquisar por número da UC, assinante ou identificação da fatura..."
                                                     value={ucSearch || (selectedUc ? `${selectedUc.numero_uc} — ${selectedUc.titular_conta || selectedUc.identification || ''}` : '')}
                                                     onChange={e => {
                                                         setUcSearch(e.target.value);
@@ -1662,20 +1865,10 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
                                                     }}
                                                     onFocus={() => { setUcSearch(''); setUcDropdownOpen(true); }}
                                                     onBlur={() => setTimeout(() => setUcDropdownOpen(false), 180)}
-                                                    style={{
-                                                        width: '100%',
-                                                        padding: '0.85rem 2.75rem 0.85rem 1rem',
-                                                        border: `1px solid ${ucDropdownOpen ? '#2563eb' : '#cbd5e1'}`,
-                                                        borderRadius: '10px',
-                                                        fontSize: '1rem',
-                                                        background: 'white',
-                                                        boxShadow: ucDropdownOpen ? '0 0 0 3px rgba(37,99,235,0.1)' : '0 1px 2px rgba(0,0,0,0.05)',
-                                                        outline: 'none',
-                                                        transition: 'all 0.2s'
-                                                    }}
+                                                    style={{ ...invInputStyle, paddingRight: '2.5rem', background: '#ffffff' }}
                                                 />
-                                                <span style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', color: ucDropdownOpen ? '#2563eb' : '#94a3b8', pointerEvents: 'none', fontSize: '1rem' }}>
-                                                    {ucDropdownOpen ? '▲' : '▼'}
+                                                <span style={{ position: 'absolute', right: '0.85rem', top: '50%', transform: 'translateY(-50%)', color: ucDropdownOpen ? '#2563eb' : '#94a3b8', pointerEvents: 'none', display: 'flex' }}>
+                                                    {ucDropdownOpen ? <ChevronUp size={17} /> : <ChevronDown size={17} />}
                                                 </span>
                                             </div>
                                             {ucDropdownOpen && (
@@ -1684,10 +1877,10 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
                                                     top: '100%',
                                                     left: 0,
                                                     right: 0,
-                                                    background: 'white',
-                                                    border: '1px solid #e2e8f0',
+                                                    background: '#ffffff',
+                                                    border: '1px solid #cbd5e1',
                                                     borderRadius: '10px',
-                                                    boxShadow: '0 10px 25px rgba(0,0,0,0.12)',
+                                                    boxShadow: '0 12px 28px rgba(15, 23, 42, 0.14)',
                                                     zIndex: 200,
                                                     maxHeight: '260px',
                                                     overflowY: 'auto',
@@ -1704,7 +1897,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
                                                             uc.titular_fatura?.name?.toLowerCase().includes(term)
                                                         );
                                                     }).length === 0 ? (
-                                                        <div style={{ padding: '1rem', textAlign: 'center', color: '#94a3b8', fontSize: '0.9rem' }}>Nenhuma UC encontrada</div>
+                                                        <div style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.85rem' }}>Nenhuma UC encontrada</div>
                                                     ) : (
                                                         (ucs || []).filter(uc => {
                                                             const term = ucSearch.toLowerCase();
@@ -1726,32 +1919,27 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
                                                                     setUcDropdownOpen(false);
                                                                 }}
                                                                 style={{
-                                                                    padding: '0.75rem 1rem',
+                                                                    padding: '0.7rem 1rem',
                                                                     cursor: 'pointer',
                                                                     borderBottom: '1px solid #f1f5f9',
-                                                                    background: formData.uc_id === uc.id ? '#eff6ff' : 'white',
-                                                                    transition: 'background 0.15s'
+                                                                    background: formData.uc_id === uc.id ? '#eff6ff' : '#ffffff'
                                                                 }}
-                                                                onMouseOver={e => e.currentTarget.style.background = '#f0f9ff'}
-                                                                onMouseOut={e => e.currentTarget.style.background = formData.uc_id === uc.id ? '#eff6ff' : 'white'}
                                                             >
-                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                                                    <span style={{ background: '#eff6ff', color: '#2563eb', borderRadius: '6px', padding: '0.2rem 0.5rem', fontSize: '0.8rem', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.7rem' }}>
+                                                                    <span style={{ background: '#eff6ff', color: '#1d4ed8', borderRadius: '6px', padding: '0.18rem 0.5rem', fontSize: '0.78rem', fontWeight: 700, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
                                                                         {uc.numero_uc}
                                                                     </span>
                                                                     <div style={{ flex: 1, minWidth: 0 }}>
-                                                                        <div style={{ fontWeight: 600, color: '#0f172a', fontSize: '0.9rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                                        <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.88rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                                             {uc.titular_conta || uc.identification || '—'}
                                                                         </div>
                                                                         {uc.subscribers?.name && (
-                                                                            <div style={{ fontSize: '0.75rem', color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                                            <div style={{ fontSize: '0.74rem', color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                                                 {uc.subscribers.name}
                                                                             </div>
                                                                         )}
                                                                     </div>
-                                                                    {formData.uc_id === uc.id && (
-                                                                        <span style={{ color: '#2563eb', fontSize: '1rem' }}>&#10003;</span>
-                                                                    )}
+                                                                    {formData.uc_id === uc.id && <CheckCircle size={16} color="#2563eb" />}
                                                                 </div>
                                                             </div>
                                                         ))
@@ -1759,135 +1947,173 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
                                                 </div>
                                             )}
                                             {selectedUc && (
-                                                <div style={{ marginTop: '0.5rem', padding: '0.6rem 0.9rem', background: '#f0f9ff', borderRadius: '8px', border: '1px solid #bae6fd', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                    <span style={{ background: '#2563eb', color: 'white', borderRadius: '4px', padding: '0.15rem 0.4rem', fontSize: '0.75rem', fontWeight: 700 }}>{selectedUc.numero_uc}</span>
-                                                    <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#0f172a' }}>{selectedUc.titular_conta || selectedUc.identification}</span>
-                                                    {selectedUc.subscribers?.name && <span style={{ fontSize: '0.8rem', color: '#64748b' }}>&mdash; {selectedUc.subscribers.name}</span>}
+                                                <div style={{ marginTop: '0.6rem', padding: '0.55rem 0.85rem', background: '#f0f9ff', borderRadius: '8px', border: '1px solid #bae6fd', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                                                    <span style={{ background: '#2563eb', color: 'white', borderRadius: '6px', padding: '0.12rem 0.45rem', fontSize: '0.74rem', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{selectedUc.numero_uc}</span>
+                                                    <span style={{ fontSize: '0.84rem', fontWeight: 700, color: '#0f172a' }}>{selectedUc.titular_conta || selectedUc.identification}</span>
+                                                    {selectedUc.subscribers?.name && <span style={{ fontSize: '0.8rem', color: '#475569' }}>&mdash; {selectedUc.subscribers.name}</span>}
                                                 </div>
                                             )}
-                                        </>
+                                        </div>
                                     )}
                                 </div>
 
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.5rem' }}>
-                                    {/* Month/Year */}
-                                    <div className="bg-white p-4 rounded-xl border border-slate-200">
-                                        <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.6rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Mês Referência</label>
-                                        <div style={{ display: 'flex', gap: '0.75rem' }}>
-                                            <select value={formData.mes_referencia.split('-')[1]} onChange={e => handleMonthChange('month', e.target.value)} style={{ flex: 1, padding: '0.75rem', border: '1px solid #cbd5e1', borderRadius: '8px', cursor: 'pointer' }}>
-                                                {['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'].map((m, i) => <option key={m} value={m}>{['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'][i]}</option>)}
-                                            </select>
-                                            <select value={formData.mes_referencia.split('-')[0]} onChange={e => handleMonthChange('year', e.target.value)} style={{ width: '100px', padding: '0.75rem', border: '1px solid #cbd5e1', borderRadius: '8px', cursor: 'pointer' }}>
-                                                {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 1 + i).map(y => <option key={y} value={y}>{y}</option>)}
-                                            </select>
+                                {/* Competência e Datas */}
+                                <div style={invCardStyle}>
+                                    <div style={{ marginBottom: '1rem', paddingBottom: '0.65rem', borderBottom: '1px solid #f1f5f9' }}>
+                                        <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                                            <Clock size={17} color="#2563eb" /> Competência, Leitura e Vencimento
+                                        </h4>
+                                    </div>
+                                    <div className="inv-grid-3">
+                                        <div>
+                                            <label style={invLabelStyle}>Mês de Referência (Ciclo)</label>
+                                            <div style={{ display: 'flex', gap: '0.55rem' }}>
+                                                <select
+                                                    className="inv-input"
+                                                    value={formData.mes_referencia.split('-')[1]}
+                                                    onChange={e => handleMonthChange('month', e.target.value)}
+                                                    style={{ ...invInputStyle, flex: 1, cursor: 'pointer' }}
+                                                >
+                                                    {['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'].map((m, i) => (
+                                                        <option key={m} value={m}>{['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'][i]}</option>
+                                                    ))}
+                                                </select>
+                                                <select
+                                                    className="inv-input"
+                                                    value={formData.mes_referencia.split('-')[0]}
+                                                    onChange={e => handleMonthChange('year', e.target.value)}
+                                                    style={{ ...invInputStyle, width: '96px', cursor: 'pointer' }}
+                                                >
+                                                    {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 1 + i).map(y => (
+                                                        <option key={y} value={y}>{y}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <label style={invLabelStyle}>Data da Leitura (Concessionária)</label>
+                                            <input
+                                                type="date"
+                                                className="inv-input"
+                                                value={formData.data_leitura}
+                                                onChange={e => setFormData({ ...formData, data_leitura: e.target.value })}
+                                                style={invInputStyle}
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label style={invLabelStyle}>Data de Vencimento *</label>
+                                            <input
+                                                type="date"
+                                                required
+                                                className="inv-input"
+                                                value={formData.vencimento}
+                                                onChange={e => {
+                                                    const val = e.target.value;
+                                                    setFormData(prev => ({
+                                                        ...prev,
+                                                        vencimento: val,
+                                                        vencimento_concessionaria: ['sem_faturamento', 'ag_emissao_boleto'].includes(prev.status) ? val : prev.vencimento_concessionaria
+                                                    }));
+                                                }}
+                                                style={{ ...invInputStyle, color: '#b91c1c', fontWeight: 700 }}
+                                            />
                                         </div>
                                     </div>
-                                    {/* Reading Date */}
-                                    <div className="bg-white p-4 rounded-xl border border-slate-200">
-                                        <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.6rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Data da Leitura</label>
-                                        <input type="date" value={formData.data_leitura} onChange={e => setFormData({ ...formData, data_leitura: e.target.value })} style={{ width: '100%', padding: '0.75rem', border: '1px solid #cbd5e1', borderRadius: '8px' }} />
-                                    </div>
-                                    {/* Due Date */}
-                                    <div className="bg-white p-4 rounded-xl border border-slate-200">
-                                        <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.6rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Vencimento</label>
-                                        <input type="date" required value={formData.vencimento} onChange={e => {
-                                            const val = e.target.value;
-                                            setFormData(prev => ({
-                                                ...prev,
-                                                vencimento: val,
-                                                vencimento_concessionaria: ['sem_faturamento', 'ag_emissao_boleto'].includes(prev.status) ? val : prev.vencimento_concessionaria
-                                            }));
-                                        }} style={{ width: '100%', padding: '0.75rem', border: '1px solid #cbd5e1', borderRadius: '8px', color: '#dc2626', fontWeight: 'bold' }} />
-                                    </div>
                                 </div>
-                                </div>
+                            </div>
                         )}
 
+                        {/* ==================== SEÇÃO 2: CONSUMO ==================== */}
                         {activeTab === 'consumo' && (
-                            <div style={{ animation: 'fadeIn 0.3s ease' }}>
-                                <div style={{ background: '#eff6ff', padding: '1.5rem', borderRadius: '12px', border: '1px solid #bfdbfe', marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div style={{ animation: 'invFadeIn 0.2s ease-out', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                                {/* Lançamento Automático via PDF ou Conta Processada */}
+                                <div style={{
+                                    background: '#eff6ff',
+                                    padding: '1.15rem 1.4rem',
+                                    borderRadius: '14px',
+                                    border: '1px solid #bfdbfe',
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    flexWrap: 'wrap',
+                                    gap: '1rem'
+                                }}>
                                     <div>
-                                        <h4 style={{ color: '#1e40af', fontWeight: 'bold', marginBottom: '0.25rem' }}>Lançamento Automático</h4>
-                                        <p style={{ color: '#3b82f6', fontSize: '0.85rem' }}>Importe a fatura em PDF para preenchimento instantâneo.</p>
+                                        <h4 style={{ margin: 0, color: '#1e3a8a', fontWeight: 800, fontSize: '0.96rem' }}>Lançamento Automático por PDF</h4>
+                                        <p style={{ margin: '0.2rem 0 0 0', color: '#1d4ed8', fontSize: '0.82rem' }}>
+                                            Importe a fatura em PDF da concessionária ou recupere uma conta já raspada pelo robô.
+                                        </p>
                                     </div>
                                     {!invoice && !localInvoiceId && (
-                                        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                                            {/* Recuperar Conta Processada */}
+                                        <div style={{ display: 'flex', gap: '0.65rem', alignItems: 'center', flexWrap: 'wrap' }}>
                                             {pendingBills.length > 0 && (
                                                 <div style={{ position: 'relative' }}>
                                                     <button
                                                         type="button"
                                                         onClick={() => setShowPendingDropdown(v => !v)}
                                                         style={{
-                                                            display: 'flex',
+                                                            display: 'inline-flex',
                                                             alignItems: 'center',
-                                                            gap: '0.5rem',
-                                                            padding: '0.85rem 1.25rem',
+                                                            gap: '0.45rem',
+                                                            padding: '0.6rem 1rem',
                                                             background: '#f0fdf4',
                                                             color: '#166534',
-                                                            border: '2px solid #86efac',
+                                                            border: '1px solid #86efac',
                                                             borderRadius: '10px',
                                                             cursor: 'pointer',
-                                                            fontSize: '0.9rem',
-                                                            fontWeight: 'bold',
-                                                            transition: 'all 0.2s',
+                                                            fontSize: '0.84rem',
+                                                            fontWeight: 700
                                                         }}
-                                                        onMouseOver={e => e.currentTarget.style.background = '#dcfce7'}
-                                                        onMouseOut={e => e.currentTarget.style.background = '#f0fdf4'}
                                                     >
-                                                        <FileText size={16} />
+                                                        <FileText size={15} />
                                                         Recuperar Conta Processada
-                                                        <span style={{ background: '#166534', color: 'white', borderRadius: '99px', padding: '0.1rem 0.45rem', fontSize: '0.75rem', fontWeight: '800' }}>{pendingBills.length}</span>
-                                                        <span style={{ fontSize: '0.8rem', opacity: 0.7 }}>{showPendingDropdown ? '▲' : '▼'}</span>
+                                                        <span style={{ background: '#166534', color: 'white', borderRadius: '999px', padding: '0.08rem 0.45rem', fontSize: '0.72rem', fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>
+                                                            {pendingBills.length}
+                                                        </span>
+                                                        {showPendingDropdown ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
                                                     </button>
                                                     {showPendingDropdown && (
                                                         <div style={{
                                                             position: 'absolute',
-                                                            bottom: '110%',
+                                                            top: '110%',
                                                             right: 0,
-                                                            background: 'white',
-                                                            border: '1px solid #e2e8f0',
+                                                            background: '#ffffff',
+                                                            border: '1px solid #cbd5e1',
                                                             borderRadius: '12px',
-                                                            boxShadow: '0 -10px 30px rgba(0,0,0,0.12)',
+                                                            boxShadow: '0 12px 28px rgba(15, 23, 42, 0.14)',
                                                             zIndex: 300,
-                                                            minWidth: '280px',
+                                                            minWidth: '300px',
                                                             maxHeight: '260px',
-                                                            overflowY: 'auto',
-                                                            marginBottom: '6px',
+                                                            overflowY: 'auto'
                                                         }}>
-                                                            <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                                            <div style={{ padding: '0.65rem 1rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.72rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>
                                                                 Contas sem faturamento para esta UC
                                                             </div>
                                                             {pendingBills.map(bill => (
                                                                 <div
                                                                     key={bill.id}
                                                                     onClick={() => applyPendingBill(bill)}
-                                                                    style={{
-                                                                        padding: '0.85rem 1rem',
-                                                                        cursor: 'pointer',
-                                                                        borderBottom: '1px solid #f8fafc',
-                                                                        transition: 'background 0.15s',
-                                                                    }}
-                                                                    onMouseOver={e => e.currentTarget.style.background = '#f0fdf4'}
-                                                                    onMouseOut={e => e.currentTarget.style.background = 'white'}
+                                                                    style={{ padding: '0.75rem 1rem', cursor: 'pointer', borderBottom: '1px solid #f8fafc' }}
                                                                 >
                                                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}>
                                                                         <div>
-                                                                            <div style={{ fontWeight: '700', color: '#0f172a', fontSize: '0.9rem' }}>
+                                                                            <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.86rem' }}>
                                                                                 Ref. {bill.mes_referencia ? new Date(`${bill.mes_referencia}-01T00:00:00`).toLocaleString('pt-BR', { month: 'long', year: 'numeric' }) : '—'}
                                                                             </div>
                                                                             {bill.vencimento && (
-                                                                                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                                                                                <div style={{ fontSize: '0.74rem', color: '#64748b', fontVariantNumeric: 'tabular-nums' }}>
                                                                                     Venc. {new Date(bill.vencimento + 'T00:00:00').toLocaleDateString('pt-BR')}
                                                                                 </div>
                                                                             )}
                                                                         </div>
-                                                                        <div style={{ textAlign: 'right' }}>
-                                                                            {bill.consumo_kwh !== null && bill.consumo_kwh !== undefined && (
-                                                                                <div style={{ fontSize: '0.8rem', color: '#2563eb', fontWeight: '600' }}>{bill.consumo_kwh} kWh</div>
+                                                                        <div style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                                                                            {bill.consumo_kwh != null && (
+                                                                                <div style={{ fontSize: '0.78rem', color: '#1d4ed8', fontWeight: 700 }}>{bill.consumo_kwh} kWh</div>
                                                                             )}
                                                                             {bill.valor_concessionaria > 0 && (
-                                                                                <div style={{ fontSize: '0.8rem', color: '#166534', fontWeight: '700' }}>
+                                                                                <div style={{ fontSize: '0.78rem', color: '#15803d', fontWeight: 700 }}>
                                                                                     {Number(bill.valor_concessionaria).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                                                                                 </div>
                                                                             )}
@@ -1899,32 +2125,27 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
                                                     )}
                                                 </div>
                                             )}
-                                            {/* Upload PDF */}
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-                                                <div>
-                                                    <label htmlFor="pdf-upload" style={{
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        gap: '0.5rem',
-                                                        padding: '0.85rem 1.5rem',
-                                                        background: isParsing ? '#f1f5f9' : '#2563eb',
-                                                        color: 'white',
-                                                        borderRadius: '10px',
-                                                        cursor: isParsing ? 'not-allowed' : 'pointer',
-                                                        fontSize: '0.95rem',
-                                                        fontWeight: 'bold',
-                                                        boxShadow: '0 4px 6px -1px rgba(37, 99, 235, 0.2)',
-                                                        transition: 'all 0.2s'
-                                                    }}>
-                                                        {isParsing ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
-                                                        {isParsing ? 'Processando...' : 'Fazer Upload do PDF'}
-                                                    </label>
-                                                    <input id="pdf-upload" type="file" accept="application/pdf" onChange={handlePdfUpload} disabled={isParsing} style={{ display: 'none' }} />
-                                                </div>
+
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
+                                                <label htmlFor="pdf-upload" style={{
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '0.45rem',
+                                                    padding: '0.6rem 1.15rem',
+                                                    background: isParsing ? '#94a3b8' : '#2563eb',
+                                                    color: '#ffffff',
+                                                    borderRadius: '10px',
+                                                    cursor: isParsing ? 'not-allowed' : 'pointer',
+                                                    fontSize: '0.84rem',
+                                                    fontWeight: 700
+                                                }}>
+                                                    {isParsing ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+                                                    {isParsing ? 'Processando PDF...' : 'Fazer Upload do PDF'}
+                                                </label>
+                                                <input id="pdf-upload" type="file" accept="application/pdf" onChange={handlePdfUpload} disabled={isParsing} style={{ display: 'none' }} />
                                                 {pdfFile && (
-                                                    <div style={{ fontSize: '0.85rem', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.35rem', background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '0.5rem 0.75rem', borderRadius: '8px' }}>
-                                                        <FileText size={16} className="text-emerald-600" />
-                                                        <span style={{ fontWeight: '600', color: '#15803d' }}>{pdfFile.name}</span>
+                                                    <div style={{ fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem', background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '0.42rem 0.75rem', borderRadius: '8px', color: '#15803d', fontWeight: 700 }}>
+                                                        <FileText size={14} /> {pdfFile.name}
                                                     </div>
                                                 )}
                                             </div>
@@ -1932,489 +2153,714 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
                                     )}
                                 </div>
 
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem' }}>
-                                    <div className="bg-white p-6 rounded-xl border border-slate-200">
-                                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem', marginBottom: '0.75rem', color: '#475569', fontWeight: 600 }}>
-                                            <Zap size={18} className="text-blue-500" /> Consumo (kWh)
-                                        </label>
-                                        <input type="number" step="any" required value={formData.consumo_kwh || ''} onChange={e => setFormData({ ...formData, consumo_kwh: e.target.value })} placeholder="Ex: 450" style={{ width: '100%', padding: '0.85rem', border: '1px solid #cbd5e1', borderRadius: '10px', fontSize: '1.1rem', fontWeight: 'bold' }} />
+                                {/* Medições de Energia */}
+                                <div style={invCardStyle}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', paddingBottom: '0.65rem', borderBottom: '1px solid #f1f5f9', flexWrap: 'wrap', gap: '0.5rem' }}>
+                                        <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                                            <Zap size={17} color="#2563eb" /> Medições de Energia no Ciclo (kWh)
+                                        </h4>
+                                        {compRatioPct !== null && (
+                                            <span style={{
+                                                fontSize: '0.74rem',
+                                                fontWeight: 700,
+                                                fontVariantNumeric: 'tabular-nums',
+                                                padding: '0.2rem 0.6rem',
+                                                borderRadius: '999px',
+                                                background: compRatioPct > 0 ? '#dcfce7' : '#f1f5f9',
+                                                color: compRatioPct > 0 ? '#166534' : '#475569'
+                                            }}>
+                                                Compensação: {compRatioPct}% do consumo
+                                            </span>
+                                        )}
                                     </div>
-                                    <div className="bg-white p-6 rounded-xl border border-slate-200">
-                                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem', marginBottom: '0.75rem', color: '#475569', fontWeight: 600 }}>
-                                            <Calculator size={18} className="text-green-500" /> Consumo Compensado (kWh)
-                                        </label>
-                                        <input type="number" step="any" value={formData.consumo_compensado || ''} onChange={e => setFormData({ ...formData, consumo_compensado: e.target.value })} placeholder="Ex: 400" style={{ width: '100%', padding: '0.85rem', border: '1px solid #cbd5e1', borderRadius: '10px', fontSize: '1.1rem', fontWeight: 'bold' }} />
-                                    </div>
-                                    <div className="bg-white p-6 rounded-xl border border-slate-200">
-                                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem', marginBottom: '0.75rem', color: '#475569', fontWeight: 600 }}>
-                                            <Zap size={18} style={{ color: '#0284c7' }} /> Energia Injetada (kWh)
-                                        </label>
-                                        <input type="number" step="any" value={formData.energia_injetada || ''} onChange={e => setFormData({ ...formData, energia_injetada: e.target.value })} placeholder="Ex: 14760" style={{ width: '100%', padding: '0.85rem', border: '1px solid #cbd5e1', borderRadius: '10px', fontSize: '1.1rem', fontWeight: 'bold', color: '#0284c7' }} />
+
+                                    <div className="inv-grid-3">
+                                        <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                            <label style={{ ...invLabelStyle, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                <Zap size={14} color="#2563eb" /> Consumo Total (kWh) *
+                                            </label>
+                                            <input
+                                                type="number"
+                                                step="any"
+                                                required
+                                                className="inv-input"
+                                                value={formData.consumo_kwh || ''}
+                                                onChange={e => setFormData({ ...formData, consumo_kwh: e.target.value })}
+                                                placeholder="Ex.: 450"
+                                                style={{ ...invInputStyle, background: '#ffffff', fontSize: '1.05rem', fontWeight: 800 }}
+                                            />
+                                        </div>
+
+                                        <div style={{ background: '#f0fdf4', padding: '1rem', borderRadius: '12px', border: '1px solid #bbf7d0' }}>
+                                            <label style={{ ...invLabelStyle, color: '#166534', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                <Calculator size={14} color="#16a34a" /> Consumo Compensado (kWh)
+                                            </label>
+                                            <input
+                                                type="number"
+                                                step="any"
+                                                className="inv-input"
+                                                value={formData.consumo_compensado || ''}
+                                                onChange={e => setFormData({ ...formData, consumo_compensado: e.target.value })}
+                                                placeholder="Ex.: 400"
+                                                style={{ ...invInputStyle, background: '#ffffff', borderColor: '#86efac', fontSize: '1.05rem', fontWeight: 800, color: '#15803d' }}
+                                            />
+                                        </div>
+
+                                        <div style={{ background: '#f0f9ff', padding: '1rem', borderRadius: '12px', border: '1px solid #bae6fd' }}>
+                                            <label style={{ ...invLabelStyle, color: '#0369a1', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                <Lightbulb size={14} color="#0284c7" /> Energia Injetada (kWh)
+                                            </label>
+                                            <input
+                                                type="number"
+                                                step="any"
+                                                className="inv-input"
+                                                value={formData.energia_injetada || ''}
+                                                onChange={e => setFormData({ ...formData, energia_injetada: e.target.value })}
+                                                placeholder="Ex.: 14760"
+                                                style={{ ...invInputStyle, background: '#ffffff', borderColor: '#7dd3fc', fontSize: '1.05rem', fontWeight: 800, color: '#0369a1' }}
+                                            />
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         )}
 
+                        {/* ==================== SEÇÃO 3: FINANCEIRO ==================== */}
                         {activeTab === 'financeiro' && (
-                            <div style={{ animation: 'fadeIn 0.3s ease' }}>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.5rem' }}>
-                                    <div className="bg-white p-5 rounded-xl border border-slate-200">
-                                        <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.6rem', color: '#64748b', fontWeight: 600 }}>Iluminação Pública (R$)</label>
-                                        <div style={{ position: 'relative' }}>
-                                            <span style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', fontWeight: 'bold', color: '#94a3b8' }}>R$</span>
-                                            <input type="text" value={formData.iluminacao_publica.replace('R$', '').trim()} onChange={e => handleCurrencyChange('iluminacao_publica', e.target.value)} placeholder="0,00" style={{ width: '100%', padding: '0.85rem 0.85rem 0.85rem 2.5rem', border: '1px solid #cbd5e1', borderRadius: '10px', fontSize: '1rem', fontWeight: 'bold' }} />
-                                        </div>
-                                    </div>
-                                    <div className="bg-white p-5 rounded-xl border border-slate-200">
-                                        <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.6rem', color: '#64748b', fontWeight: 600 }}>Outros Lançamentos (R$)</label>
-                                        <div style={{ position: 'relative' }}>
-                                            <span style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', fontWeight: 'bold', color: '#94a3b8' }}>R$</span>
-                                            <input type="text" value={formData.outros_lancamentos.replace('R$', '').trim()} onChange={e => handleCurrencyChange('outros_lancamentos', e.target.value)} placeholder="0,00" style={{ width: '100%', padding: '0.85rem 0.85rem 0.85rem 2.5rem', border: '1px solid #cbd5e1', borderRadius: '10px', fontSize: '1rem', fontWeight: 'bold' }} />
-                                        </div>
-                                    </div>
-                                    <div className="bg-white p-5 rounded-xl border border-slate-200">
-                                        <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.6rem', color: '#64748b', fontWeight: 600 }}>Parcelamento (R$)</label>
-                                        <div style={{ position: 'relative' }}>
-                                            <span style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', fontWeight: 'bold', color: '#94a3b8' }}>R$</span>
-                                            <input type="text" value={(formData.parcelamento || '').replace('R$', '').trim()} onChange={e => handleCurrencyChange('parcelamento', e.target.value)} placeholder="0,00" style={{ width: '100%', padding: '0.85rem 0.85rem 0.85rem 2.5rem', border: '1px solid #cbd5e1', borderRadius: '10px', fontSize: '1rem', fontWeight: 'bold' }} />
-                                        </div>
+                            <div style={{ animation: 'invFadeIn 0.2s ease-out' }} className="inv-grid-2">
+                                {/* Coluna Esquerda: Encargos e Desconto */}
+                                <div style={invCardStyle}>
+                                    <div style={{ marginBottom: '1rem', paddingBottom: '0.65rem', borderBottom: '1px solid #f1f5f9' }}>
+                                        <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                                            <DollarSign size={17} color="#2563eb" /> Encargos da Concessionária e Desconto
+                                        </h4>
                                     </div>
 
-                                    <div className="bg-white p-5 rounded-xl border border-slate-200">
-                                        <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.6rem', color: '#64748b', fontWeight: 600 }}>Desconto Aplicado (%)</label>
-                                        <div style={{ position: 'relative' }}>
-                                            <input 
-                                                type="number" 
-                                                step="0.1" 
-                                                value={formData.desconto_aplicado !== undefined ? formData.desconto_aplicado : (selectedUc?.desconto_assinante || 0)} 
-                                                onChange={e => setFormData({ ...formData, desconto_aplicado: parseFloat(e.target.value) })} 
-                                                style={{ width: '100%', padding: '0.85rem', border: '1px solid #cbd5e1', borderRadius: '10px', fontSize: '1rem', fontWeight: 'bold', color: '#2563eb' }} 
-                                            />
-                                            <span style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', fontWeight: 'bold', color: '#94a3b8' }}>%</span>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                        <div>
+                                            <label style={invLabelStyle}>Iluminação Pública (R$)</label>
+                                            <div style={{ position: 'relative' }}>
+                                                <span style={{ position: 'absolute', left: '0.85rem', top: '50%', transform: 'translateY(-50%)', fontWeight: 700, color: '#64748b', fontSize: '0.85rem' }}>R$</span>
+                                                <input
+                                                    type="text"
+                                                    className="inv-input"
+                                                    value={formData.iluminacao_publica.replace('R$', '').trim()}
+                                                    onChange={e => handleCurrencyChange('iluminacao_publica', e.target.value)}
+                                                    placeholder="0,00"
+                                                    style={{ ...invInputStyle, paddingLeft: '2.35rem', fontWeight: 700 }}
+                                                />
+                                            </div>
                                         </div>
-                                        <p style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '0.4rem' }}>
-                                            Desconto cadastrado na UC: <strong>{selectedUc?.desconto_assinante || 0}%</strong>
-                                        </p>
-                                    </div>
-                                    
-                                    <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 col-span-full">
-                                        <h4 style={{ fontSize: '0.9rem', color: '#475569', fontWeight: 'bold', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                            <Calculator size={18} /> Resultados Calculados
-                                        </h4>
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                            <div style={{ background: 'white', padding: '1rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                                                <p style={{ fontSize: '0.7rem', color: '#94a3b8', textTransform: 'uppercase', marginBottom: '0.25rem' }}>T. Mínima e Excedentes</p>
-                                                <p style={{ fontSize: '1.1rem', fontWeight: '800', color: '#1e293b' }}>{formData.tarifa_minima_excedentes}</p>
+
+                                        <div>
+                                            <label style={invLabelStyle}>Outros Lançamentos (R$)</label>
+                                            <div style={{ position: 'relative' }}>
+                                                <span style={{ position: 'absolute', left: '0.85rem', top: '50%', transform: 'translateY(-50%)', fontWeight: 700, color: '#64748b', fontSize: '0.85rem' }}>R$</span>
+                                                <input
+                                                    type="text"
+                                                    className="inv-input"
+                                                    value={formData.outros_lancamentos.replace('R$', '').trim()}
+                                                    onChange={e => handleCurrencyChange('outros_lancamentos', e.target.value)}
+                                                    placeholder="0,00"
+                                                    style={{ ...invInputStyle, paddingLeft: '2.35rem', fontWeight: 700 }}
+                                                />
                                             </div>
-                                            <div style={{ background: '#f0fdf4', padding: '1rem', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
-                                                <p style={{ fontSize: '0.7rem', color: '#166534', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Energia Compensada (Líquida)</p>
-                                                <p style={{ fontSize: '1.1rem', fontWeight: '800', color: '#15803d' }}>{formData.energia_compensada_reais}</p>
+                                        </div>
+
+                                        <div>
+                                            <label style={invLabelStyle}>Parcelamento (R$)</label>
+                                            <div style={{ position: 'relative' }}>
+                                                <span style={{ position: 'absolute', left: '0.85rem', top: '50%', transform: 'translateY(-50%)', fontWeight: 700, color: '#64748b', fontSize: '0.85rem' }}>R$</span>
+                                                <input
+                                                    type="text"
+                                                    className="inv-input"
+                                                    value={(formData.parcelamento || '').replace('R$', '').trim()}
+                                                    onChange={e => handleCurrencyChange('parcelamento', e.target.value)}
+                                                    placeholder="0,00"
+                                                    style={{ ...invInputStyle, paddingLeft: '2.35rem', fontWeight: 700 }}
+                                                />
                                             </div>
+                                        </div>
+
+                                        <div>
+                                            <label style={invLabelStyle}>Desconto Aplicado (%)</label>
+                                            <div style={{ position: 'relative' }}>
+                                                <input
+                                                    type="number"
+                                                    step="0.1"
+                                                    className="inv-input"
+                                                    value={formData.desconto_aplicado !== undefined ? formData.desconto_aplicado : (selectedUc?.desconto_assinante || 0)}
+                                                    onChange={e => setFormData({ ...formData, desconto_aplicado: parseFloat(e.target.value) })}
+                                                    style={{ ...invInputStyle, paddingRight: '2.2rem', fontWeight: 800, color: '#1d4ed8' }}
+                                                />
+                                                <span style={{ position: 'absolute', right: '0.85rem', top: '50%', transform: 'translateY(-50%)', fontWeight: 700, color: '#64748b', fontSize: '0.85rem' }}>%</span>
+                                            </div>
+                                            <p style={{ fontSize: '0.72rem', color: '#64748b', margin: '0.35rem 0 0 0' }}>
+                                                Padrão da UC: <strong style={{ color: '#0f172a', fontVariantNumeric: 'tabular-nums' }}>{selectedUc?.desconto_assinante || 0}%</strong>
+                                            </p>
                                         </div>
                                     </div>
                                 </div>
 
-                                {(invoice?.id || localInvoiceId) && !invoice?.asaas_boleto_url && subscriberBillingMode === 'individualizada' && (
-                                    <div style={{ marginTop: '2rem' }}>
+                                {/* Coluna Direita: Resultados Calculados e Emissão */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                    <div style={invCardStyle}>
+                                        <div style={{ marginBottom: '1rem', paddingBottom: '0.65rem', borderBottom: '1px solid #f1f5f9' }}>
+                                            <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                                                <Calculator size={17} color="#16a34a" /> Resultados Apurados
+                                            </h4>
+                                        </div>
+
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem', fontVariantNumeric: 'tabular-nums' }}>
+                                            <div style={{ background: '#f8fafc', padding: '0.9rem 1rem', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                                                <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>T. Mínima e Excedentes</div>
+                                                <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#0f172a', marginTop: '0.2rem' }}>{formData.tarifa_minima_excedentes || 'R$ 0,00'}</div>
+                                            </div>
+                                            <div style={{ background: '#f0fdf4', padding: '0.9rem 1rem', borderRadius: '10px', border: '1px solid #bbf7d0' }}>
+                                                <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#166534', textTransform: 'uppercase' }}>Energia Compensada (Líq.)</div>
+                                                <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#15803d', marginTop: '0.2rem' }}>{formData.energia_compensada_reais || 'R$ 0,00'}</div>
+                                            </div>
+                                            <div style={{ background: '#eff6ff', padding: '0.9rem 1rem', borderRadius: '10px', border: '1px solid #bfdbfe' }}>
+                                                <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#1e40af', textTransform: 'uppercase' }}>Economia Gerada</div>
+                                                <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#1d4ed8', marginTop: '0.2rem' }}>{formData.economia_reais || 'R$ 0,00'}</div>
+                                            </div>
+                                            <div style={{ background: '#0f172a', padding: '0.9rem 1rem', borderRadius: '10px', border: '1px solid #1e293b' }}>
+                                                <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>Total a Pagar (Assinante)</div>
+                                                <div style={{ fontSize: '1.15rem', fontWeight: 800, color: '#4ade80', marginTop: '0.2rem' }}>{formData.valor_a_pagar || 'R$ 0,00'}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {(invoice?.id || localInvoiceId) && !invoice?.asaas_boleto_url && subscriberBillingMode === 'individualizada' && (
                                         <button
                                             type="button"
                                             onClick={() => handleEmission()}
                                             disabled={generating}
                                             style={{
-                                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem',
-                                                background: '#FF6600', color: 'white', border: 'none', padding: '1rem',
-                                                borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold', fontSize: '1rem',
-                                                width: '100%', transition: 'all 0.2s', boxShadow: '0 4px 12px rgba(255, 102, 0, 0.2)'
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                gap: '0.6rem',
+                                                background: '#ea580c',
+                                                color: '#ffffff',
+                                                border: 'none',
+                                                padding: '0.85rem 1.25rem',
+                                                borderRadius: '12px',
+                                                cursor: generating ? 'not-allowed' : 'pointer',
+                                                fontWeight: 700,
+                                                fontSize: '0.92rem',
+                                                width: '100%'
                                             }}
                                         >
-                                            {generating ? <Loader2 className="animate-spin" size={20} /> : <><CreditCard size={20} /> Emitir Boleto via Asaas</>}
+                                            {generating ? <Loader2 className="animate-spin" size={18} /> : <><CreditCard size={18} /> Emitir Boleto Individual via Asaas</>}
                                         </button>
-                                    </div>
-                                )}
+                                    )}
+                                </div>
                             </div>
                         )}
 
+                        {/* ==================== SEÇÃO 4: CONTA DE ENERGIA (CONCESSIONÁRIA) ==================== */}
                         {activeTab === 'resumo' && (
-                            <div style={{ animation: 'fadeIn 0.3s ease' }}>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 550px)', gap: '2rem', justifyContent: 'center' }}>
-                                    <div style={{ background: 'white', padding: '2rem', borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px -5px rgba(0,0,0,0.1)' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem', paddingBottom: '1rem', borderBottom: '2px solid #f1f5f9' }}>
-                                            <div style={{ padding: '0.5rem', background: '#eff6ff', borderRadius: '10px' }}>
-                                                <FileText size={24} color="#3b82f6" />
-                                            </div>
-                                            <div style={{ flex: 1 }}>
-                                                <h4 style={{ color: '#1e293b', fontWeight: 800, margin: 0, fontSize: '1.1rem', textTransform: 'uppercase' }}>RESUMO DA CONTA DE ENERGIA</h4>
-                                                <p style={{ color: '#64748b', fontSize: '0.8rem', margin: 0 }}>Conta processada da concessionária</p>
-                                            </div>
+                            <div style={{ animation: 'invFadeIn 0.2s ease-out' }} className="inv-grid-2">
+                                {/* Coluna Esquerda: Status de Pagamento da Concessionária + Identificação */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                    <div style={invCardStyle}>
+                                        <div style={{ marginBottom: '0.85rem', paddingBottom: '0.65rem', borderBottom: '1px solid #f1f5f9' }}>
+                                            <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                                                <FileText size={17} color="#2563eb" /> Status da Conta na Concessionária
+                                            </h4>
+                                            <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.76rem', color: '#64748b' }}>
+                                                Obrigação da B2W perante a distribuidora (independente do boleto do assinante).
+                                            </p>
                                         </div>
 
-                                        {/* Energy Bill Status Toggle (MOVED HERE FOR VISIBILITY) */}
-                                        <div style={{ marginBottom: '1.5rem', padding: '1.25rem', background: '#f8fafc', borderRadius: '16px', border: '2px solid #e2e8f0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
-                                            <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', marginBottom: '1rem', textAlign: 'center', letterSpacing: '0.05em' }}>
-                                                STATUS DE PAGAMENTO DA CONCESSIONÁRIA
-                                            </label>
-                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.4rem' }}>
-                                                {[
-                                                    { id: 'pendente', label: 'PENDENTE', color: '#2563eb', bg: '#eff6ff' },
-                                                    { id: 'inconsistente', label: 'INCONSISTENTE', color: '#ea580c', bg: '#ffedd5' },
-                                                    { id: 'contestada', label: 'CONTESTADA', color: '#7c3aed', bg: '#f3e8ff' },
-                                                    { id: 'inconsistente_pago', label: 'INCONSISTENTE PAGO', color: '#9a3412', bg: '#fed7aa' },
-                                                    { id: 'contestada_pago', label: 'CONTESTADO PAGO', color: '#5b21b6', bg: '#ddd6fe' },
-                                                    { id: 'parcelada', label: 'PARCELADA', color: '#ca8a04', bg: '#fef9c3' },
-                                                    { id: 'pago', label: 'PAGO', color: '#16a34a', bg: '#f0fdf4' }
-                                                ].map(s => (
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.45rem' }}>
+                                            {[
+                                                { id: 'pendente', label: 'Pendente', color: '#1d4ed8', bg: '#eff6ff', border: '#93c5fd' },
+                                                { id: 'inconsistente', label: 'Inconsistente', color: '#c2410c', bg: '#ffedd5', border: '#fdba74' },
+                                                { id: 'contestada', label: 'Contestada', color: '#6d28d9', bg: '#f3e8ff', border: '#d8b4fe' },
+                                                { id: 'inconsistente_pago', label: 'Inconsist. Pago', color: '#9a3412', bg: '#fed7aa', border: '#fb923c' },
+                                                { id: 'contestada_pago', label: 'Contestado Pago', color: '#5b21b6', bg: '#ddd6fe', border: '#a78bfa' },
+                                                { id: 'parcelada', label: 'Parcelada', color: '#a16207', bg: '#fef9c3', border: '#fde047' },
+                                                { id: 'pago', label: 'Pago', color: '#15803d', bg: '#f0fdf4', border: '#86efac' }
+                                            ].map(s => {
+                                                const active = formData.energy_bill_status === s.id;
+                                                return (
                                                     <button
                                                         key={s.id}
                                                         type="button"
                                                         onClick={() => setFormData({ ...formData, energy_bill_status: s.id })}
                                                         style={{
-                                                            padding: '0.6rem 0.2rem',
-                                                            borderRadius: '10px',
-                                                            border: '2px solid',
-                                                            borderColor: formData.energy_bill_status === s.id ? s.color : '#e2e8f0',
-                                                            background: formData.energy_bill_status === s.id ? s.bg : 'white',
-                                                            color: formData.energy_bill_status === s.id ? s.color : '#64748b',
-                                                            fontSize: '0.7rem',
-                                                            fontWeight: 800,
+                                                            padding: '0.52rem 0.5rem',
+                                                            borderRadius: '8px',
+                                                            border: `1.5px solid ${active ? s.border : '#e2e8f0'}`,
+                                                            background: active ? s.bg : '#ffffff',
+                                                            color: active ? s.color : '#64748b',
+                                                            fontSize: '0.74rem',
+                                                            fontWeight: active ? 800 : 600,
                                                             cursor: 'pointer',
-                                                            transition: 'all 0.2s',
-                                                            boxShadow: formData.energy_bill_status === s.id ? `0 4px 6px ${s.color}20` : 'none',
-                                                            whiteSpace: 'nowrap',
-                                                            textAlign: 'center'
+                                                            textAlign: 'center',
+                                                            transition: 'all 0.15s'
                                                         }}
                                                     >
                                                         {s.label}
                                                     </button>
-                                                ))}
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    {selectedUc && (
+                                        <div style={invCardStyle}>
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem' }}>
+                                                <div style={{ gridColumn: '1 / -1' }}>
+                                                    <div style={invLabelStyle}>Beneficiário / Unidade Consumidora</div>
+                                                    <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.94rem' }}>{selectedUc.subscribers?.name || selectedUc.titular_conta}</div>
+                                                    <div style={{ fontSize: '0.8rem', color: '#64748b', fontVariantNumeric: 'tabular-nums' }}>UC: {selectedUc.numero_uc}</div>
+                                                </div>
+                                                <div>
+                                                    <div style={invLabelStyle}>Período</div>
+                                                    <div style={{ fontWeight: 700, color: '#334155', fontVariantNumeric: 'tabular-nums' }}>{formattedMesRef}</div>
+                                                </div>
+                                                <div>
+                                                    <div style={invLabelStyle}>Vencimento</div>
+                                                    <div style={{ fontWeight: 700, color: '#1d4ed8', fontVariantNumeric: 'tabular-nums' }}>
+                                                        {formData.vencimento ? new Date(formData.vencimento + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
+                                                    </div>
+                                                </div>
                                             </div>
+
+                                            {invoice?.concessionaria_pdf_url && (
+                                                <button
+                                                    type="button"
+                                                    onClick={handleOpenOriginalPdf}
+                                                    style={{
+                                                        marginTop: '1rem',
+                                                        width: '100%',
+                                                        padding: '0.62rem 1rem',
+                                                        borderRadius: '10px',
+                                                        border: '1px solid #bfdbfe',
+                                                        background: '#eff6ff',
+                                                        color: '#1d4ed8',
+                                                        fontWeight: 700,
+                                                        fontSize: '0.82rem',
+                                                        cursor: 'pointer',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        gap: '0.45rem'
+                                                    }}
+                                                >
+                                                    <ExternalLink size={15} /> Abrir PDF Original da Concessionária
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Coluna Direita: Demonstrativo da Conta de Energia */}
+                                <div style={invCardStyle}>
+                                    <div style={{ marginBottom: '1rem', paddingBottom: '0.65rem', borderBottom: '1px solid #f1f5f9' }}>
+                                        <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#0f172a' }}>
+                                            Demonstrativo da Conta Concessionária
+                                        </h4>
+                                    </div>
+
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', fontVariantNumeric: 'tabular-nums' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.88rem', color: '#475569' }}>
+                                            <span>Consumo Total</span>
+                                            <strong style={{ color: '#0f172a' }}>{formData.consumo_kwh || 0} kWh</strong>
+                                        </div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.88rem', color: '#475569' }}>
+                                            <span>Energia Injetada</span>
+                                            <strong style={{ color: '#0369a1' }}>{formData.energia_injetada || 0} kWh</strong>
+                                        </div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.88rem', color: '#475569' }}>
+                                            <span>Energia Compensada</span>
+                                            <strong style={{ color: '#1d4ed8' }}>{formData.consumo_compensado || 0} kWh</strong>
                                         </div>
 
-                                        {selectedUc && (
-                                            <div style={{ background: '#f8fafc', padding: '1.25rem', borderRadius: '12px', marginBottom: '1.5rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', border: '1px solid #e2e8f0' }}>
-                                                <div style={{ gridColumn: '1 / -1' }}>
-                                                    <label style={{ display: 'block', fontSize: '0.65rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Beneficiário / Unidade Consumidora</label>
-                                                    <span style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '1rem' }}>{selectedUc.subscribers?.name || selectedUc.titular_conta}</span>
-                                                    <div style={{ fontSize: '0.8rem', color: '#64748b' }}>UC: {selectedUc.numero_uc}</div>
-                                                </div>
-                                                <div>
-                                                    <label style={{ display: 'block', fontSize: '0.65rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Período</label>
-                                                    <span style={{ fontWeight: 600, color: '#334155' }}>
-                                                        {(() => {
-                                                            const [y, m] = formData.mes_referencia.split('-');
-                                                            const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-                                                            return `${months[parseInt(m) - 1]}/${y}`;
-                                                        })()}
-                                                    </span>
-                                                </div>
-                                                <div>
-                                                    <label style={{ display: 'block', fontSize: '0.65rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Vencimento Boleto</label>
-                                                    <span style={{ fontWeight: 'bold', color: '#2563eb' }}>{formData.vencimento ? new Date(formData.vencimento + 'T12:00:00').toLocaleDateString('pt-BR') : '-'}</span>
-                                                </div>
-                                            </div>
-                                        )}
+                                        <div style={{ height: '1px', background: '#e2e8f0', margin: '0.25rem 0' }} />
 
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#475569' }}>
-                                                <span>Consumo Total:</span>
-                                                <span style={{ fontWeight: 700, color: '#1e293b' }}>{formData.consumo_kwh} kWh</span>
-                                            </div>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#475569' }}>
-                                                <span>Energia Injetada:</span>
-                                                <span style={{ fontWeight: 700, color: '#0284c7' }}>{formData.energia_injetada || 0} kWh</span>
-                                            </div>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#475569' }}>
-                                                <span>Energia Compensada:</span>
-                                                <span style={{ fontWeight: 700, color: '#2563eb' }}>{formData.consumo_compensado} kWh</span>
-                                            </div>
-                                            
-                                            <div style={{ height: '1px', background: '#e2e8f0', margin: '0.4rem 0' }}></div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.88rem', color: '#475569' }}>
+                                            <span>Custo da Energia</span>
+                                            <strong style={{ color: '#0f172a' }}>{formData.consumo_reais || 'R$ 0,00'}</strong>
+                                        </div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.88rem', color: '#15803d', fontWeight: 700 }}>
+                                            <span>Economia Gerada</span>
+                                            <span>- {formData.economia_reais || 'R$ 0,00'}</span>
+                                        </div>
 
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#475569' }}>
-                                                <span>Custo da Energia:</span>
-                                                <span style={{ fontWeight: 700, color: '#1e293b' }}>{formData.consumo_reais}</span>
+                                        <div style={{
+                                            marginTop: '0.5rem',
+                                            padding: '1.1rem 1.25rem',
+                                            borderRadius: '12px',
+                                            background: '#f0fdf4',
+                                            border: '1px solid #86efac',
+                                            display: 'flex',
+                                            justifyContent: 'space-between',
+                                            alignItems: 'center',
+                                            gap: '1rem'
+                                        }}>
+                                            <div>
+                                                <div style={{ fontSize: '0.78rem', fontWeight: 800, color: '#166534', textTransform: 'uppercase' }}>Valor da Conta Concessionária</div>
+                                                <div style={{ fontSize: '0.72rem', color: '#15803d' }}>Incluindo taxas, CIP e impostos</div>
                                             </div>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#16a34a', fontWeight: '600' }}>
-                                                <span>Economia Gerada:</span>
-                                                <span>- {formData.economia_reais}</span>
-                                            </div>
-                                            
-                                            <div style={{ 
-                                                marginTop: '0.5rem', padding: '1.25rem', borderRadius: '12px', 
-                                                background: '#f0fdf4', border: '1px solid #bbf7d0',
-                                                display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-                                            }}>
-                                                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                                    <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#166534' }}>VALOR DA CONTA DE ENERGIA</span>
-                                                    <span style={{ fontSize: '0.7rem', color: '#166534', opacity: 0.8 }}>Incluindo taxas e impostos</span>
-                                                </div>
-                                                <span style={{ fontSize: '1.6rem', fontWeight: 900, color: '#166534' }}>
-                                                    {formData.valor_concessionaria ? (typeof formData.valor_concessionaria === 'number' ? formData.valor_concessionaria.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : formData.valor_concessionaria) : formData.valor_a_pagar}
-                                                </span>
-                                            </div>
-
-                                            {/* Original Document Link */}
-                                            {invoice?.concessionaria_pdf_url && (
-                                                <div style={{ marginTop: '1rem', textAlign: 'center' }}>
-                                                    <a 
-                                                        href="#"
-                                                        onClick={async (e) => {
-                                                            e.preventDefault();
-                                                            const secureUrl = await getSecurePdfUrl(supabase, invoice.concessionaria_pdf_url);
-                                                            if (secureUrl) {
-                                                                window.open(secureUrl, '_blank');
-                                                            } else {
-                                                                showAlert('Não foi possível carregar o PDF original.', 'error');
-                                                            }
-                                                        }}
-                                                        style={{ 
-                                                            fontSize: '0.8rem', color: '#64748b', textDecoration: 'none', 
-                                                            display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
-                                                            cursor: 'pointer'
-                                                        }}
-                                                    >
-                                                        <FileText size={14} /> Ver Conta da Concessionária
-                                                    </a>
-                                                </div>
-                                            )}
+                                            <span style={{ fontSize: '1.45rem', fontWeight: 900, color: '#14532d' }}>
+                                                {formData.valor_concessionaria
+                                                    ? (typeof formData.valor_concessionaria === 'number'
+                                                        ? formData.valor_concessionaria.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+                                                        : formData.valor_concessionaria)
+                                                    : formData.valor_a_pagar}
+                                            </span>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         )}
 
-                        {activeTab === 'resumo_fatura' && (
-                            <div style={{ animation: 'fadeIn 0.3s ease' }}>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 550px)', gap: '2rem', justifyContent: 'center' }}>
-                                    <div style={{ background: 'white', padding: '2rem', borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px -5px rgba(0,0,0,0.1)' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem', paddingBottom: '1rem', borderBottom: '2px solid #f1f5f9' }}>
-                                            <div style={{ padding: '0.5rem', background: '#fff7ed', borderRadius: '10px' }}>
-                                                <Calculator size={24} color="#f97316" />
-                                            </div>
-                                            <div>
-                                                <h4 style={{ color: '#1e293b', fontWeight: 800, margin: 0, fontSize: '1.1rem' }}>RESUMO DA FATURA</h4>
-                                                <p style={{ color: '#64748b', fontSize: '0.8rem', margin: 0 }}>Detalhamento financeiro do assinante</p>
-                                            </div>
-                                        </div>
+                        {/* ==================== SEÇÃO 5: RESUMO DA FATURA (ASSINANTE + MEMÓRIA DE CÁLCULO PR #149) ==================== */}
+                        {activeTab === 'resumo_fatura' && (() => {
+                            const d = demonstrativo;
+                            const brl = (v) => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                            const tar = (v) => `R$ ${(Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 4, maximumFractionDigits: 5 })}`;
+                            const kwh = (v) => `${(Number(v) || 0).toLocaleString('pt-BR')} kWh`;
+                            const pct = (v) => `${(Number(v) || 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
 
+                            const LinhaMemoria = ({ rotulo, detalhe, valor, cor = '#0f172a', forte = false, destaqueBg = null }) => (
+                                <div style={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'flex-start',
+                                    gap: '1rem',
+                                    fontSize: '0.86rem',
+                                    padding: destaqueBg ? '0.55rem 0.75rem' : '0.2rem 0',
+                                    borderRadius: destaqueBg ? '8px' : 0,
+                                    background: destaqueBg || 'transparent'
+                                }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                                        <span style={{ fontWeight: forte ? 700 : 500, color: forte ? '#0f172a' : '#334155' }}>{rotulo}</span>
+                                        {detalhe && (
+                                            <span style={{ fontSize: '0.73rem', color: '#64748b', fontVariantNumeric: 'tabular-nums', marginTop: '0.1rem' }}>
+                                                {detalhe}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <span style={{ fontWeight: forte ? 800 : 700, color: cor, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+                                        {valor}
+                                    </span>
+                                </div>
+                            );
+
+                            return (
+                                <div style={{ animation: 'invFadeIn 0.2s ease-out' }} className="inv-grid-2">
+                                    {/* Coluna Esquerda: Identificação + Comparativo sem B2W + Ações */}
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                                         {selectedUc && (
-                                            <div style={{ background: '#f8fafc', padding: '1.25rem', borderRadius: '12px', marginBottom: '1.5rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', border: '1px solid #e2e8f0' }}>
-                                                <div style={{ gridColumn: '1 / -1' }}>
-                                                    <label style={{ display: 'block', fontSize: '0.65rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Beneficiário / Unidade Consumidora</label>
-                                                    <span style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '1rem' }}>{selectedUc.subscribers?.name || selectedUc.titular_conta}</span>
-                                                    <div style={{ fontSize: '0.8rem', color: '#64748b' }}>UC: {selectedUc.numero_uc}</div>
-                                                </div>
-                                                <div>
-                                                    <label style={{ display: 'block', fontSize: '0.65rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Período</label>
-                                                    <span style={{ fontWeight: 600, color: '#334155' }}>
-                                                        {(() => {
-                                                            const [y, m] = formData.mes_referencia.split('-');
-                                                            const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-                                                            return `${months[parseInt(m) - 1]}/${y}`;
-                                                        })()}
+                                            <div style={invCardStyle}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem', paddingBottom: '0.65rem', borderBottom: '1px solid #f1f5f9', flexWrap: 'wrap', gap: '0.5rem' }}>
+                                                    <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                                                        <Calculator size={17} color="#ea580c" /> Identificação e Medições
+                                                    </h4>
+                                                    <span style={{ fontSize: '0.74rem', fontWeight: 700, fontVariantNumeric: 'tabular-nums', padding: '0.18rem 0.55rem', borderRadius: '999px', background: '#f1f5f9', color: '#334155' }}>
+                                                        Ciclo {formattedMesRef}
                                                     </span>
                                                 </div>
-                                                <div>
-                                                    <label style={{ display: 'block', fontSize: '0.65rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Vencimento Boleto</label>
-                                                    <span style={{ fontWeight: 'bold', color: '#2563eb' }}>{formData.vencimento ? new Date(formData.vencimento + 'T12:00:00').toLocaleDateString('pt-BR') : '-'}</span>
+
+                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem', marginBottom: '0.95rem' }}>
+                                                    <div style={{ gridColumn: '1 / -1' }}>
+                                                        <div style={invLabelStyle}>Beneficiário / UC</div>
+                                                        <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.95rem' }}>{selectedUc.subscribers?.name || selectedUc.titular_conta}</div>
+                                                        <div style={{ fontSize: '0.8rem', color: '#64748b', fontVariantNumeric: 'tabular-nums' }}>UC: {selectedUc.numero_uc}</div>
+                                                    </div>
+                                                    <div>
+                                                        <div style={invLabelStyle}>Vencimento do Boleto</div>
+                                                        <div style={{ fontWeight: 700, color: '#1d4ed8', fontVariantNumeric: 'tabular-nums' }}>
+                                                            {formData.vencimento ? new Date(formData.vencimento + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
+                                                        </div>
+                                                    </div>
+                                                    <div>
+                                                        <div style={invLabelStyle}>Modalidade</div>
+                                                        <div style={{ fontWeight: 700, color: '#334155' }}>
+                                                            {subscriberBillingMode === 'consolidada' ? 'Consolidada' : 'Individualizada'}
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Strip de medições kWh */}
+                                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.55rem', fontVariantNumeric: 'tabular-nums' }}>
+                                                    <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '0.6rem 0.75rem' }}>
+                                                        <div style={{ fontSize: '0.66rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Consumo</div>
+                                                        <div style={{ fontSize: '0.9rem', fontWeight: 800, color: '#0f172a', marginTop: '0.15rem' }}>{kwh(formData.consumo_kwh)}</div>
+                                                    </div>
+                                                    <div style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '10px', padding: '0.6rem 0.75rem' }}>
+                                                        <div style={{ fontSize: '0.66rem', fontWeight: 700, color: '#0369a1', textTransform: 'uppercase' }}>Injetada</div>
+                                                        <div style={{ fontSize: '0.9rem', fontWeight: 800, color: '#0369a1', marginTop: '0.15rem' }}>{kwh(formData.energia_injetada)}</div>
+                                                    </div>
+                                                    <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '10px', padding: '0.6rem 0.75rem' }}>
+                                                        <div style={{ fontSize: '0.66rem', fontWeight: 700, color: '#166534', textTransform: 'uppercase' }}>Compensada</div>
+                                                        <div style={{ fontSize: '0.9rem', fontWeight: 800, color: '#15803d', marginTop: '0.15rem' }}>{kwh(formData.consumo_compensado)}</div>
+                                                    </div>
                                                 </div>
                                             </div>
                                         )}
 
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#475569' }}>
-                                                <span>Consumo Total:</span>
-                                                <span style={{ fontWeight: 700, color: '#1e293b' }}>{formData.consumo_kwh} kWh</span>
-                                            </div>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#475569' }}>
-                                                <span>Energia Injetada:</span>
-                                                <span style={{ fontWeight: 700, color: '#0284c7' }}>{formData.energia_injetada || 0} kWh</span>
-                                            </div>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#475569' }}>
-                                                <span>Energia Compensada:</span>
-                                                <span style={{ fontWeight: 700, color: '#2563eb' }}>{formData.consumo_compensado} kWh</span>
-                                            </div>
-                                            
-                                            {demonstrativo && (() => {
-                                                const d = demonstrativo;
-                                                const brl = (v) => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-                                                const tar = (v) => `R$ ${(Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 4, maximumFractionDigits: 5 })}`;
-                                                const kwh = (v) => `${(Number(v) || 0).toLocaleString('pt-BR')} kWh`;
-                                                const pct = (v) => `${(Number(v) || 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
-                                                const secao = { fontSize: '0.65rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em', margin: '0.6rem 0 0.1rem' };
-                                                const Linha = ({ rotulo, detalhe, valor, cor = '#1e293b', forte = false }) => (
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', fontSize: '0.9rem', color: '#475569' }}>
-                                                        <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                                            <span style={{ fontWeight: forte ? 700 : 400, color: forte ? '#1e293b' : '#475569' }}>{rotulo}</span>
-                                                            {detalhe && <span style={{ fontSize: '0.72rem', color: '#94a3b8', fontVariantNumeric: 'tabular-nums' }}>{detalhe}</span>}
-                                                        </div>
-                                                        <span style={{ fontWeight: 700, color: cor, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{valor}</span>
-                                                    </div>
-                                                );
-                                                const Regua = () => <div style={{ height: '1px', background: '#e2e8f0', margin: '0.2rem 0' }}></div>;
-                                                return (
-                                                    <>
-                                                        <div style={{ height: '1px', background: '#e2e8f0', margin: '0.4rem 0' }}></div>
-
-                                                        <div style={secao}>Como chegamos ao valor</div>
-                                                        <Linha
-                                                            rotulo="Energia compensada (tarifa cheia)"
-                                                            detalhe={`${kwh(d.compensadoKwh)} × ${tar(d.tarifa)}/kWh · tarifa ${d.tarifaOrigem === 'conta' ? 'da conta (TE + TUSD)' : 'do cadastro da UC'}`}
-                                                            valor={brl(d.compensadaBruta)}
-                                                        />
-                                                        <Linha
-                                                            rotulo={`(−) Desconto B2W de ${pct(d.percentualDesconto)}`}
-                                                            detalhe={`${brl(d.compensadaBruta)} × ${pct(d.percentualDesconto)}`}
-                                                            valor={`− ${brl(d.desconto)}`}
-                                                            cor="#16a34a"
-                                                        />
-                                                        <Linha
-                                                            rotulo="= Energia compensada com desconto"
-                                                            valor={brl(d.compensadaLiquida)}
-                                                            forte
-                                                        />
-                                                        <Regua />
-                                                        <Linha
-                                                            rotulo="(+) Consumo não compensado"
-                                                            detalhe={`${kwh(d.naoCompensadoKwh)} × ${tar(d.tarifa)}/kWh (mínimo e excedentes)`}
-                                                            valor={brl(d.naoCompensadaReais)}
-                                                        />
-                                                        <Linha
-                                                            rotulo="(+) Iluminação pública (CIP)"
-                                                            detalhe="repassada da conta da concessionária"
-                                                            valor={brl(d.ip)}
-                                                        />
-                                                        <Linha
-                                                            rotulo="(+) Outros lançamentos da conta"
-                                                            detalhe="encargos, multas, juros e ajustes da concessionária"
-                                                            valor={brl(d.outros)}
-                                                        />
-                                                        {d.parcelamento !== 0 && (
-                                                            <Linha
-                                                                rotulo="(+) Parcelamento"
-                                                                detalhe="parcela de débito negociado na concessionária"
-                                                                valor={brl(d.parcelamento)}
-                                                            />
-                                                        )}
-                                                        <Regua />
-                                                        <Linha rotulo="= Valor da fatura" valor={brl(d.total)} forte />
-
-                                                        <div style={{ marginTop: '0.75rem', padding: '1rem 1.1rem', borderRadius: '12px', background: '#f8fafc', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-                                                            <div style={{ ...secao, margin: 0 }}>Comparativo — sem a B2W</div>
-                                                            <Linha
-                                                                rotulo="Conta projetada na concessionária"
-                                                                detalhe={`sem compensação e sem desconto: ${kwh(d.consumoKwh)} × ${tar(d.tarifa)} + CIP + outros${d.parcelamento !== 0 ? ' + parcelamento' : ''}`}
-                                                                valor={brl(d.contaProjetada)}
-                                                            />
-                                                            <Linha
-                                                                rotulo="Fatura com a B2W"
-                                                                valor={brl(d.total)}
-                                                            />
-                                                            <Regua />
-                                                            <Linha
-                                                                rotulo="Economia gerada"
-                                                                detalhe={d.contaProjetada > 0 ? `${pct((d.economia / d.contaProjetada) * 100)} da conta projetada` : undefined}
-                                                                valor={brl(d.economia)}
-                                                                cor="#16a34a"
-                                                                forte
-                                                            />
-                                                            {!d.tarifa && (
-                                                                <span style={{ fontSize: '0.72rem', color: '#b45309' }}>
-                                                                    Tarifa da UC zerada no cadastro — projeção e energia aparecem zeradas.
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    </>
-                                                );
-                                            })()}
-
+                                        {/* Comparativo — Sem a B2W (PR #149) */}
+                                        {d && (
                                             <div style={{
-                                                marginTop: '0.5rem', padding: '1.25rem', borderRadius: '12px',
-                                                background: '#f0fdf4', border: '1px solid #bbf7d0',
-                                                display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                                                ...invCardStyle,
+                                                background: '#f8fafc',
+                                                border: '1px solid #cbd5e1'
                                             }}>
-                                                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                                    <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#166534' }}>VALOR TOTAL FATURA</span>
-                                                    <span style={{ fontSize: '0.7rem', color: '#166534', opacity: 0.8 }}>Incluindo taxas e impostos</span>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem', paddingBottom: '0.6rem', borderBottom: '1px solid #e2e8f0' }}>
+                                                    <h4 style={{ margin: 0, fontSize: '0.92rem', fontWeight: 800, color: '#0f172a' }}>
+                                                        Comparativo — Sem a B2W
+                                                    </h4>
+                                                    {d.contaProjetada > 0 && (
+                                                        <span style={{
+                                                            fontSize: '0.72rem',
+                                                            fontWeight: 800,
+                                                            fontVariantNumeric: 'tabular-nums',
+                                                            padding: '0.18rem 0.6rem',
+                                                            borderRadius: '999px',
+                                                            background: '#dcfce7',
+                                                            color: '#166534'
+                                                        }}>
+                                                            {pct((d.economia / d.contaProjetada) * 100)} de economia real
+                                                        </span>
+                                                    )}
                                                 </div>
-                                                <span style={{ fontSize: '1.6rem', fontWeight: 900, color: '#166534' }}>
-                                                    {formData.valor_a_pagar}
-                                                </span>
-                                            </div>
 
-                                            {/* Action Buttons */}
-                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1.5rem' }}>
-                                                <button 
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
+                                                    <LinhaMemoria
+                                                        rotulo="Conta projetada na concessionária"
+                                                        detalhe={`sem compensação e sem desconto: ${kwh(d.consumoKwh)} × ${tar(d.tarifa)} + CIP + outros${d.parcelamento !== 0 ? ' + parcelamento' : ''}`}
+                                                        valor={brl(d.contaProjetada)}
+                                                    />
+                                                    <LinhaMemoria
+                                                        rotulo="Fatura com a B2W"
+                                                        valor={brl(d.total)}
+                                                    />
+                                                    <div style={{ height: '1px', background: '#cbd5e1', margin: '0.15rem 0' }} />
+                                                    <LinhaMemoria
+                                                        rotulo="Economia gerada"
+                                                        detalhe={d.contaProjetada > 0 ? `${pct((d.economia / d.contaProjetada) * 100)} da conta projetada` : undefined}
+                                                        valor={brl(d.economia)}
+                                                        cor="#15803d"
+                                                        forte
+                                                        destaqueBg="#dcfce7"
+                                                    />
+                                                    {!d.tarifa && (
+                                                        <div style={{ fontSize: '0.75rem', color: '#92400e', background: '#fef3c7', border: '1px solid #fde68a', padding: '0.5rem 0.75rem', borderRadius: '8px', fontWeight: 600 }}>
+                                                            Tarifa da UC zerada no cadastro — projeção e energia aparecem zeradas.
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Ações de Emissão e Impressão */}
+                                        <div style={invCardStyle}>
+                                            <div style={{ marginBottom: '0.85rem', paddingBottom: '0.65rem', borderBottom: '1px solid #f1f5f9' }}>
+                                                <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#0f172a' }}>
+                                                    Emissão e Documentos da Fatura
+                                                </h4>
+                                            </div>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                                                <button
                                                     type="button"
                                                     onClick={() => handleDownloadCombined()}
                                                     disabled={isGeneratingPdf}
-                                                    style={{ 
+                                                    style={{
                                                         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
-                                                        padding: '0.85rem', background: 'white', color: '#475569', fontWeight: 700,
-                                                        border: '1px solid #cbd5e1', borderRadius: '10px', fontSize: '0.9rem',
-                                                        cursor: isGeneratingPdf ? 'not-allowed' : 'pointer', transition: 'all 0.2s'
+                                                        padding: '0.7rem 1rem', background: '#ffffff', color: '#334155', fontWeight: 700,
+                                                        border: '1px solid #cbd5e1', borderRadius: '10px', fontSize: '0.86rem',
+                                                        cursor: isGeneratingPdf ? 'not-allowed' : 'pointer'
                                                     }}
                                                 >
-                                                    {isGeneratingPdf ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />} Imprimir
+                                                    {isGeneratingPdf ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+                                                    {isGeneratingPdf ? 'Gerando PDF Combinado...' : 'Imprimir / Baixar PDF Combinado'}
                                                 </button>
 
                                                 {(invoice?.id || localInvoiceId) && (
                                                     localBoletoUrl ? (
-                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', width: '100%' }}>
-                                                            <a 
-                                                                href={localBoletoUrl} 
-                                                                target="_blank" 
+                                                        <>
+                                                            <a
+                                                                href={localBoletoUrl}
+                                                                target="_blank"
                                                                 rel="noopener noreferrer"
-                                                                style={{ 
+                                                                style={{
                                                                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
-                                                                    padding: '0.85rem', background: '#2563eb', color: 'white', fontWeight: 700,
-                                                                    borderRadius: '10px', textDecoration: 'none', fontSize: '0.9rem',
-                                                                    boxShadow: '0 4px 6px -1px rgba(37, 99, 235, 0.2)'
+                                                                    padding: '0.72rem 1rem', background: '#2563eb', color: '#ffffff', fontWeight: 700,
+                                                                    borderRadius: '10px', textDecoration: 'none', fontSize: '0.88rem'
                                                                 }}
                                                             >
-                                                                <CreditCard size={18} /> Pagar Boleto
+                                                                <CreditCard size={17} /> Abrir Boleto Asaas
                                                             </a>
                                                             <button
                                                                 type="button"
                                                                 onClick={handleEmission}
                                                                 disabled={generating}
                                                                 style={{
-                                                                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem',
-                                                                    padding: '0.4rem', background: '#f1f5f9', color: '#475569', fontWeight: 700,
-                                                                    border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.75rem',
-                                                                    cursor: generating ? 'not-allowed' : 'pointer', transition: 'all 0.2s',
-                                                                    width: '100%'
+                                                                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.45rem',
+                                                                    padding: '0.52rem 1rem', background: '#f8fafc', color: '#475569', fontWeight: 700,
+                                                                    border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.78rem',
+                                                                    cursor: generating ? 'not-allowed' : 'pointer'
                                                                 }}
                                                             >
-                                                                {generating ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />} Reemitir Boleto (Produção)
+                                                                {generating ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+                                                                Reemitir Boleto (Produção)
                                                             </button>
-                                                        </div>
+                                                        </>
                                                     ) : (
-                                                        <button 
+                                                        <button
                                                             type="button"
                                                             onClick={handleEmission}
                                                             disabled={generating}
-                                                            style={{ 
+                                                            style={{
                                                                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
-                                                                padding: '0.85rem', background: '#FF6600', color: 'white', fontWeight: 700,
-                                                                border: 'none', borderRadius: '10px', fontSize: '0.9rem',
-                                                                cursor: generating ? 'not-allowed' : 'pointer',
-                                                                boxShadow: '0 4px 6px -1px rgba(255, 102, 0, 0.2)'
+                                                                padding: '0.72rem 1rem', background: '#ea580c', color: '#ffffff', fontWeight: 700,
+                                                                border: 'none', borderRadius: '10px', fontSize: '0.88rem',
+                                                                cursor: generating ? 'not-allowed' : 'pointer'
                                                             }}
                                                         >
-                                                            {generating ? <Loader2 size={18} className="animate-spin" /> : <Plus size={18} />} Emitir Boleto
+                                                            {generating ? <Loader2 size={17} className="animate-spin" /> : <Plus size={17} />}
+                                                            Emitir Boleto via Asaas
                                                         </button>
                                                     )
                                                 )}
                                             </div>
                                         </div>
                                     </div>
-                                </div>
-                            </div>
-                        )}
 
+                                    {/* Coluna Direita: Memória de Cálculo — Como chegamos ao valor (PR #149) */}
+                                    <div style={invCardStyle}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', paddingBottom: '0.65rem', borderBottom: '1px solid #f1f5f9', flexWrap: 'wrap', gap: '0.5rem' }}>
+                                            <div>
+                                                <h4 style={{ margin: 0, fontSize: '0.96rem', fontWeight: 800, color: '#0f172a' }}>
+                                                    Memória de Cálculo
+                                                </h4>
+                                                <p style={{ margin: '0.15rem 0 0 0', fontSize: '0.76rem', color: '#64748b' }}>
+                                                    Como chegamos ao valor final da fatura do assinante
+                                                </p>
+                                            </div>
+                                            {d && (
+                                                <span style={{
+                                                    fontSize: '0.72rem',
+                                                    fontWeight: 700,
+                                                    fontVariantNumeric: 'tabular-nums',
+                                                    padding: '0.2rem 0.6rem',
+                                                    borderRadius: '8px',
+                                                    background: d.tarifaOrigem === 'conta' ? '#eff6ff' : '#fffbeb',
+                                                    color: d.tarifaOrigem === 'conta' ? '#1d4ed8' : '#92400e',
+                                                    border: `1px solid ${d.tarifaOrigem === 'conta' ? '#bfdbfe' : '#fde68a'}`
+                                                }}>
+                                                    Tarifa {d.tarifaOrigem === 'conta' ? 'da conta (TE + TUSD)' : 'do cadastro da UC'}: {tar(d.tarifa)}/kWh
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        {d ? (
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                                                <LinhaMemoria
+                                                    rotulo="Energia compensada (tarifa cheia)"
+                                                    detalhe={`${kwh(d.compensadoKwh)} × ${tar(d.tarifa)}/kWh`}
+                                                    valor={brl(d.compensadaBruta)}
+                                                />
+                                                <LinhaMemoria
+                                                    rotulo={`(−) Desconto B2W de ${pct(d.percentualDesconto)}`}
+                                                    detalhe={`${brl(d.compensadaBruta)} × ${pct(d.percentualDesconto)}`}
+                                                    valor={`− ${brl(d.desconto)}`}
+                                                    cor="#15803d"
+                                                />
+                                                <LinhaMemoria
+                                                    rotulo="= Energia compensada com desconto"
+                                                    valor={brl(d.compensadaLiquida)}
+                                                    forte
+                                                    destaqueBg="#f8fafc"
+                                                />
+
+                                                <div style={{ height: '1px', background: '#e2e8f0', margin: '0.2rem 0' }} />
+
+                                                <LinhaMemoria
+                                                    rotulo="(+) Consumo não compensado"
+                                                    detalhe={`${kwh(d.naoCompensadoKwh)} × ${tar(d.tarifa)}/kWh (mínimo e excedentes)`}
+                                                    valor={brl(d.naoCompensadaReais)}
+                                                />
+                                                <LinhaMemoria
+                                                    rotulo="(+) Iluminação pública (CIP)"
+                                                    detalhe="repassada da conta da concessionária"
+                                                    valor={brl(d.ip)}
+                                                />
+                                                <LinhaMemoria
+                                                    rotulo="(+) Outros lançamentos da conta"
+                                                    detalhe="encargos, multas, juros e ajustes da concessionária"
+                                                    valor={brl(d.outros)}
+                                                />
+                                                {d.parcelamento !== 0 && (
+                                                    <LinhaMemoria
+                                                        rotulo="(+) Parcelamento"
+                                                        detalhe="parcela de débito negociado na concessionária"
+                                                        valor={brl(d.parcelamento)}
+                                                    />
+                                                )}
+
+                                                <div style={{ height: '1px', background: '#cbd5e1', margin: '0.25rem 0' }} />
+
+                                                <LinhaMemoria
+                                                    rotulo="= Valor da fatura"
+                                                    valor={brl(d.total)}
+                                                    forte
+                                                />
+                                            </div>
+                                        ) : (
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', fontVariantNumeric: 'tabular-nums' }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.88rem', color: '#475569' }}>
+                                                    <span>Custo da Energia (Líquido)</span>
+                                                    <strong style={{ color: '#0f172a' }}>{formData.consumo_reais || 'R$ 0,00'}</strong>
+                                                </div>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.88rem', color: '#15803d', fontWeight: 700 }}>
+                                                    <span>Economia Gerada no Mês</span>
+                                                    <span>- {formData.economia_reais || 'R$ 0,00'}</span>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Bloco Destaque Valor Total da Fatura */}
+                                        <div style={{
+                                            marginTop: '1rem',
+                                            padding: '1.15rem 1.25rem',
+                                            borderRadius: '12px',
+                                            background: '#0f172a',
+                                            border: '1px solid #1e293b',
+                                            display: 'flex',
+                                            justifyContent: 'space-between',
+                                            alignItems: 'center',
+                                            gap: '1rem',
+                                            fontVariantNumeric: 'tabular-nums'
+                                        }}>
+                                            <div>
+                                                <div style={{ fontSize: '0.78rem', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase' }}>Valor Total da Fatura</div>
+                                                <div style={{ fontSize: '0.72rem', color: '#cbd5e1' }}>Incluindo taxas, CIP e impostos</div>
+                                            </div>
+                                            <span style={{ fontSize: '1.5rem', fontWeight: 900, color: '#4ade80' }}>
+                                                {formData.valor_a_pagar || 'R$ 0,00'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })()}
+
+                        {/* ==================== SEÇÃO 6: HISTÓRICO ==================== */}
                         {activeTab === 'historico' && (invoice?.id || localInvoiceId) && (
-                            <div style={{ animation: 'fadeIn 0.3s ease' }}>
-                                <div style={{ maxWidth: '800px', margin: '0 auto', paddingBottom: '1.5rem' }}>
+                            <div style={{ animation: 'invFadeIn 0.2s ease-out' }}>
+                                <div style={invCardStyle}>
+                                    <div style={{ marginBottom: '1rem', paddingBottom: '0.65rem', borderBottom: '1px solid #f1f5f9' }}>
+                                        <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                                            <Clock size={17} color="#2563eb" /> Histórico de Eventos e Auditoria da Fatura
+                                        </h4>
+                                    </div>
                                     <HistoryTimeline
                                         entityType="invoice"
                                         entityId={invoice?.id || localInvoiceId}
@@ -2427,8 +2873,18 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
                         )}
                     </div>
 
-                    {/* Footer Actions */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid #e2e8f0' }}>
+                    {/* Pinned Footer Actions */}
+                    <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: '1rem 1.75rem',
+                        background: '#ffffff',
+                        borderTop: '1px solid #e2e8f0',
+                        flexShrink: 0,
+                        gap: '0.85rem',
+                        flexWrap: 'wrap'
+                    }}>
                         <div>
                             {invoice?.id && invoice.status !== 'cancelado' && !['confirmado', 'pago'].includes(invoice.status) && canManageStatus && (
                                 <button
@@ -2436,29 +2892,62 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
                                     onClick={handleCancel}
                                     disabled={loading}
                                     style={{
-                                        display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
-                                        background: '#fee2e2', color: '#dc2626', border: '1px solid #fecaca',
-                                        padding: '0.6rem 1rem', borderRadius: '6px', cursor: 'pointer',
-                                        fontWeight: 'bold', fontSize: '0.9rem', marginLeft: localBoletoUrl ? '1rem' : 0,
-                                        transition: 'all 0.2s'
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '0.45rem',
+                                        background: '#fef2f2',
+                                        color: '#dc2626',
+                                        border: '1px solid #fecaca',
+                                        padding: '0.62rem 1.1rem',
+                                        borderRadius: '10px',
+                                        cursor: 'pointer',
+                                        fontWeight: 700,
+                                        fontSize: '0.84rem'
                                     }}
-                                    onMouseOver={e => { e.currentTarget.style.background = '#fecaca'; }}
-                                    onMouseOut={e => { e.currentTarget.style.background = '#fee2e2'; }}
                                 >
-                                    <Ban size={18} /> Cancelar Fatura
+                                    <Ban size={16} /> Cancelar Fatura
                                 </button>
                             )}
                         </div>
-                        <div style={{ display: 'flex', gap: '1rem' }}>
-                            <button type="button" onClick={onClose} style={{ padding: '0.8rem 1.5rem', background: 'white', border: '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer', color: '#475569', fontWeight: 600 }}>Cancelar</button>
-                            <button type="submit" disabled={loading} style={{ padding: '0.8rem 2rem', background: 'var(--color-blue)', color: 'white', borderRadius: '6px', border: 'none', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 4px 6px -1px rgba(37, 99, 235, 0.2)' }}>
+                        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                            <button
+                                type="button"
+                                onClick={onClose}
+                                style={{
+                                    padding: '0.62rem 1.25rem',
+                                    background: '#ffffff',
+                                    border: '1px solid #cbd5e1',
+                                    borderRadius: '10px',
+                                    cursor: 'pointer',
+                                    color: '#475569',
+                                    fontWeight: 700,
+                                    fontSize: '0.84rem'
+                                }}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="submit"
+                                disabled={loading}
+                                style={{
+                                    padding: '0.62rem 1.5rem',
+                                    background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+                                    color: '#ffffff',
+                                    borderRadius: '10px',
+                                    border: 'none',
+                                    cursor: loading ? 'not-allowed' : 'pointer',
+                                    fontWeight: 700,
+                                    fontSize: '0.86rem',
+                                    boxShadow: '0 4px 12px rgba(37, 99, 235, 0.25)'
+                                }}
+                            >
                                 {loading ? 'Salvando...' : 'Salvar Fatura'}
                             </button>
                         </div>
                     </div>
-
                 </form>
             </div>
+
 
             {/* Duplicate Safety Modal */}
             {showDuplicateModal && (
