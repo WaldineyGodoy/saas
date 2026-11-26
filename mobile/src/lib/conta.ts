@@ -23,6 +23,7 @@ export type ContaLida = {
   tipoFornecimento?: string;
   ligacao?: '' | 'monofasico' | 'bifasico' | 'trifasico';
   mediaKwh?: number;
+  medianaKwh?: number;
   historico?: { mes: string; kwh: number; dias: number }[];
   mesReferencia?: string;
   consumoKwh?: number;
@@ -34,7 +35,7 @@ export type ContaLida = {
  *  so o que serve para cadastrar a UC; nada de linha digitavel ou PIX. */
 const CAMPOS_PEDIDO = [
   'numeroUc', 'numeroUcNovo', 'codigoCliente', 'codigoInstalacao', 'titular', 'documentoTipo', 'documento',
-  'endereco', 'classificacao', 'tipoFornecimento', 'ligacao', 'mediaKwh', 'historico', 'mesReferencia',
+  'endereco', 'classificacao', 'tipoFornecimento', 'ligacao', 'mediaKwh', 'medianaKwh', 'historico', 'mesReferencia',
   'consumoKwh', 'valorTotal', 'concessionaria',
 ] as const;
 

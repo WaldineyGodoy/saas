@@ -516,7 +516,8 @@ function Dados({ conta, arquivo, plano, docs, meta, cliente, onVoltar, onCriada 
         representante_cpf: ehCnpj ? soDigitos(repCpf) : undefined,
         ucs: [{
           numero_uc: conta.numeroUc, titular_conta: (titularEu ? nome : titularNome).trim(), cpf_cnpj_fatura: soDigitos(docTitular),
-          tipo_ligacao: ligacao, concessionaria: conta.concessionaria, franquia: conta.mediaKwh,
+          tipo_ligacao: ligacao, concessionaria: conta.concessionaria, franquia: conta.medianaKwh || conta.mediaKwh,
+          ...(conta.historico?.length ? { historico: conta.historico } : {}),
           plano_assinatura_id: plano?.id ?? null, ...endereco,
         }],
       };

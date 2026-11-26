@@ -233,7 +233,9 @@ export default function SubscriberSignup() {
                     numero_uc: data.uc.numeroUc,
                     titular_conta: data.uc.titular || '',
                     tipo_ligacao: data.uc.ligacao || '',
-                    franquia: data.uc.mediaKwh ? String(data.uc.mediaKwh) : '',
+                    // Mediana do histórico (regra do dono); só conta antiga tem apenas a média.
+                    franquia: (data.uc.medianaKwh || data.uc.mediaKwh) ? String(data.uc.medianaKwh || data.uc.mediaKwh) : '',
+                    historico: Array.isArray(data.uc.historico) ? data.uc.historico : null,
                     concessionaria: data.concessionaria || '',
                     endereco: { cep: end.cep || '', rua, numero, complemento: end.complemento || '', bairro: end.bairro || '', cidade: end.cidade || '', uf: end.uf || '' },
                 });
@@ -435,6 +437,7 @@ export default function SubscriberSignup() {
                     bairro: uc.bairro,
                     cidade: uc.cidade,
                     uf: uc.uf,
+                    ...(Array.isArray(uc.historico) && uc.historico.length ? { historico: uc.historico } : {}),
                     ...(paramPlano ? { plano_assinatura_id: paramPlano } : {})
                 })),
                 p_dia_vencimento: diaVencimento,

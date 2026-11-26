@@ -247,6 +247,7 @@ export type DadosAdesao = {
   ucs: {
     numero_uc: string; titular_conta?: string; cpf_cnpj_fatura: string; tipo_ligacao: string; concessionaria?: string;
     franquia?: number; plano_assinatura_id?: string | null;
+    historico?: { mes: string; kwh: number; dias?: number }[];
     cep: string; rua: string; numero: string; complemento?: string; bairro: string; cidade: string; uf: string; ibge?: string;
   }[];
 };
