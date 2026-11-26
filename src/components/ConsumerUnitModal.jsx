@@ -39,6 +39,26 @@ import { descontoParaGravar, descontoDoPlanoParaCampo } from '../lib/ucDesconto'
 
 const semAcento = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase();
 
+const SECOES_UC_VALIDAS = ['geral', 'tecnico', 'faturas_contas', 'financeiro', 'comunicados', 'contrato'];
+const SECOES_UC_ALIASES = {
+    all: 'geral',
+    general: 'geral',
+    technical: 'tecnico',
+    invoices: 'faturas_contas',
+    faturas: 'faturas_contas',
+    financial: 'financeiro',
+    communications: 'comunicados',
+    contract: 'contrato',
+};
+
+const resolverSecaoInicial = (secao, role) => {
+    const chave = String(secao || '').trim().toLowerCase();
+    const normalizada = SECOES_UC_ALIASES[chave] || chave;
+    if (!SECOES_UC_VALIDAS.includes(normalizada)) return 'geral';
+    if (normalizada === 'faturas_contas' && role && !ehPapelInterno(role)) return 'geral';
+    return normalizada;
+};
+
 export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDelete, defaultSection = 'geral' }) {
     // Ao encerrar uma UC, o robo para de buscar conta dela -- mas a
     // concessionaria ainda emite a conta final proporcional, que e devida. O
@@ -70,7 +90,17 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
     const [showCredentialsModal, setShowCredentialsModal] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const [showInvoicesModal, setShowInvoicesModal] = useState(false);
-    const [activeTab, setActiveTab] = useState(defaultSection); // 'geral' | 'tecnico' | 'financeiro' | 'comunicados' | 'contrato'
+    const [activeTab, setActiveTab] = useState(() => resolverSecaoInicial(defaultSection, profile?.role)); // 'geral' | 'tecnico' | 'faturas_contas' | 'financeiro' | 'comunicados' | 'contrato'
+
+    useEffect(() => {
+        setActiveTab(resolverSecaoInicial(defaultSection, profile?.role));
+    }, [defaultSection, consumerUnit?.id]);
+
+    useEffect(() => {
+        if (activeTab === 'faturas_contas' && profile?.role && !ehPapelInterno(profile.role)) {
+            setActiveTab('geral');
+        }
+    }, [activeTab, profile?.role]);
     const { branding } = useBranding();
     // Termo de transferência de titularidade (aba Contrato)
     const [termoDraft, setTermoDraft] = useState('');
@@ -1528,16 +1558,7 @@ Qualquer dúvida, é só responder esta mensagem.`;
                             <button
                                 type="button"
                                 onClick={() => setShowHistory(true)}
-                                style={{
-                                    display: 'flex', alignItems: 'center', gap: '0.4rem',
-                                    background: '#ffffff', color: 'var(--color-blue)',
-                                    border: '1px solid #cbd5e1',
-                                    padding: '0.45rem 0.85rem', borderRadius: '8px',
-                                    cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600,
-                                    transition: 'all 0.15s ease'
-                                }}
-                                onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f8fafc'}
-                                onMouseLeave={e => e.currentTarget.style.backgroundColor = '#ffffff'}
+                                className="uc-modal__btn-secondary"
                             >
                                 <History size={16} /> Histórico
                             </button>
@@ -1588,67 +1609,41 @@ Qualquer dúvida, é só responder esta mensagem.`;
 
                     {/* Faixa de status: a troca grava na hora (handleUpdateStatus, PR #64) */}
                     <div className="uc-modal__status">
-                        <span className="uc-modal__status-label">Alterar Status da UC</span>
-                    <div style={{ display: 'flex', gap: '0.375rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                        {statusOptions.map(opt => {
-                            const isSelected = formData.status === opt.value;
-                            const meta = getUcStatusMeta(opt.value);
-                            return (
-                                <button
-                                    key={opt.value}
-                                    type="button"
-                                    onClick={() => handleUpdateStatus(opt.value, opt.label)}
-                                    style={{
-                                        padding: '0.28rem 0.65rem',
-                                        borderRadius: '9999px',
-                                        fontSize: '0.75rem',
-                                        fontWeight: isSelected ? 700 : 500,
-                                        border: `1px solid ${isSelected ? meta.border : '#e2e8f0'}`,
-                                        background: isSelected ? meta.bg : '#ffffff',
-                                        color: isSelected ? meta.color : '#64748b',
-                                        cursor: 'pointer',
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: '0.35rem',
-                                        transition: 'all 0.15s ease',
-                                        boxShadow: isSelected ? '0 1px 2px rgba(0,0,0,0.05)' : 'none'
-                                    }}
-                                    onMouseEnter={e => {
-                                        if (!isSelected) {
-                                            e.currentTarget.style.borderColor = meta.border;
-                                            e.currentTarget.style.color = meta.color;
-                                            e.currentTarget.style.background = meta.bg;
-                                        }
-                                    }}
-                                    onMouseLeave={e => {
-                                        if (!isSelected) {
-                                            e.currentTarget.style.borderColor = '#e2e8f0';
-                                            e.currentTarget.style.color = '#64748b';
-                                            e.currentTarget.style.background = '#ffffff';
-                                        }
-                                    }}
-                                >
-                                    <span style={{
-                                        width: 6,
-                                        height: 6,
-                                        borderRadius: '50%',
-                                        backgroundColor: isSelected ? meta.dot : '#cbd5e1'
-                                    }} />
-                                    {opt.label}
-                                </button>
-                            );
-                        })}
-                    </div>
+                        <span className="uc-modal__status-label">Status da UC</span>
+                        <div className="uc-modal__status-list" role="group" aria-label="Alterar status da unidade consumidora">
+                            {statusOptions.map(opt => {
+                                const isSelected = formData.status === opt.value;
+                                const meta = getUcStatusMeta(opt.value);
+                                return (
+                                    <button
+                                        key={opt.value}
+                                        type="button"
+                                        aria-pressed={isSelected}
+                                        className="uc-modal__status-pill"
+                                        onClick={() => handleUpdateStatus(opt.value, opt.label)}
+                                        style={{
+                                            '--pill-border': meta.border,
+                                            '--pill-bg': meta.bg,
+                                            '--pill-color': meta.color,
+                                            '--pill-dot': meta.dot
+                                        }}
+                                    >
+                                        <span className="uc-modal__status-dot" />
+                                        {opt.label}
+                                    </button>
+                                );
+                            })}
+                        </div>
                     </div>
 
                     <div className="uc-modal__body">
                         <form className="uc-modal__form" onSubmit={handleSubmit}>
                             {/* Tab Content: Geral */}
                             {activeTab === 'geral' && (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                                <div className="uc-modal__tabpanel" role="tabpanel" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                                     {!consumerUnit?.id && <PreencherUcPelaConta onLeitura={aplicarContaNaUc} />}
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', alignItems: 'start' }}>
-                                        <div style={{ background: '#f8fafc', padding: '1.25rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                        <div className="uc-modal__card">
                                             <h4 style={{ margin: '0 0 1rem 0', fontSize: '0.9rem', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                                 <Zap size={18} color="var(--color-blue)" /> Identificação da UC
                                             </h4>
@@ -1739,7 +1734,7 @@ Qualquer dúvida, é só responder esta mensagem.`;
                                             </div>
                                         </div>
 
-                                        <div style={{ background: '#f8fafc', padding: '1.25rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                        <div className="uc-modal__card">
                                             <h4 style={{ margin: '0 0 1rem 0', fontSize: '0.9rem', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                                 <Link size={18} color="var(--color-blue)" /> Vínculos
                                             </h4>
@@ -2664,7 +2659,7 @@ Qualquer dúvida, é só responder esta mensagem.`;
                                         </div>
                                     </div>
 
-                                    <div style={{ background: '#f8fafc', padding: '1.5rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                    <div className="uc-modal__card">
                                         <h4 style={{ margin: '0 0 1rem 0', fontSize: '0.9rem', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                             <MapPin size={18} color="var(--color-blue)" /> Localização
                                         </h4>
@@ -3459,17 +3454,7 @@ Qualquer dúvida, é só responder esta mensagem.`;
                                 <button
                                     type="button"
                                     onClick={handleDelete}
-                                    style={{
-                                        padding: '0.625rem 1.25rem',
-                                        background: '#fee2e2',
-                                        color: '#dc2626',
-                                        borderRadius: '8px',
-                                        border: '1px solid #fecaca',
-                                        fontWeight: 600,
-                                        fontSize: '0.875rem',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.15s ease'
-                                    }}
+                                    className="uc-modal__btn-danger"
                                 >
                                     Excluir Unidade
                                 </button>
@@ -3479,38 +3464,14 @@ Qualquer dúvida, é só responder esta mensagem.`;
                             <button
                                 type="button"
                                 onClick={onClose}
-                                style={{
-                                    padding: '0.625rem 1.25rem',
-                                    background: '#ffffff',
-                                    color: '#475569',
-                                    borderRadius: '8px',
-                                    border: '1px solid #cbd5e1',
-                                    fontWeight: 600,
-                                    fontSize: '0.875rem',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.15s ease'
-                                }}
+                                className="uc-modal__btn-ghost"
                             >
                                 Cancelar
                             </button>
                             <button
                                 type="submit"
                                 disabled={loading}
-                                style={{
-                                    padding: '0.625rem 1.75rem',
-                                    background: 'var(--color-blue)',
-                                    color: '#ffffff',
-                                    borderRadius: '8px',
-                                    border: 'none',
-                                    fontWeight: 600,
-                                    fontSize: '0.875rem',
-                                    cursor: loading ? 'not-allowed' : 'pointer',
-                                    boxShadow: '0 4px 6px -1px rgba(0, 51, 102, 0.2)',
-                                    transition: 'all 0.15s ease',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '0.5rem'
-                                }}
+                                className="uc-modal__btn-primary"
                             >
                                 {loading ? 'Salvando...' : 'Salvar Unidade'}
                             </button>

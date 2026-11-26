@@ -49,7 +49,7 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
     const [previewUC, setPreviewUC] = useState(null);
     const [showPreviewModal, setShowPreviewModal] = useState(false);
     const [editingUC, setEditingUC] = useState(null);
-    const [ucModalMode, setUcModalMode] = useState('all'); // 'all' | 'technical'
+    const [ucModalMode, setUcModalMode] = useState('geral'); // 'geral' | 'tecnico'
     const [invoices, setInvoices] = useState([]);
     const [loadingInvoices, setLoadingInvoices] = useState(false);
     const [showMonthPicker, setShowMonthPicker] = useState(false);
@@ -2958,7 +2958,7 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
                                             type="button"
                                             onClick={() => {
                                                 setEditingUC({ subscriber_id: subscriber.id });
-                                                setUcModalMode('all');
+                                                setUcModalMode('geral');
                                                 setShowUcModal(true);
                                             }}
                                             style={{
@@ -3084,7 +3084,7 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
                                                             type="button"
                                                             onClick={() => {
                                                                 setEditingUC(uc);
-                                                                setUcModalMode('all');
+                                                                setUcModalMode('geral');
                                                                 setShowUcModal(true);
                                                             }}
                                                             style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', padding: '0.42rem 0.7rem', color: '#1d4ed8', background: '#eff6ff', borderRadius: '8px', border: '1px solid #bfdbfe', cursor: 'pointer', fontSize: '0.76rem', fontWeight: 700 }}
@@ -3107,7 +3107,7 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
                                                             type="button"
                                                             onClick={() => {
                                                                 setEditingUC(uc);
-                                                                setUcModalMode('technical');
+                                                                setUcModalMode('tecnico');
                                                                 setShowUcModal(true);
                                                             }}
                                                             style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', padding: '0.42rem 0.7rem', color: '#b45309', background: '#fffbeb', borderRadius: '8px', border: '1px solid #fde68a', cursor: 'pointer', fontSize: '0.76rem', fontWeight: 700 }}
@@ -4192,13 +4192,13 @@ export default function SubscriberModal({ subscriber: subscriberProp, onClose, o
                     onClose={() => {
                         setShowUcModal(false);
                         setEditingUC(null);
-                        setUcModalMode('all');
+                        setUcModalMode('geral');
                     }}
                     onSave={() => {
                         fetchConsumerUnits(subscriber.id);
                         setShowUcModal(false);
                         setEditingUC(null);
-                        setUcModalMode('all');
+                        setUcModalMode('geral');
                     }}
                 />
             )}
