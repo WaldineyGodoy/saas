@@ -5,6 +5,7 @@ import {
   ativarBiometria, atualizarTokenBiometria, biometriaAtiva, conferirBiometria, desativarBiometria, lerTokenBiometria,
 } from '../lib/biometria';
 import { DEMO } from '../lib/demo';
+import { desligarPush, registrarPush } from '../lib/push';
 import { supabase } from '../lib/supabase';
 
 const DEMO_SESSION = { user: { id: 'demo', email: 'ana@exemplo.com.br' } } as unknown as Session;
@@ -68,6 +69,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(s);
       // O Supabase gira o refresh token: a biometria precisa sempre do mais novo.
       if (s?.refresh_token) void atualizarTokenBiometria(s.refresh_token);
+      // Aparelho registrado no login que entrou (push da Central de notificacoes).
+      if (s && (_event === 'SIGNED_IN' || _event === 'INITIAL_SESSION')) void registrarPush();
       // Troca de usuario nao pode herdar cache do anterior.
       if (!s) qc.clear();
     });
@@ -113,6 +116,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
           return msg || 'Não foi possível excluir a conta agora. Tente de novo.';
         }
+        await desligarPush();
         await supabase.auth.signOut().catch(() => {});
         await desativarBiometria();
         qc.clear();
@@ -153,6 +157,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
       async signOut() {
         if (DEMO) return;
+        await desligarPush();
         // Com biometria ativa, sai so deste aparelho: o token guardado continua
         // valendo para o proximo "Entrar com Face ID".
         if (await biometriaAtiva()) {

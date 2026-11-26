@@ -77,6 +77,14 @@
           "faceIDPermission": "Use o Face ID para entrar no app B2W Energia sem digitar a senha."
         }
       ],
+      [
+        "expo-notifications",
+        {
+          "color": "#F26B00",
+          "defaultChannel": "default",
+          "icon": "./assets/android-icon-monochrome.png"
+        }
+      ],
       "expo-web-browser",
       [
         "expo-location",

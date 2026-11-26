@@ -29,6 +29,14 @@ const ucs: UcResumo[] = [
   ucBase('a3', '839.102.5741', end('Av. das Américas', '4200', 'Barra', 'Rio de Janeiro', 'RJ'), 2100, 1876, 427),
 ];
 
+// Caixa de notificacoes da demonstracao (mesmos textos do catalogo do banco).
+const notificacoes = [
+  { id: 'n1', tipo: 'rede_novo_assinante', titulo: 'Novo assinante na sua rede', corpo: 'Carlos, de Natal, assinou com a B2W e entrou no nível 1 da sua rede.', rota: '/connect/home', criada_em: '2025-03-18T13:20:00Z', lida_em: null },
+  { id: 'n2', tipo: 'recompensa_recebida', titulo: 'Você recebeu uma recompensa', corpo: 'R$ 18,40 de recompensa: um assinante do nível 2 da sua rede pagou a fatura.', rota: '/connect/home', criada_em: '2025-03-15T10:05:00Z', lida_em: null },
+  { id: 'n3', tipo: 'bonus_recebido', titulo: 'Bônus Start recebido', corpo: 'R$ 60,00 de bônus pela primeira fatura paga de um assinante do nível 1 da sua rede.', rota: '/connect/home', criada_em: '2025-03-02T09:00:00Z', lida_em: '2025-03-02T12:00:00Z' },
+  { id: 'n4', tipo: 'comunicado', titulo: 'Bandeira tarifária de março', corpo: 'A bandeira segue verde em março. Seu desconto continua o mesmo.', rota: null, criada_em: '2025-02-28T15:00:00Z', lida_em: '2025-03-01T08:00:00Z' },
+];
+
 const meses = ['2024-10-01', '2024-11-01', '2024-12-01', '2025-01-01', '2025-02-01', '2025-03-01'];
 // Composicao coerente com o resumo do CRM: tarifa da conta 0,38951 + 0,64028,
 // desconto de 20%, CIP fixa. Os valores fecham com resumoFatura().
@@ -79,6 +87,9 @@ const meusPostos: MeuEletroposto[] = [
 
 export const demoRpc = (fn: string, args?: Record<string, unknown>): unknown => {
   switch (fn) {
+    case 'app_minhas_notificacoes': return notificacoes;
+    case 'app_notificacoes_nao_lidas': return notificacoes.filter((n) => !n.lida_em).length;
+    case 'app_marcar_notificacoes_lidas': return null;
     case 'app_perfil': return perfil;
     case 'app_minhas_ucs': return ucs;
     case 'app_planos_para_uc': return [

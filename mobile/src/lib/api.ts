@@ -17,6 +17,19 @@ async function rpc<T>(fn: string, args?: Record<string, unknown>): Promise<T> {
   return data as T;
 }
 
+export type Notificacao = {
+  id: string; tipo: string; titulo: string; corpo: string; rota: string | null; criada_em: string; lida_em: string | null;
+};
+
+/** Central de notificacoes (migracao 20261126b). */
+export const useNotificacoes = (enabled = true) =>
+  useQuery({ queryKey: ['notificacoes'], queryFn: () => rpc<Notificacao[]>('app_minhas_notificacoes', { p_limite: 100 }), enabled });
+
+export const useNaoLidas = (enabled = true) =>
+  useQuery({ queryKey: ['notificacoes-nao-lidas'], queryFn: () => rpc<number>('app_notificacoes_nao_lidas'), enabled, refetchInterval: 60_000 });
+
+export const marcarLidas = (ids?: string[]) => rpc<void>('app_marcar_notificacoes_lidas', { p_ids: ids ?? null });
+
 export const usePerfil = (enabled = true) =>
   useQuery({ queryKey: ['perfil'], queryFn: () => rpc<Perfil | null>('app_perfil'), enabled });
 

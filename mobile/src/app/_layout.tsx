@@ -13,6 +13,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { BotaoVoltar } from '../components/BotaoVoltar';
 import { AuthProvider, useAuth } from '../contexts/AuthContext';
 import { extrairIndicador, guardarIndicacaoPendente } from '../lib/indicacao';
+import { AbrirPushTocado } from '../lib/pushTocado';
 import {
   carregarEsquemaSalvo, colors, configurarTipografia, definirEsquema, fonts, useEsquema,
 } from '../theme/tokens';
@@ -59,6 +60,8 @@ function RootStack() {
   if (!ready) return null;
 
   return (
+    <>
+    {session && <AbrirPushTocado />}
     <Stack
       screenOptions={{
         headerStyle: { backgroundColor: colors.header },
@@ -89,8 +92,10 @@ function RootStack() {
         <Stack.Screen name="comecar" options={comVoltar('Começar', '/')} />
         <Stack.Screen name="parceiro" options={comVoltar('Parceiro Power', '/')} />
         <Stack.Screen name="investir" options={comVoltar('B2W Invest', '/invest')} />
+        <Stack.Screen name="notificacoes" options={comVoltar('Notificações', '/')} />
       </Stack.Protected>
     </Stack>
+    </>
   );
 }
 
