@@ -2,10 +2,11 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import type { ClienteParceiro } from '../lib/api';
+import { casaBusca } from '../lib/buscaRede';
 import { fmtBRL, fmtKwh, iniciais } from '../lib/format';
 import { grupoParceiro, ROTULO_PARCEIRO, type GrupoParceiro } from '../lib/status';
 import { colors, type } from '../theme/tokens';
-import { Badge, Card, Chip, Divider, Empty, Icon, Row } from './ui';
+import { Badge, Card, Chip, Divider, Empty, Icon, Row, SearchInput } from './ui';
 
 const ABAS: { key: GrupoParceiro | 'todos'; label: string }[] = [
   { key: 'todos', label: 'Todos' },
@@ -21,18 +22,24 @@ const ABAS: { key: GrupoParceiro | 'todos'; label: string }[] = [
  *  assinatura abre a adesão assistida para continuar de onde parou. */
 export function RedeParceiro({ clientes }: { clientes: ClienteParceiro[] }) {
   const [aba, setAba] = useState<GrupoParceiro | 'todos'>('todos');
-  const comGrupo = clientes.map((c) => ({ ...c, grupo: grupoParceiro(c.etapa) }));
+  const [busca, setBusca] = useState('');
+  const comGrupo = clientes.filter((c) => casaBusca(c, busca)).map((c) => ({ ...c, grupo: grupoParceiro(c.etapa) }));
   const conta = (k: GrupoParceiro | 'todos') => (k === 'todos' ? comGrupo.length : comGrupo.filter((c) => c.grupo === k).length);
   const lista = aba === 'todos' ? comGrupo : comGrupo.filter((c) => c.grupo === aba);
 
   return (
     <View style={{ gap: 10 }}>
+      {clientes.length > 0 ? (
+        <SearchInput value={busca} onChangeText={setBusca} placeholder="Buscar por nome, CPF ou telefone" />
+      ) : null}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
         {ABAS.filter((a) => a.key === 'todos' || conta(a.key) > 0).map((a) => (
           <Chip key={a.key} label={`${a.label} (${conta(a.key)})`} active={aba === a.key} onPress={() => setAba(a.key)} />
         ))}
       </ScrollView>
-      {lista.length === 0 ? (
+      {lista.length === 0 && busca.trim() ? (
+        <Empty icon="search-off" title="Nenhum cliente encontrado" text={`Nada na sua rede para "${busca.trim()}". Confira o nome, o CPF ou o telefone.`} />
+      ) : lista.length === 0 ? (
         <Empty icon="group-add" title="Ninguém aqui ainda" text="Cadastre um novo assinante ou compartilhe seu link: cada cliente ativo gera comissão." />
       ) : lista.map((c) => {
         const [rotulo, tom] = ROTULO_PARCEIRO[c.grupo];

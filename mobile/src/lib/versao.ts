@@ -10,4 +10,4 @@
  * Vale o maior nível que a versão tiver (layout + correção = X). Subir um
  * nível zera os da direita: 1.6.1 -> 2.0.0 (X), 1.7.0 (Y) ou 1.6.2 (Z).
  */
-export const NOVIDADES_DA_VERSAO = 'Notificações: avisos de novo assinante na sua rede, recompensa e bônus recebidos, e comunicados da B2W, no sino do topo e no celular. Entre com Face ID ou digital. Tela da UC redesenhada. Usinas: escolha o mês.';
+export const NOVIDADES_DA_VERSAO = 'Menu novo: Início, Home Connect, Energia, Usinas e Mais. Adesão mais rápida: envie os documentos e os dados se preenchem sozinhos, inclusive para empresas (Cartão CNPJ ou Contrato Social). Busque clientes da sua rede por nome, CPF ou telefone. O Face ID continua ativo depois de sair da conta.';

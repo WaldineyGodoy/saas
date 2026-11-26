@@ -51,3 +51,36 @@ describe('normalizarDocumento: o que a leitura do modelo vira antes de chegar a 
         expect(TIPOS_ARQUIVO_DOCUMENTO).toEqual(expect.arrayContaining(['image/jpeg', 'image/png', 'application/pdf']))
     })
 })
+
+import { cnpjValido, normalizarEmpresa } from '../supabase/functions/_shared/leitura-documento'
+
+describe('documento da empresa (Cartao CNPJ / Contrato Social)', () => {
+    // CNPJ ficticio com digitos verificadores validos.
+    const cnpj = '11.222.333/0001-81'
+
+    it('cnpjValido confere os dois digitos verificadores', () => {
+        expect(cnpjValido(cnpj)).toBe(true)
+        expect(cnpjValido('11.222.333/0001-82')).toBe(false)
+        expect(cnpjValido('11111111111111')).toBe(false)
+        expect(cnpjValido('1122233300018')).toBe(false)
+    })
+
+    it('CNPJ lido certo sai so com digitos; errado fica vazio mas guarda o lido', () => {
+        const ok = normalizarEmpresa({ tipoDocumento: 'cartao_cnpj', cnpj, razaoSocial: '  EXEMPLO   COMERCIO LTDA ' })
+        expect(ok).toMatchObject({ tipoDocumento: 'CARTAO_CNPJ', cnpj: '11222333000181', razaoSocial: 'EXEMPLO COMERCIO LTDA' })
+        const ruim = normalizarEmpresa({ tipoDocumento: 'CONTRATO_SOCIAL', cnpj: '11.222.333/0001-80', razaoSocial: 'X' })
+        expect(ruim.cnpj).toBe('')
+        expect(ruim.cnpjLido).toBe('11222333000180')
+    })
+
+    it('contrato social sem CNPJ volta vazio (o usuario digita e a busca preenche)', () => {
+        const r = normalizarEmpresa({ tipoDocumento: 'CONTRATO_SOCIAL', cnpj: '', razaoSocial: 'Exemplo Ltda' })
+        expect(r.cnpj).toBe('')
+        expect(r.tipoDocumento).toBe('CONTRATO_SOCIAL')
+    })
+
+    it('tipo desconhecido vira OUTRO', () => {
+        expect(normalizarEmpresa({ tipoDocumento: 'boleto' }).tipoDocumento).toBe('OUTRO')
+        expect(normalizarEmpresa(null).cnpj).toBe('')
+    })
+})

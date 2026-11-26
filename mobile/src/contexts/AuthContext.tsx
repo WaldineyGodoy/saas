@@ -38,6 +38,22 @@ type AuthValue = {
 
 const AuthContext = createContext<AuthValue | null>(null);
 
+/**
+ * Tira a sessao do aparelho sem revoga-la no servidor. O supabase-js nao tem
+ * API publica para isso; _removeSession apaga a sessao guardada e avisa
+ * SIGNED_OUT, o mesmo que o signOut faz depois de chamar o servidor.
+ */
+async function esquecerSessaoNoAparelho() {
+  const auth = supabase.auth as unknown as { _removeSession?: () => Promise<void> };
+  if (typeof auth._removeSession === 'function') {
+    await auth._removeSession.call(supabase.auth).catch(() => {});
+    return;
+  }
+  // Versao do supabase-js sem o metodo: sai do jeito normal; a biometria
+  // pede a senha uma vez (melhor que deixar a sessao aberta).
+  await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+}
+
 const traduzErro = (msg: string) => {
   if (/invalid login credentials/i.test(msg)) return 'E-mail ou senha incorretos.';
   if (/email not confirmed/i.test(msg)) return 'Confirme seu e-mail antes de entrar.';
@@ -158,10 +174,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       async signOut() {
         if (DEMO) return;
         await desligarPush();
-        // Com biometria ativa, sai so deste aparelho: o token guardado continua
-        // valendo para o proximo "Entrar com Face ID".
+        // Com biometria ativa, a sessao so sai do aparelho, sem avisar o
+        // servidor: o token guardado tem que continuar valendo para o proximo
+        // "Entrar com Face ID". Atencao: signOut({ scope: 'local' }) NAO serve,
+        // ele revoga a sessao no servidor e o token guardado morre junto (era
+        // o bug "Face ID desabilitado" depois de sair, 26/11/2026).
         if (await biometriaAtiva()) {
-          await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+          await esquecerSessaoNoAparelho();
           qc.clear();
           return;
         }
