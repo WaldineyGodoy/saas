@@ -9,8 +9,8 @@ import { Platform } from 'react-native';
  * refresh token da sessao; para entrar, o sistema confere o rosto ou a digital
  * e so entao o token e usado para abrir uma sessao nova. O Supabase gira o
  * refresh token a cada renovacao, por isso o AuthContext regrava o token a
- * cada mudanca de sessao, e o "Sair" com biometria ativa encerra so o aparelho
- * (scope local), para o token guardado continuar valido.
+ * cada mudanca de sessao, e o "Sair" com biometria ativa so apaga a sessao do
+ * aparelho, sem revogar no servidor, para o token guardado continuar valido.
  */
 const CHAVE_ATIVA = 'b2w.bio.ativa';
 const CHAVE_TOKEN = 'b2w.bio.rt';

@@ -9,9 +9,27 @@ import { iniciais } from '../../lib/format';
 import { colors, esquemaAtual, fonts } from '../../theme/tokens';
 
 type IconName = React.ComponentProps<typeof MaterialIcons>['name'];
+
+/**
+ * Ícone das abas no mesmo azul da esfera de Energia (pedido do dono,
+ * 26/11/2026): pastilha em degradê com o glifo branco. A aba ativa fica
+ * cheia e com brilho; as outras ficam esmaecidas, para o lugar atual ler
+ * de longe sem depender só da cor do rótulo.
+ */
 function icon(name: IconName) {
-  function TabIcon({ color, size }: { color: ColorValue; size: number }) {
-    return <MaterialIcons name={name} color={color} size={size} />;
+  function TabIcon({ focused }: { focused: boolean; color: ColorValue; size: number }) {
+    return (
+      <View style={[s.pastilhaWrap, focused ? s.pastilhaAtiva : s.pastilhaInativa]}>
+        <LinearGradient
+          colors={[colors.centerOrbStart, colors.centerOrbEnd]}
+          start={{ x: 0.15, y: 0.1 }}
+          end={{ x: 0.85, y: 0.95 }}
+          style={s.pastilha}
+        >
+          <MaterialIcons name={name} color={colors.centerOrbIcon} size={18} />
+        </LinearGradient>
+      </View>
+    );
   }
   return TabIcon;
 }
@@ -60,8 +78,10 @@ export default function TabsLayout() {
         tabBarLabelStyle: { fontFamily: fonts.bodySemi, fontSize: 11, lineHeight: 15 },
       }}
     >
+      {/* Ordem do menu (dono, 26/11/2026): Início, Home Connect, Energia,
+          Usinas, Mais. Eletroposto segue acessível pelo Início. */}
       <Tabs.Screen name="index" options={{ title: 'Início', tabBarIcon: icon('grid-view') }} />
-      <Tabs.Screen name="eletroposto" options={{ title: 'Eletroposto', tabBarIcon: icon('ev-station') }} />
+      <Tabs.Screen name="connect/home" options={{ title: 'Home Connect', tabBarIcon: icon('diversity-3') }} />
       <Tabs.Screen
         name="energia"
         options={{
@@ -69,17 +89,43 @@ export default function TabsLayout() {
           tabBarIcon: ({ focused }) => <CentralOrbIcon focused={focused} />,
         }}
       />
-      <Tabs.Screen name="invest" options={{ title: 'B2W Invest', tabBarIcon: icon('solar-power') }} />
+      <Tabs.Screen name="invest" options={{ title: 'Usinas', tabBarIcon: icon('solar-power') }} />
       <Tabs.Screen name="mais" options={{ title: 'Mais', tabBarIcon: icon('more-horiz') }} />
-      {/* Home e Drive Connect: telas do ecossistema com o mesmo cabeçalho e
-          menu das abas, mas sem botão próprio no menu (11/10/2026). */}
-      <Tabs.Screen name="connect/home" options={{ title: 'Home Connect', href: null }} />
+      {/* Telas com o cabeçalho e o menu das abas, sem botão próprio no menu. */}
+      <Tabs.Screen name="eletroposto" options={{ title: 'Eletroposto', href: null }} />
       <Tabs.Screen name="connect/drive" options={{ title: 'Drive Connect', href: null }} />
     </Tabs>
   );
 }
 
 const s = StyleSheet.create({
+  pastilhaWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 11,
+    shadowColor: '#0A58CA',
+    shadowOffset: { width: 0, height: 3 },
+    shadowRadius: 6,
+  },
+  pastilhaAtiva: {
+    shadowOpacity: 0.45,
+    elevation: 4,
+    transform: [{ scale: 1.06 }],
+  },
+  pastilhaInativa: {
+    opacity: 0.5,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  pastilha: {
+    width: 32,
+    height: 32,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
+  },
   orbWrap: {
     width: 44,
     height: 44,

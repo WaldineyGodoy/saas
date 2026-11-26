@@ -95,6 +95,33 @@ export async function lerConta(base64: string, mediaType: 'image/jpeg' | 'applic
   return data.dados as Record<string, unknown>;
 }
 
+export type IdentidadeLida = { tipoDocumento: string; nome: string; cpf: string; cpfLido: string; nascimento: string; observacoes: string };
+export type EmpresaLida = { tipoDocumento: string; cnpj: string; cnpjLido: string; razaoSocial: string; observacoes: string };
+
+/** Lê CNH/RG ('identidade') ou Cartão CNPJ/Contrato Social ('empresa') na
+ *  Edge Function ler-documento-identidade, para preencher a adesão. */
+export async function lerDocumentoAdesao(arquivo: { base64: string; tipo: string }, tipo: 'identidade'): Promise<IdentidadeLida>;
+export async function lerDocumentoAdesao(arquivo: { base64: string; tipo: string }, tipo: 'empresa'): Promise<EmpresaLida>;
+export async function lerDocumentoAdesao(arquivo: { base64: string; tipo: string }, tipo: 'identidade' | 'empresa') {
+  if (DEMO) {
+    return tipo === 'empresa'
+      ? { tipoDocumento: 'CARTAO_CNPJ', cnpj: '11222333000181', cnpjLido: '11222333000181', razaoSocial: 'EXEMPLO COMERCIO LTDA', observacoes: '' }
+      : { tipoDocumento: 'CNH', nome: 'Ana Exemplo Souza', cpf: '52998224725', cpfLido: '52998224725', nascimento: '1985-03-07', observacoes: '' };
+  }
+  const { data, error } = await supabase.functions.invoke('ler-documento-identidade', {
+    body: { imageBase64: arquivo.base64, mediaType: arquivo.tipo, tipo },
+  });
+  if (error || !data?.ok) {
+    let msg: string | undefined = data?.error;
+    const ctx = (error as { context?: Response } | null)?.context;
+    if (!msg && ctx?.json) {
+      try { msg = (await ctx.json())?.error; } catch { /* corpo nao-JSON */ }
+    }
+    throw new Error(msg || 'Não foi possível ler o documento.');
+  }
+  return data.dados;
+}
+
 export type PlanoUc = { id: string; nome: string; desconto_assinante: number | null };
 
 /** Planos ativos que valem para a distribuidora da UC (planos_distribuidoras). */
@@ -306,6 +333,8 @@ export type ClienteParceiro = {
   etapa: 'interessado' | 'adesao' | 'assinatura' | string;
   numero_uc: string | null; cidade: string | null; uf: string | null;
   consumo_kwh: number | null; comissao: number; criado_em: string;
+  /** Para a busca da rede (migração 20261126c). */
+  cpf_cnpj?: string | null; representante_cpf?: string | null; telefone?: string | null;
 };
 
 /** Rede do Parceiro Power: clientes (com etapa e comissão) e interessados. */

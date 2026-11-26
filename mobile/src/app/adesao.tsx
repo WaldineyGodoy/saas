@@ -7,13 +7,13 @@ import { Campo } from '../components/Campo';
 import { Button, Card, Chip, Hero, Icon, Loading, Row, Screen, type IconName } from '../components/ui';
 import { useAuth } from '../contexts/AuthContext';
 import {
-  criarAdesao, criarAdesaoCliente, enviarDocumentoAdesao, gerarContratoAdesao, idDaUcAdesao, lerConta, useMinhaAdesao, usePerfil, usePlanosAdesao,
-  type AdesaoCliente, type FaltaDocumento, type MinhaAdesao, type PlanoUc,
+  criarAdesao, criarAdesaoCliente, enviarDocumentoAdesao, gerarContratoAdesao, idDaUcAdesao, lerConta, lerDocumentoAdesao, useMinhaAdesao, usePerfil, usePlanosAdesao,
+  type AdesaoCliente, type FaltaDocumento, type IdentidadeLida, type MinhaAdesao, type PlanoUc,
 } from '../lib/api';
 import { DIAS_VENCIMENTO, lerVisitaAdesao, URL_TERMOS_USO, VERSAO_TERMOS } from '../lib/adesao';
 import { escolherFoto, escolherPdf, fotografar, type Arquivo } from '../lib/captura';
 import { contaParaPedido, LIGACAO, mensagemDeErro, type ContaLida } from '../lib/conta';
-import { buscarCep, documentoValido, soDigitos, tipoDocumento } from '../lib/documento';
+import { buscarCep, buscarCnpj, documentoValido, soDigitos, tipoDocumento, type EmpresaCnpj } from '../lib/documento';
 import { fmtPct } from '../lib/format';
 import { celularBR } from '../lib/indicacao';
 import { PRIVACIDADE_URL, textoContratoCliente, whatsappPara } from '../lib/links';
@@ -49,19 +49,21 @@ export default function Adesao() {
 
 type Passos = { icon: IconName; titulo: string; texto: string }[];
 
+// Ordem (dono, 26/11/2026): primeiro os documentos, e os dados saem deles,
+// como no CRM. A pessoa só confere e completa.
 const PASSOS: Passos = [
   { icon: 'receipt-long', titulo: 'Sua conta de energia', texto: 'Foto ou PDF: lemos a UC, a distribuidora e o consumo.' },
   { icon: 'sell', titulo: 'Seu plano', texto: 'O desconto que vale para a sua distribuidora.' },
-  { icon: 'person', titulo: 'Seus dados', texto: 'CPF, endereço e o melhor dia de vencimento.' },
-  { icon: 'badge', titulo: 'Documentos', texto: 'Foto de um documento com foto (RG ou CNH).' },
+  { icon: 'badge', titulo: 'Documentos', texto: 'CNH ou RG; se for empresa, também o Cartão CNPJ ou o Contrato Social.' },
+  { icon: 'person', titulo: 'Seus dados', texto: 'Já vêm preenchidos pelos documentos: você confere e completa.' },
   { icon: 'draw', titulo: 'Contrato', texto: 'Você assina pelo celular, sem papel.' },
 ];
 
 const PASSOS_CLIENTE: Passos = [
   { icon: 'receipt-long', titulo: 'Conta de energia do cliente', texto: 'Foto ou PDF: lemos a UC, a distribuidora e o consumo.' },
   { icon: 'sell', titulo: 'Plano', texto: 'O desconto que vale para a distribuidora do cliente.' },
-  { icon: 'person', titulo: 'Dados do cliente', texto: 'CPF, e-mail, celular, endereço e dia de vencimento.' },
-  { icon: 'badge', titulo: 'Documentos', texto: 'Foto de um documento com foto do cliente (RG ou CNH).' },
+  { icon: 'badge', titulo: 'Documentos do cliente', texto: 'CNH ou RG; se for empresa, também o Cartão CNPJ ou o Contrato Social.' },
+  { icon: 'person', titulo: 'Dados do cliente', texto: 'Já vêm preenchidos pelos documentos: confira e complete e-mail e celular.' },
   { icon: 'draw', titulo: 'Contrato', texto: 'Vai para o WhatsApp e o e-mail do cliente: só ele assina.' },
 ];
 
@@ -105,9 +107,22 @@ function EscolherArquivo({ onArquivo, onErro, ocupado, pdf = true }: {
 }
 
 // ---------------------------------------------------------------------------
-// Adesão nova: conta -> plano -> dados
+// Adesão nova: conta -> plano -> documentos -> dados
 
-type Etapa = 'inicio' | 'lendo' | 'plano' | 'dados';
+type Etapa = 'inicio' | 'lendo' | 'plano' | 'documentos' | 'dados';
+
+/** Documentos juntados antes dos dados. Os arquivos sobem depois que a
+ *  adesão é gravada; a leitura só preenche os campos. */
+type DocsAdesao = {
+  pessoa: 'pf' | 'pj';
+  identidade: Arquivo;
+  idLida: IdentidadeLida | null;
+  empresa?: Arquivo;
+  /** CNPJ conferido (lido ou digitado) e o que a consulta pública trouxe. */
+  cnpj?: string;
+  empresaCnpj?: EmpresaCnpj | null;
+  razaoLida?: string;
+};
 
 export function Nova({ onCriada, cliente = false }: { onCriada: (subscriberId: string) => Promise<void>; cliente?: boolean }) {
   const perfil = usePerfil();
@@ -117,6 +132,7 @@ export function Nova({ onCriada, cliente = false }: { onCriada: (subscriberId: s
   const [conta, setConta] = useState<ContaLida | null>(null);
   const [arquivo, setArquivo] = useState<Arquivo | null>(null);
   const [plano, setPlano] = useState<PlanoUc | null>(null);
+  const [docs, setDocs] = useState<DocsAdesao | null>(null);
   const [erro, setErro] = useState('');
   const planos = usePlanosAdesao(etapa === 'plano' ? conta?.concessionaria : undefined);
 
@@ -138,8 +154,20 @@ export function Nova({ onCriada, cliente = false }: { onCriada: (subscriberId: s
 
   if (etapa === 'lendo') return <Loading label="Lendo a conta… pode levar uns 20 segundos" />;
 
-  if (etapa === 'dados' && conta && arquivo) {
-    return <Dados conta={conta} arquivo={arquivo} plano={plano} meta={cliente ? {} : meta} cliente={cliente} onVoltar={() => setEtapa('plano')} onCriada={onCriada} />;
+  if (etapa === 'dados' && conta && arquivo && docs) {
+    return <Dados conta={conta} arquivo={arquivo} plano={plano} docs={docs} meta={cliente ? {} : meta} cliente={cliente} onVoltar={() => setEtapa('documentos')} onCriada={onCriada} />;
+  }
+
+  if (etapa === 'documentos' && conta) {
+    return (
+      <DocumentosIniciais
+        cliente={cliente}
+        inicial={docs}
+        sugestaoPj={soDigitos(conta.documento).length === 14}
+        onVoltar={() => setEtapa('plano')}
+        onPronto={(d) => { setDocs(d); setEtapa('dados'); }}
+      />
+    );
   }
 
   if (etapa === 'plano' && conta) {
@@ -188,7 +216,7 @@ export function Nova({ onCriada, cliente = false }: { onCriada: (subscriberId: s
           label="Continuar"
           icon="arrow-forward"
           disabled={lista.length > 0 && !plano}
-          onPress={() => setEtapa('dados')}
+          onPress={() => setEtapa('documentos')}
         />
         <Button label="Ler outra conta" icon="refresh" variant="ghost" onPress={() => { setConta(null); setEtapa('inicio'); }} />
       </Screen>
@@ -233,21 +261,197 @@ export function Nova({ onCriada, cliente = false }: { onCriada: (subscriberId: s
 }
 
 // ---------------------------------------------------------------------------
+// Documentos antes dos dados (dono, 26/11/2026)
+
+/** Situação de um documento já anexado: lido, ou anexado sem leitura. */
+function Lido({ ok, texto }: { ok: boolean; texto: string }) {
+  return (
+    <View style={{ flexDirection: 'row', gap: 8, alignItems: 'flex-start' }}>
+      <Icon name={ok ? 'check-circle' : 'info-outline'} size={18} color={ok ? colors.secondary : colors.inkSecondary} />
+      <Text style={[type.bodySm, { color: ok ? colors.onSurface : colors.inkSecondary, flex: 1 }]}>{texto}</Text>
+    </View>
+  );
+}
+
+function DocumentosIniciais({ cliente, inicial, sugestaoPj, onVoltar, onPronto }: {
+  cliente: boolean; inicial: DocsAdesao | null; sugestaoPj: boolean;
+  onVoltar: () => void; onPronto: (d: DocsAdesao) => void;
+}) {
+  const [pessoa, setPessoa] = useState<'pf' | 'pj'>(inicial?.pessoa ?? (sugestaoPj ? 'pj' : 'pf'));
+  const [identidade, setIdentidade] = useState<Arquivo | null>(inicial?.identidade ?? null);
+  const [idLida, setIdLida] = useState<IdentidadeLida | null>(inicial?.idLida ?? null);
+  const [empresa, setEmpresa] = useState<Arquivo | null>(inicial?.empresa ?? null);
+  const [razaoLida, setRazaoLida] = useState(inicial?.razaoLida ?? '');
+  const [cnpj, setCnpj] = useState(inicial?.cnpj ?? '');
+  const [empresaCnpj, setEmpresaCnpj] = useState<EmpresaCnpj | null | undefined>(inicial?.empresaCnpj);
+  const [lendo, setLendo] = useState<'identidade' | 'empresa' | 'cnpj' | null>(null);
+  const [avisoId, setAvisoId] = useState('');
+  const [avisoEmpresa, setAvisoEmpresa] = useState('');
+  const [erro, setErro] = useState('');
+  const pj = pessoa === 'pj';
+  const doCliente = cliente ? ' do cliente' : '';
+
+  const lerIdentidade = async (a: Arquivo) => {
+    setIdentidade(a);
+    setIdLida(null);
+    setAvisoId('');
+    setLendo('identidade');
+    try {
+      const r = await lerDocumentoAdesao(a, 'identidade');
+      setIdLida(r);
+      if (!r.nome && !r.cpf) setAvisoId('Documento anexado, mas não deu para ler o nome e o CPF. Você confere no próximo passo.');
+      else if (!r.cpf && r.cpfLido) setAvisoId('O CPF lido não confere. Digite o CPF no próximo passo.');
+    } catch (e) {
+      setAvisoId(`Documento anexado. ${e instanceof Error ? e.message : ''} Você preenche os dados no próximo passo.`.replace(/\s+/g, ' '));
+    } finally {
+      setLendo(null);
+    }
+  };
+
+  const consultarCnpj = async (valor: string) => {
+    setAvisoEmpresa('');
+    if (!documentoValido(valor) || soDigitos(valor).length !== 14) {
+      setEmpresaCnpj(undefined);
+      return setAvisoEmpresa('CNPJ inválido. Confira os 14 dígitos.');
+    }
+    setLendo('cnpj');
+    try {
+      const r = await buscarCnpj(valor);
+      setEmpresaCnpj(r);
+      if (!r) setAvisoEmpresa('CNPJ não encontrado na Receita. Confira o número.');
+    } catch (e) {
+      setEmpresaCnpj(undefined);
+      setAvisoEmpresa(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLendo(null);
+    }
+  };
+
+  const lerEmpresa = async (a: Arquivo) => {
+    setEmpresa(a);
+    setAvisoEmpresa('');
+    setLendo('empresa');
+    let lido = '';
+    try {
+      const r = await lerDocumentoAdesao(a, 'empresa');
+      setRazaoLida(r.razaoSocial);
+      lido = r.cnpj;
+      if (!r.cnpj) {
+        setAvisoEmpresa(r.cnpjLido
+          ? 'O CNPJ lido não confere. Digite o CNPJ abaixo e toque em Buscar CNPJ.'
+          : 'Este documento não traz o CNPJ (comum no contrato social). Digite o CNPJ abaixo e toque em Buscar CNPJ.');
+      }
+    } catch (e) {
+      setAvisoEmpresa(`Documento anexado. ${e instanceof Error ? e.message : ''} Digite o CNPJ abaixo e toque em Buscar CNPJ.`.replace(/\s+/g, ' '));
+    } finally {
+      setLendo(null);
+    }
+    if (lido) {
+      setCnpj(lido);
+      await consultarCnpj(lido);
+    }
+  };
+
+  const continuar = () => {
+    setErro('');
+    if (pj) {
+      if (!empresa) return setErro('Envie o Cartão CNPJ ou o Contrato Social da empresa.');
+      if (!documentoValido(cnpj) || soDigitos(cnpj).length !== 14) return setErro('Informe o CNPJ da empresa e toque em Buscar CNPJ.');
+    }
+    if (!identidade) return setErro(pj ? 'Envie a CNH ou o RG do representante legal.' : `Envie a CNH ou o RG${doCliente}.`);
+    onPronto({
+      pessoa, identidade, idLida,
+      ...(pj && empresa ? { empresa, cnpj: soDigitos(cnpj), empresaCnpj: empresaCnpj ?? null, razaoLida } : {}),
+    });
+  };
+
+  return (
+    <Screen>
+      <Passo n={3} titulo="Documentos" />
+      <Hero
+        title={cliente ? 'Documentos do cliente' : 'Seus documentos'}
+        subtitle="Lemos os documentos e já preenchemos os dados para você conferir no próximo passo."
+      />
+      <Card style={{ gap: space.sm }}>
+        <Text style={[type.labelSm, { color: colors.onSurfaceVariant, textTransform: 'uppercase' }]}>
+          {cliente ? 'A adesão é de' : 'A adesão é em nome de'}
+        </Text>
+        <Row>
+          <Chip label="Pessoa física (CPF)" active={!pj} onPress={() => setPessoa('pf')} />
+          <Chip label="Empresa (CNPJ)" active={pj} onPress={() => setPessoa('pj')} />
+        </Row>
+      </Card>
+
+      {pj ? (
+        <Card style={{ gap: space.md }}>
+          <Text style={[type.headlineSm, { color: colors.onSurface }]}>Documentos da empresa</Text>
+          <Text style={[type.bodySm, { color: colors.inkSecondary }]}>Cartão CNPJ ou Contrato Social, em foto ou PDF.</Text>
+          {lendo === 'empresa' ? <Loading label="Lendo o documento da empresa…" /> : (
+            <>
+              {empresa ? <Lido ok={!!razaoLida} texto={razaoLida ? `Documento lido: ${razaoLida}` : 'Documento anexado.'} /> : null}
+              <EscolherArquivo onArquivo={lerEmpresa} onErro={setErro} ocupado={lendo !== null} />
+            </>
+          )}
+          {empresa && lendo !== 'empresa' ? (
+            <>
+              <Campo label="CNPJ da empresa" value={cnpj} onChangeText={(t) => { setCnpj(t); setEmpresaCnpj(undefined); }} keyboardType="number-pad" />
+              <Button label="Buscar CNPJ" icon="search" variant="secondary" onPress={() => consultarCnpj(cnpj)} loading={lendo === 'cnpj'} disabled={lendo !== null && lendo !== 'cnpj'} />
+              {empresaCnpj ? (
+                <Lido ok texto={`${empresaCnpj.razaoSocial}${empresaCnpj.representante ? ` · representante: ${empresaCnpj.representante}` : ''}`} />
+              ) : null}
+            </>
+          ) : null}
+          {avisoEmpresa ? <Text style={[type.bodySm, { color: colors.inkSecondary }]}>{avisoEmpresa}</Text> : null}
+        </Card>
+      ) : null}
+
+      <Card style={{ gap: space.md }}>
+        <Text style={[type.headlineSm, { color: colors.onSurface }]}>
+          {pj ? 'CNH ou RG do representante legal' : `CNH ou RG${doCliente}`}
+        </Text>
+        <Text style={[type.bodySm, { color: colors.inkSecondary }]}>Frente e verso legíveis, em foto ou PDF. A CNH já tem tudo em um lado só.</Text>
+        {lendo === 'identidade' ? <Loading label="Lendo o documento…" /> : (
+          <>
+            {identidade ? (
+              <Lido ok={!!(idLida?.nome || idLida?.cpf)}
+                texto={idLida?.nome || idLida?.cpf
+                  ? `Documento lido: ${[idLida.nome, idLida.cpf ? `CPF ${idLida.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')}` : null].filter(Boolean).join(' · ')}`
+                  : 'Documento anexado.'} />
+            ) : null}
+            <EscolherArquivo onArquivo={lerIdentidade} onErro={setErro} ocupado={lendo !== null} />
+          </>
+        )}
+        {avisoId ? <Text style={[type.bodySm, { color: colors.inkSecondary }]}>{avisoId}</Text> : null}
+      </Card>
+
+      <Erro texto={erro} />
+      <Button label="Continuar para os dados" icon="arrow-forward" onPress={continuar} disabled={lendo !== null} />
+      <Button label="Voltar ao plano" icon="arrow-back" variant="ghost" onPress={onVoltar} disabled={lendo !== null} />
+    </Screen>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Dados: titular, endereço, vencimento e aceite
 
 const EMAIL_OK = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
-function Dados({ conta, arquivo, plano, meta, cliente, onVoltar, onCriada }: {
-  conta: ContaLida; arquivo: Arquivo; plano: PlanoUc | null; meta: { name?: string; phone?: string }; cliente: boolean;
+function Dados({ conta, arquivo, plano, docs, meta, cliente, onVoltar, onCriada }: {
+  conta: ContaLida; arquivo: Arquivo; plano: PlanoUc | null; docs: DocsAdesao; meta: { name?: string; phone?: string }; cliente: boolean;
   onVoltar: () => void; onCriada: (subscriberId: string) => Promise<void>;
 }) {
   const end = conta.endereco ?? {};
-  const [nome, setNome] = useState(meta.name ?? '');
+  // Preenchido pelos documentos do passo anterior; o que não foi lido fica
+  // com o cadastro do login (adesão própria) ou em branco.
+  const pj = docs.pessoa === 'pj';
+  const lidoNome = docs.idLida?.nome ?? '';
+  const lidoCpf = docs.idLida?.cpf ?? '';
+  const [nome, setNome] = useState(pj ? (docs.empresaCnpj?.razaoSocial || docs.razaoLida || '') : (lidoNome || meta.name || ''));
   const [celular, setCelular] = useState(meta.phone ?? '');
   const [email, setEmail] = useState('');
-  const [doc, setDoc] = useState('');
-  const [repNome, setRepNome] = useState('');
-  const [repCpf, setRepCpf] = useState('');
+  const [doc, setDoc] = useState(pj ? (docs.cnpj ?? '') : lidoCpf);
+  const [repNome, setRepNome] = useState(pj ? (lidoNome || docs.empresaCnpj?.representante || '') : '');
+  const [repCpf, setRepCpf] = useState(pj ? lidoCpf : '');
   const [titularEu, setTitularEu] = useState(true);
   const [titularNome, setTitularNome] = useState(conta.titular ?? '');
   const [titularDoc, setTitularDoc] = useState('');
@@ -319,11 +523,19 @@ function Dados({ conta, arquivo, plano, meta, cliente, onVoltar, onCriada }: {
       const r = cliente
         ? await criarAdesaoCliente({ ...dados, email: email.trim().toLowerCase() })
         : await criarAdesao(dados, await lerVisitaAdesao());
-      // A conta de luz lida vira o documento da UC. Se falhar, o passo de
-      // documentos pede de novo.
+      // Os arquivos já juntados viram os documentos da adesão. O que falhar,
+      // o passo de documentos pendentes pede de novo.
       try {
         await enviarDocumentoAdesao(r.onboarding_token, 'conta_energia', arquivo, await idDaUcAdesao(r.onboarding_token, conta.numeroUc));
       } catch { /* segue: o passo de documentos mostra o que falta */ }
+      try {
+        await enviarDocumentoAdesao(r.onboarding_token, 'identidade', docs.identidade);
+      } catch { /* idem */ }
+      if (ehCnpj && docs.empresa) {
+        try {
+          await enviarDocumentoAdesao(r.onboarding_token, 'contrato_social', docs.empresa);
+        } catch { /* idem */ }
+      }
       await onCriada(r.subscriber_id);
     } catch (e) {
       setErro(mensagemDeErro(e instanceof Error ? e.message : String(e)));
@@ -334,11 +546,11 @@ function Dados({ conta, arquivo, plano, meta, cliente, onVoltar, onCriada }: {
 
   return (
     <Screen>
-      <Passo n={3} titulo={cliente ? 'Dados do cliente' : 'Seus dados'} />
-      <Hero title={cliente ? 'Dados do cliente' : 'Seus dados'} subtitle={`UC ${conta.numeroUc}${plano ? ` · ${plano.nome}` : ''}`} />
+      <Passo n={4} titulo={cliente ? 'Dados do cliente' : 'Seus dados'} />
+      <Hero title={cliente ? 'Dados do cliente' : 'Seus dados'} subtitle={`UC ${conta.numeroUc}${plano ? ` · ${plano.nome}` : ''}. Confira o que lemos nos documentos e complete o resto.`} />
       <Card style={{ gap: space.md }}>
-        <Campo label={cliente ? 'Nome completo do cliente' : 'Nome completo'} value={nome} onChangeText={setNome} autoCapitalize="words" />
-        <Campo label="CPF ou CNPJ" value={doc} onChangeText={setDoc} keyboardType="number-pad" />
+        <Campo label={pj ? 'Razão social' : cliente ? 'Nome completo do cliente' : 'Nome completo'} value={nome} onChangeText={setNome} autoCapitalize="words" />
+        <Campo label={pj ? 'CNPJ' : 'CPF'} value={doc} onChangeText={setDoc} keyboardType="number-pad" />
         {ehCnpj ? (
           <>
             <Campo label="Representante legal" value={repNome} onChangeText={setRepNome} autoCapitalize="words" />
@@ -403,8 +615,8 @@ function Dados({ conta, arquivo, plano, meta, cliente, onVoltar, onCriada }: {
       </Card>
 
       <Erro texto={erro} />
-      <Button label="Continuar para os documentos" icon="arrow-forward" onPress={enviar} loading={enviando} />
-      <Button label="Voltar ao plano" icon="arrow-back" variant="ghost" onPress={onVoltar} disabled={enviando} />
+      <Button label="Continuar para o contrato" icon="arrow-forward" onPress={enviar} loading={enviando} />
+      <Button label="Voltar aos documentos" icon="arrow-back" variant="ghost" onPress={onVoltar} disabled={enviando} />
     </Screen>
   );
 }
@@ -424,7 +636,7 @@ function Caixa({ marcado, onPress, texto }: { marcado: boolean; onPress: () => v
 
 const NOME_DOCUMENTO: Record<FaltaDocumento['tipo'], string> = {
   identidade: 'Documento com foto (RG ou CNH)',
-  contrato_social: 'Contrato social da empresa',
+  contrato_social: 'Documentos da empresa (Cartão CNPJ ou Contrato Social)',
   conta_energia: 'Conta de luz',
 };
 
@@ -434,7 +646,7 @@ function Documentos({ faltantes, titulo, subtitulo, dicaIdentidade, enviar, envi
 }) {
   return (
     <Screen>
-      <Passo n={4} titulo="Documentos" />
+      <Passo n={4} titulo="Documentos pendentes" />
       <Hero title={titulo} subtitle={subtitulo} />
       {faltantes.map((f) => {
         const chave = `${f.tipo}:${f.consumer_unit_id ?? ''}`;
