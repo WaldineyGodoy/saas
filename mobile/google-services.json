@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "329708335248",
+    "project_id": "b2w-energia-app",
+    "storage_bucket": "b2w-energia-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:329708335248:android:b3b0bd1ce609352951a815",
+        "android_client_info": {
+          "package_name": "com.b2wenergia.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA8eD40j9NpgVVC5Fr4RwqmtFlm9cvNlT8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
