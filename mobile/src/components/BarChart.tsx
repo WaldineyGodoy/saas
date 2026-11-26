@@ -7,11 +7,13 @@ export type Serie = { label: string; values: (number | null)[]; color: string };
 
 /** Barras agrupadas simples (historico de consumo/injecao, geracao mensal).
  *  `categories` vem do mais antigo para o mais novo. */
-export function BarChart({ categories, series, height = 150, highlightLast }: {
+export function BarChart({ categories, series, height = 150, highlightLast, highlightIndex }: {
   categories: string[];
   series: Serie[];
   height?: number;
   highlightLast?: boolean;
+  /** Destaca esta barra (ex.: o mes escolhido no seletor). */
+  highlightIndex?: number;
 }) {
   const [width, setWidth] = useState(0);
   const max = Math.max(1, ...series.flatMap((s) => s.values.map((v) => v ?? 0)));
@@ -29,7 +31,8 @@ export function BarChart({ categories, series, height = 150, highlightLast }: {
                 const v = s.values[i] ?? 0;
                 const h = Math.max(v > 0 ? 2 : 0, (v / max) * (height - 4));
                 const x = i * groupW + (groupW - barW * series.length) / 2 + j * barW;
-                const fade = highlightLast && i !== n - 1 ? 0.45 : 1;
+                const destaque = highlightIndex ?? (highlightLast ? n - 1 : undefined);
+                const fade = destaque !== undefined && i !== destaque ? 0.45 : 1;
                 return <Rect key={`${i}-${j}`} x={x} y={height - h} width={barW - 2} height={h} rx={2} fill={s.color} opacity={fade} />;
               }),
             )}

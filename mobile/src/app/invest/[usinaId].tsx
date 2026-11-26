@@ -1,7 +1,8 @@
 import { Stack, useLocalSearchParams } from 'expo-router';
-import { Text } from 'react-native';
+import { useState } from 'react';
+import { ScrollView, Text } from 'react-native';
 import { BarChart } from '../../components/BarChart';
-import { Badge, Card, Divider, Empty, ErrorState, KeyValue, Loading, Metric, Row, Screen, SectionLabel } from '../../components/ui';
+import { Badge, Card, Chip, Divider, Empty, ErrorState, KeyValue, Loading, Metric, Row, Screen, SectionLabel } from '../../components/ui';
 import { useUsinaDetalhe } from '../../lib/api';
 import { enderecoCurto, fmtBRL, fmtCiclo, fmtKwh, fmtPct, mesCurto, variacao } from '../../lib/format';
 import { usinaStatus } from '../../lib/status';
@@ -10,13 +11,16 @@ import { colors, type } from '../../theme/tokens';
 export default function UsinaDetalhe() {
   const { usinaId } = useLocalSearchParams<{ usinaId: string }>();
   const q = useUsinaDetalhe(usinaId);
+  const [sel, setSel] = useState(0);
 
   if (q.isLoading) return <Loading />;
   if (q.error) return <Screen><ErrorState error={q.error} onRetry={() => q.refetch()} /></Screen>;
   if (!q.data) return <Screen><Empty title="Usina não encontrada" text="Ela não pertence a este login." /></Screen>;
 
   const { usina, producao } = q.data;
-  const atual = producao[0];
+  // Mes escolhido no seletor; o mais recente por padrao.
+  const idx = Math.min(sel, Math.max(0, producao.length - 1));
+  const atual = producao[idx];
   const [label, tone] = usinaStatus(usina.status);
   const investido = Number(usina.valor_investido) || 0;
   const receita = Number(atual?.saldo_receber) || 0;
@@ -44,6 +48,14 @@ export default function UsinaDetalhe() {
         </Text>
       </Card>
 
+      {producao.length > 1 && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+          {producao.map((p, i) => (
+            <Chip key={p.id} label={`${mesCurto(p.mes_referencia)}/${(p.mes_referencia ?? '').slice(2, 4)}`} active={i === idx} onPress={() => setSel(i)} />
+          ))}
+        </ScrollView>
+      )}
+
       <Row>
         <Metric label="Geração do mês" value={fmtKwh(atual?.geracao_mensal_kwh)} unit="kWh" icon="solar-power" iconColor={colors.accentSolar}
           foot={vsPrev === null ? fmtCiclo(atual?.mes_referencia) : `${vsPrev > 0 ? '+' : ''}${fmtPct(vsPrev)} vs projetado`}
@@ -62,7 +74,7 @@ export default function UsinaDetalhe() {
         <Card style={{ gap: 12 }}>
           <Text style={[type.headlineSm, { color: colors.onSurface }]}>Histórico de geração mensal (kWh)</Text>
           <Text style={[type.bodySm, { color: colors.inkSecondary, marginTop: -8 }]}>Últimos {hist.length} meses</Text>
-          <BarChart highlightLast categories={hist.map((p) => mesCurto(p.mes_referencia))}
+          <BarChart highlightIndex={hist.length - 1 - idx} categories={hist.map((p) => mesCurto(p.mes_referencia))}
             series={[{ label: 'Geração', values: hist.map((p) => p.geracao_mensal_kwh), color: colors.primary }]} />
         </Card>
       )}
@@ -86,9 +98,9 @@ export default function UsinaDetalhe() {
 
       {producao.length > 1 && (
         <>
-          <SectionLabel title="Fechamentos anteriores" />
+          <SectionLabel title="Outros meses" />
           <Card style={{ paddingVertical: 6 }}>
-            {producao.slice(1).map((p, i) => (
+            {producao.filter((_, j) => j !== idx).map((p, i) => (
               <Row key={p.id} style={{ flexDirection: 'column', gap: 0 }}>
                 {i > 0 && <Divider />}
                 <KeyValue k={`${fmtCiclo(p.mes_referencia)} · ${fmtKwh(p.geracao_mensal_kwh)} kWh`} v={fmtBRL(p.saldo_receber)} />
