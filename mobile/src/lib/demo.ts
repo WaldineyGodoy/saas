@@ -29,15 +29,36 @@ const ucs: UcResumo[] = [
   ucBase('a3', '839.102.5741', end('Av. das Américas', '4200', 'Barra', 'Rio de Janeiro', 'RJ'), 2100, 1876, 427),
 ];
 
+// Caixa de notificacoes da demonstracao (mesmos textos do catalogo do banco).
+const notificacoes = [
+  { id: 'n1', tipo: 'rede_novo_assinante', titulo: 'Novo assinante na sua rede', corpo: 'Carlos, de Natal, assinou com a B2W e entrou no nível 1 da sua rede.', rota: '/connect/home', criada_em: '2025-03-18T13:20:00Z', lida_em: null },
+  { id: 'n2', tipo: 'recompensa_recebida', titulo: 'Você recebeu uma recompensa', corpo: 'R$ 18,40 de recompensa: um assinante do nível 2 da sua rede pagou a fatura.', rota: '/connect/home', criada_em: '2025-03-15T10:05:00Z', lida_em: null },
+  { id: 'n3', tipo: 'bonus_recebido', titulo: 'Bônus Start recebido', corpo: 'R$ 60,00 de bônus pela primeira fatura paga de um assinante do nível 1 da sua rede.', rota: '/connect/home', criada_em: '2025-03-02T09:00:00Z', lida_em: '2025-03-02T12:00:00Z' },
+  { id: 'n4', tipo: 'comunicado', titulo: 'Bandeira tarifária de março', corpo: 'A bandeira segue verde em março. Seu desconto continua o mesmo.', rota: null, criada_em: '2025-02-28T15:00:00Z', lida_em: '2025-03-01T08:00:00Z' },
+];
+
 const meses = ['2024-10-01', '2024-11-01', '2024-12-01', '2025-01-01', '2025-02-01', '2025-03-01'];
-const faturas: Fatura[] = meses.map((m, i) => ({
-  id: `f${i}`, mes_referencia: m, vencimento: m.replace(/-01$/, '-15'), status: i === meses.length - 1 ? 'a_vencer' : 'pago',
-  consumo_kwh: [1720, 1810, 2010, 2150, 2014, 1845][i]!, consumo_compensado: [1300, 1390, 1560, 1640, 1530, 1420][i]!,
-  energia_injetada: null, valor_concessionaria: [1530, 1610, 1790, 1910, 1790, 1648][i]!, economia_reais: [349, 367, 408, 435, 408, 375][i]!,
-  valor_a_pagar: [1181, 1243, 1382, 1475, 1382, 1273][i]!, desconto_aplicado: 22.8,
-  asaas_boleto_url: 'https://b2wenergia.com.br', asaas_pdf_storage_url: null,
-  linha_digitavel: '34191.79001 01043.510047 91020.150008 8 10270000127300', pix_string: '00020126580014br.gov.bcb.pix0136b2w-demo',
-})).reverse();
+// Composicao coerente com o resumo do CRM: tarifa da conta 0,38951 + 0,64028,
+// desconto de 20%, CIP fixa. Os valores fecham com resumoFatura().
+const TE = 0.38951, TUSD = 0.64028, CIP = 55.27;
+const r2 = (v: number) => Math.round(v * 100) / 100;
+const faturas: Fatura[] = meses.map((m, i) => {
+  const consumo = [1720, 1810, 2010, 2150, 2014, 1845][i]!;
+  const comp = [1300, 1390, 1560, 1640, 1530, 1420][i]!;
+  const t = TE + TUSD;
+  const naoComp = r2((consumo - comp) * t);
+  const comDesc = r2(comp * t * 0.8);
+  return {
+    id: `f${i}`, mes_referencia: m, vencimento: m.replace(/-01$/, '-15'), status: i === meses.length - 1 ? 'a_vencer' : 'pago',
+    consumo_kwh: consumo, consumo_compensado: comp, energia_injetada: null,
+    valor_concessionaria: r2(naoComp + CIP), economia_reais: r2(comp * t * 0.2),
+    valor_a_pagar: r2(comDesc + naoComp + CIP), desconto_aplicado: 20,
+    te_apurado: TE, tusd_apurado: TUSD, iluminacao_publica: CIP, outros_lancamentos: 0, parcelamento: 0,
+    parcelamento_repassado: true, tarifa_minima: naoComp, consumo_reais: r2(comDesc + naoComp),
+    asaas_boleto_url: 'https://b2wenergia.com.br', asaas_pdf_storage_url: null,
+    linha_digitavel: '34191.79001 01043.510047 91020.150008 8 10270000127300', pix_string: '00020126580014br.gov.bcb.pix0136b2w-demo',
+  };
+}).reverse();
 
 const usinas: UsinaResumo[] = [
   { id: 'u1', name: 'UFV - São Thomé', address: end('BR-304', 'Km 115', '', 'Mossoró', 'RN'), status: 'gerando', potencia_kwp: 75, valor_investido: 330000, geracao_estimada_kwh: 14375, geracao_mes_kwh: 14145, receita_mes: 7072.5, mes_referencia: '2025-03-01' },
@@ -66,6 +87,9 @@ const meusPostos: MeuEletroposto[] = [
 
 export const demoRpc = (fn: string, args?: Record<string, unknown>): unknown => {
   switch (fn) {
+    case 'app_minhas_notificacoes': return notificacoes;
+    case 'app_notificacoes_nao_lidas': return notificacoes.filter((n) => !n.lida_em).length;
+    case 'app_marcar_notificacoes_lidas': return null;
     case 'app_perfil': return perfil;
     case 'app_minhas_ucs': return ucs;
     case 'app_planos_para_uc': return [

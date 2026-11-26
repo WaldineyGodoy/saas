@@ -2,7 +2,7 @@
   "expo": {
     "name": "B2W Energia",
     "slug": "b2w-energia",
-    "version": "7.3.0",
+    "version": "8.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -71,6 +71,20 @@
       "expo-router",
       "expo-font",
       "expo-secure-store",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Use o Face ID para entrar no app B2W Energia sem digitar a senha."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#F26B00",
+          "defaultChannel": "default",
+          "icon": "./assets/android-icon-monochrome.png"
+        }
+      ],
       "expo-web-browser",
       [
         "expo-location",

@@ -25,3 +25,17 @@ export function confirmar(titulo: string, mensagem: string, acao: string, aoConf
     { text: acao, style: 'destructive', onPress: aoConfirmar },
   ]);
 }
+
+/** Pergunta neutra (sem o vermelho de ação destrutiva), com "Agora não". */
+export function perguntar(titulo: string, mensagem: string, acao: string, aoAceitar: () => void, aoRecusar?: () => void) {
+  if (Platform.OS === 'web') {
+    if (typeof window === 'undefined') return;
+    if (window.confirm(`${titulo}\n\n${mensagem}`)) aoAceitar();
+    else aoRecusar?.();
+    return;
+  }
+  Alert.alert(titulo, mensagem, [
+    { text: 'Agora não', style: 'cancel', onPress: aoRecusar },
+    { text: acao, onPress: aoAceitar },
+  ]);
+}

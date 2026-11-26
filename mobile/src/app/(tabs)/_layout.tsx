@@ -4,7 +4,7 @@ import { StyleSheet, View, type ColorValue } from 'react-native';
 import { router, Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TopBar } from '../../components/ui';
-import { usePerfil } from '../../lib/api';
+import { useNaoLidas, usePerfil } from '../../lib/api';
 import { iniciais } from '../../lib/format';
 import { colors, esquemaAtual, fonts } from '../../theme/tokens';
 
@@ -34,6 +34,7 @@ function CentralOrbIcon({ focused }: { focused: boolean }) {
 
 export default function TabsLayout() {
   const { data: perfil } = usePerfil();
+  const { data: naoLidas } = useNaoLidas();
   // Altura do menu com folga para o rótulo e a barra de gestos do iPhone:
   // o padrão cortava a parte de baixo dos textos (11/10/2026).
   const insets = useSafeAreaInsets();
@@ -42,7 +43,10 @@ export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
-        header: () => <TopBar initials={iniciais(perfil?.name)} onAvatar={() => router.navigate('/mais')} />,
+        header: () => (
+          <TopBar initials={iniciais(perfil?.name)} onAvatar={() => router.navigate('/mais')}
+            naoLidas={naoLidas ?? 0} onSino={() => router.push('/notificacoes')} />
+        ),
         tabBarStyle: {
           backgroundColor: colors.tabBar,
           borderTopColor: colors.tabBarBorder,

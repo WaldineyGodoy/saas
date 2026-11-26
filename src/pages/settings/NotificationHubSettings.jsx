@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { MessageSquare, Zap, Settings, Mail } from 'lucide-react';
+import { MessageSquare, Zap, Settings, Mail, Smartphone } from 'lucide-react';
 import IntegrationSettings from './IntegrationSettings';
 import TriggerMessageDashboard from './TriggerMessageDashboard';
+import AppPushSettings from './AppPushSettings';
 
 export default function NotificationHubSettings() {
     const [activeSubTab, setActiveSubTab] = useState('triggers');
@@ -70,6 +71,24 @@ export default function NotificationHubSettings() {
                 >
                     <Mail size={18} /> Serviço de e-mail
                 </button>
+                <button
+                    onClick={() => setActiveSubTab('app')}
+                    style={{
+                        padding: '0.75rem 1.5rem',
+                        border: 'none',
+                        background: 'none',
+                        color: activeSubTab === 'app' ? '#0284c7' : '#64748b',
+                        borderBottom: activeSubTab === 'app' ? '2px solid #0284c7' : '2px solid transparent',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                        transition: 'all 0.2s'
+                    }}
+                >
+                    <Smartphone size={18} /> App (push)
+                </button>
             </div>
 
             {/* Sub-tab Content */}
@@ -82,6 +101,7 @@ export default function NotificationHubSettings() {
                     />
                 )}
                 {activeSubTab === 'triggers' && <TriggerMessageDashboard />}
+                {activeSubTab === 'app' && <AppPushSettings />}
                 {activeSubTab === 'email' && (
                     <IntegrationSettings 
                         serviceName="resend_api" 

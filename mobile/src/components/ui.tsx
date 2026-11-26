@@ -104,7 +104,13 @@ export function SeletorTema() {
 }
 
 /** Cabecalho fixo das telas (logo, seletor de tema, "Online", avatar), como no Stitch. */
-export function TopBar({ initials, onAvatar }: { initials?: string; onAvatar?: () => void }) {
+export function TopBar({ initials, onAvatar, naoLidas = 0, onSino }: {
+  initials?: string;
+  onAvatar?: () => void;
+  /** Central de notificacoes: o sino entra no lugar do selo "Online". */
+  naoLidas?: number;
+  onSino?: () => void;
+}) {
   const insets = useSafeAreaInsets();
   const logo = esquemaAtual === 'light' ? LOGO_HORIZONTAL_LIGHT : LOGO_HORIZONTAL;
   return (
@@ -122,10 +128,27 @@ export function TopBar({ initials, onAvatar }: { initials?: string; onAvatar?: (
             <MaterialIcons name={ICONE_TEMA[esquemaAtual]} size={13} color={colors.headerInk} />
             <Text style={s.themePillTxt}>{ROTULO_TEMA[esquemaAtual]}</Text>
           </Pressable>
-          <View style={s.online}>
-            <View style={s.onlineDot} />
-            <Text style={s.onlineTxt}>Online</Text>
-          </View>
+          {onSino ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={naoLidas > 0 ? `Notificações, ${naoLidas} não lidas` : 'Notificações'}
+              onPress={onSino}
+              hitSlop={8}
+              style={s.sino}
+            >
+              <MaterialIcons name={naoLidas > 0 ? 'notifications-active' : 'notifications-none'} size={20} color={colors.headerInk} />
+              {naoLidas > 0 && (
+                <View style={s.sinoSelo}>
+                  <Text style={s.sinoSeloTxt}>{naoLidas > 9 ? '9+' : naoLidas}</Text>
+                </View>
+              )}
+            </Pressable>
+          ) : (
+            <View style={s.online}>
+              <View style={s.onlineDot} />
+              <Text style={s.onlineTxt}>Online</Text>
+            </View>
+          )}
           <Pressable accessibilityLabel="Perfil" onPress={onAvatar} style={s.avatar}>
             <Text style={s.avatarTxt}>{initials || '•'}</Text>
           </Pressable>
@@ -393,6 +416,9 @@ const criarFolha = () => StyleSheet.create({
   themePill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 5, borderRadius: radius.full, backgroundColor: colors.headerChip, borderWidth: 1, borderColor: colors.headerBorder },
   themePillTxt: { fontFamily: fonts.monoMedium, fontSize: 10, color: colors.headerInk, letterSpacing: 0.4 },
   online: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 9, paddingVertical: 4, borderRadius: radius.full, backgroundColor: `${colors.headerAccent}1C`, borderWidth: 1, borderColor: `${colors.headerAccent}38` },
+  sino: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.headerChip, borderWidth: 1, borderColor: colors.headerBorder },
+  sinoSelo: { position: 'absolute', top: -3, right: -3, minWidth: 17, height: 17, paddingHorizontal: 4, borderRadius: 9, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.header },
+  sinoSeloTxt: { fontFamily: fonts.bodySemi, fontSize: 9, lineHeight: 11, color: '#FFFFFF' },
   onlineDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.headerAccent },
   onlineTxt: { fontFamily: fonts.mono, fontSize: 9, color: colors.headerAccent, textTransform: 'uppercase', letterSpacing: 0.6 },
   avatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.headerChip, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.headerBorder },
