@@ -44,7 +44,7 @@ Para cada mês `i` do histórico lido: `c_i = kwh_i / dias_i × 30` (consumo nor
 
 No caso real: anteriores `[150, 340, 790]`, mediana 340; `4.334 ≥ 680` e `4.334 > 790` → **em_rampa**.
 
-`em_queda` não reduz nada sozinha: só gera alerta para o time revisar (redução automática de franquia pode derrubar a energia de quem está sendo atendido).
+`em_queda` não reduz nada sozinha: gera uma **sugestão** de redução (decisão 4) e alerta o time, que aplica ou não (redução automática de franquia pode derrubar a energia de quem está sendo atendido).
 
 ## 5. Franquia em rampa
 
@@ -93,9 +93,11 @@ Regra atual (spec do Plano, item 4): a base é a mediana do upload, **congelada 
 
 Janela de rampa `n ≤ 6`; razão de entrada 2×; prudência 80 %; fator de carga 0,6; trava ±30 %; estabilização 3 ciclos dentro de ±25 %.
 
-## 11. Decisões que dependem do dono
+## 11. Decisões do dono (26/11/2026)
 
-1. Base do Start em rampa: A, B ou C (recomendo C).
-2. Prudência de 80 %: concorda, ou prefere outro valor?
-3. Franquia sugerida só **sugere** depois do contrato assinado (recomendado) ou aplica sozinha?
-4. `em_queda` só alerta (recomendado) ou também sugere redução?
+1. Base do Start em rampa: **opção C** (congelar já com `F_rampa`).
+2. Prudência de **80 %**: aprovada.
+3. Depois do contrato assinado a franquia só é **sugerida** (botão Aplicar).
+4. Conta `em_queda`: **sugere** redução (não só alerta). A sugestão segue a mesma regra do item 3: nada muda sozinho depois da assinatura.
+
+Status: spec aprovada; falta o plano de implementação.
