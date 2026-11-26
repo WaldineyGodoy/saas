@@ -18,6 +18,20 @@ import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import { getSecurePdfUrl } from '../lib/pdfHelper';
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
+/**
+ * Tarifa usada no cálculo da fatura — mesma regra da fn_calcular_fatura:
+ * a tarifa impressa na conta (TE + TUSD unitários, com tributos) e, só na
+ * falta dela, a do cadastro da UC. Usar o cadastro aqui fazia a tela mostrar
+ * outro valor que o boleto: UC 160382603202 10/2026 aparecia R$ 460,87
+ * (cadastro 1,0347) com R$ 458,95 gravados (conta 1,02979).
+ */
+const tarifaDaFatura = (dados, uc) => {
+    const te = Number(dados?.te_apurado);
+    const tusd = Number(dados?.tusd_apurado);
+    if (te > 0 && tusd > 0) return { tarifa: te + tusd, origem: 'conta' };
+    return { tarifa: Number(uc?.tarifa_concessionaria) || 0, origem: 'cadastro' };
+};
+
 export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraActions }) {
     const { profile } = useAuth();
     const { branding } = useBranding();
@@ -48,6 +62,9 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
     });
 
     const [selectedUc, setSelectedUc] = useState(null);
+    // Memória de cálculo da fatura: cada parcela que compõe o valor_a_pagar,
+    // mais a conta projetada sem compensação nem desconto (comparativo).
+    const [demonstrativo, setDemonstrativo] = useState(null);
     const [pdfFile, setPdfFile] = useState(null);
     const [stampCoords, setStampCoords] = useState(null);
     const [applyStamp] = useState(true);
@@ -124,7 +141,10 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
                 valor_concessionaria: invoice.valor_concessionaria || invoice.valor_a_pagar || 0,
                 status: invoice.status || 'ag_emissao_boleto',
                 desconto_aplicado: invoice.desconto_aplicado !== undefined ? invoice.desconto_aplicado : (selectedUc?.desconto_assinante || 0),
-                energy_bill_status: invoice.energy_bill_status || 'pendente'
+                energy_bill_status: invoice.energy_bill_status || 'pendente',
+                te_apurado: invoice.te_apurado ?? null,
+                tusd_apurado: invoice.tusd_apurado ?? null,
+                parcelamento_repassado: invoice.parcelamento_repassado !== false
             });
             // Find UC to set tariff info
             if (ucs) {
@@ -185,7 +205,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
             try {
                 const { data: bills, error } = await supabase
                     .from('invoices')
-                    .select('id, mes_referencia, vencimento, consumo_kwh, consumo_compensado, energia_injetada, iluminacao_publica, outros_lancamentos, parcelamento, tarifa_minima_excedentes, valor_concessionaria, data_leitura, linha_digitavel, pix_string, desconto_aplicado')
+                    .select('id, mes_referencia, vencimento, consumo_kwh, consumo_compensado, energia_injetada, iluminacao_publica, outros_lancamentos, parcelamento, tarifa_minima_excedentes, valor_concessionaria, data_leitura, linha_digitavel, pix_string, desconto_aplicado, te_apurado, tusd_apurado')
                     .eq('uc_id', formData.uc_id)
                     .in('status', ['sem_faturamento', 'ag_emissao_boleto'])
                     .order('mes_referencia', { ascending: false });
@@ -216,6 +236,8 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
             linha_digitavel: bill.linha_digitavel || prev.linha_digitavel,
             pix_string: bill.pix_string || prev.pix_string,
             desconto_aplicado: bill.desconto_aplicado ?? prev.desconto_aplicado,
+            te_apurado: bill.te_apurado ?? null,
+            tusd_apurado: bill.tusd_apurado ?? null,
         }));
         setShowPendingDropdown(false);
         showAlert('Dados da conta de energia carregados com sucesso!', 'success');
@@ -240,7 +262,10 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
         if (selectedUc) {
             const consumo = Number(formData.consumo_kwh) || 0;
             const rawConsumoCompensado = Number(formData.consumo_compensado) || 0;
-            const rawTarifa = Number(selectedUc.tarifa_concessionaria) || 0;
+            const { tarifa: rawTarifa, origem: tarifaOrigem } = tarifaDaFatura(
+                { te_apurado: formData.te_apurado, tusd_apurado: formData.tusd_apurado },
+                selectedUc
+            );
             
             // Prioritize persisted discount from invoice, otherwise use UC current discount
             const discountSnapshot = formData.desconto_aplicado !== undefined 
@@ -261,10 +286,36 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
 
             const ip = parseCurrency(formData.iluminacao_publica);
             const outros = parseCurrency(formData.outros_lancamentos);
-            const parcelamento = parseCurrency(formData.parcelamento || '0');
+            // Parcela não repassada fica na conta, mas fora do boleto (20261103d).
+            const parcelamento = formData.parcelamento_repassado === false ? 0 : parseCurrency(formData.parcelamento || '0');
 
             // Total = Energia Compensada + Tarifa Mínima e Excedentes + IP + Outros + Parcelamento
             const total = energiaCompensadaReais + tarifaMinimaExcedentesReais + ip + outros + parcelamento;
+
+            // Conta projetada: o que a concessionária cobraria pelo consumo
+            // inteiro à tarifa cheia, sem crédito de geração e sem desconto,
+            // com os mesmos encargos (CIP, outros, parcelamento) que a conta
+            // real traz. A diferença para o total é a economia do assinante.
+            const contaProjetada = consumo * rawTarifa + ip + outros + parcelamento;
+
+            setDemonstrativo({
+                tarifa: rawTarifa,
+                tarifaOrigem,
+                percentualDesconto: multiplier * 100,
+                consumoKwh: consumo,
+                compensadoKwh: rawConsumoCompensado,
+                naoCompensadoKwh: Math.max(0, consumo - rawConsumoCompensado),
+                compensadaBruta: rawConsumoCompensado * rawTarifa,
+                desconto: economiaReais,
+                compensadaLiquida: energiaCompensadaReais,
+                naoCompensadaReais: tarifaMinimaExcedentesReais,
+                ip,
+                outros,
+                parcelamento,
+                total,
+                contaProjetada,
+                economia: contaProjetada - total,
+            });
 
             setFormData(prev => ({
                 ...prev,
@@ -282,6 +333,9 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
         formData.outros_lancamentos,
         formData.parcelamento,
         formData.desconto_aplicado,
+        formData.te_apurado,
+        formData.parcelamento_repassado,
+        formData.tusd_apurado,
         selectedUc
     ]);
     
@@ -1208,7 +1262,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
             // Recalculate values for payload to be safe
             const rawConsumo = Number(formData.consumo_kwh) || 0;
             const rawCompensado = Number(formData.consumo_compensado) || 0;
-            const rawTarifa = Number(selectedUc?.tarifa_concessionaria) || 0;
+            const { tarifa: rawTarifa } = tarifaDaFatura(formData, selectedUc);
             
             // Snapshot the discount for persistence
             const discountToApply = formData.desconto_aplicado !== undefined 
@@ -1223,7 +1277,9 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
             const ip = parseCurrency(formData.iluminacao_publica);
             const outros = parseCurrency(formData.outros_lancamentos);
             const parcelamento = parseCurrency(formData.parcelamento || '0');
-            const totalToSave = Math.max(0, compensadaLiquida + tarifaMinimaExcedentes + ip + outros + parcelamento);
+            // Parcela não repassada fica gravada na conta, mas fora do boleto (20261103d).
+            const parcelamentoBoleto = formData.parcelamento_repassado === false ? 0 : parcelamento;
+            const totalToSave = Math.max(0, compensadaLiquida + tarifaMinimaExcedentes + ip + outros + parcelamentoBoleto);
 
             const payload = {
                 uc_id: formData.uc_id,
@@ -2178,19 +2234,101 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
                                                 <span style={{ fontWeight: 700, color: '#2563eb' }}>{formData.consumo_compensado} kWh</span>
                                             </div>
                                             
-                                            <div style={{ height: '1px', background: '#e2e8f0', margin: '0.4rem 0' }}></div>
+                                            {demonstrativo && (() => {
+                                                const d = demonstrativo;
+                                                const brl = (v) => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                                                const tar = (v) => `R$ ${(Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 4, maximumFractionDigits: 5 })}`;
+                                                const kwh = (v) => `${(Number(v) || 0).toLocaleString('pt-BR')} kWh`;
+                                                const pct = (v) => `${(Number(v) || 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
+                                                const secao = { fontSize: '0.65rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em', margin: '0.6rem 0 0.1rem' };
+                                                const Linha = ({ rotulo, detalhe, valor, cor = '#1e293b', forte = false }) => (
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', fontSize: '0.9rem', color: '#475569' }}>
+                                                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                                            <span style={{ fontWeight: forte ? 700 : 400, color: forte ? '#1e293b' : '#475569' }}>{rotulo}</span>
+                                                            {detalhe && <span style={{ fontSize: '0.72rem', color: '#94a3b8', fontVariantNumeric: 'tabular-nums' }}>{detalhe}</span>}
+                                                        </div>
+                                                        <span style={{ fontWeight: 700, color: cor, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{valor}</span>
+                                                    </div>
+                                                );
+                                                const Regua = () => <div style={{ height: '1px', background: '#e2e8f0', margin: '0.2rem 0' }}></div>;
+                                                return (
+                                                    <>
+                                                        <div style={{ height: '1px', background: '#e2e8f0', margin: '0.4rem 0' }}></div>
 
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#475569' }}>
-                                                <span>Custo da Energia:</span>
-                                                <span style={{ fontWeight: 700, color: '#1e293b' }}>{formData.consumo_reais}</span>
-                                            </div>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#16a34a', fontWeight: '600' }}>
-                                                <span>Economia Gerada:</span>
-                                                <span>- {formData.economia_reais}</span>
-                                            </div>
-                                            
-                                            <div style={{ 
-                                                marginTop: '0.5rem', padding: '1.25rem', borderRadius: '12px', 
+                                                        <div style={secao}>Como chegamos ao valor</div>
+                                                        <Linha
+                                                            rotulo="Energia compensada (tarifa cheia)"
+                                                            detalhe={`${kwh(d.compensadoKwh)} × ${tar(d.tarifa)}/kWh · tarifa ${d.tarifaOrigem === 'conta' ? 'da conta (TE + TUSD)' : 'do cadastro da UC'}`}
+                                                            valor={brl(d.compensadaBruta)}
+                                                        />
+                                                        <Linha
+                                                            rotulo={`(−) Desconto B2W de ${pct(d.percentualDesconto)}`}
+                                                            detalhe={`${brl(d.compensadaBruta)} × ${pct(d.percentualDesconto)}`}
+                                                            valor={`− ${brl(d.desconto)}`}
+                                                            cor="#16a34a"
+                                                        />
+                                                        <Linha
+                                                            rotulo="= Energia compensada com desconto"
+                                                            valor={brl(d.compensadaLiquida)}
+                                                            forte
+                                                        />
+                                                        <Regua />
+                                                        <Linha
+                                                            rotulo="(+) Consumo não compensado"
+                                                            detalhe={`${kwh(d.naoCompensadoKwh)} × ${tar(d.tarifa)}/kWh (mínimo e excedentes)`}
+                                                            valor={brl(d.naoCompensadaReais)}
+                                                        />
+                                                        <Linha
+                                                            rotulo="(+) Iluminação pública (CIP)"
+                                                            detalhe="repassada da conta da concessionária"
+                                                            valor={brl(d.ip)}
+                                                        />
+                                                        <Linha
+                                                            rotulo="(+) Outros lançamentos da conta"
+                                                            detalhe="encargos, multas, juros e ajustes da concessionária"
+                                                            valor={brl(d.outros)}
+                                                        />
+                                                        {d.parcelamento !== 0 && (
+                                                            <Linha
+                                                                rotulo="(+) Parcelamento"
+                                                                detalhe="parcela de débito negociado na concessionária"
+                                                                valor={brl(d.parcelamento)}
+                                                            />
+                                                        )}
+                                                        <Regua />
+                                                        <Linha rotulo="= Valor da fatura" valor={brl(d.total)} forte />
+
+                                                        <div style={{ marginTop: '0.75rem', padding: '1rem 1.1rem', borderRadius: '12px', background: '#f8fafc', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                                                            <div style={{ ...secao, margin: 0 }}>Comparativo — sem a B2W</div>
+                                                            <Linha
+                                                                rotulo="Conta projetada na concessionária"
+                                                                detalhe={`sem compensação e sem desconto: ${kwh(d.consumoKwh)} × ${tar(d.tarifa)} + CIP + outros${d.parcelamento !== 0 ? ' + parcelamento' : ''}`}
+                                                                valor={brl(d.contaProjetada)}
+                                                            />
+                                                            <Linha
+                                                                rotulo="Fatura com a B2W"
+                                                                valor={brl(d.total)}
+                                                            />
+                                                            <Regua />
+                                                            <Linha
+                                                                rotulo="Economia gerada"
+                                                                detalhe={d.contaProjetada > 0 ? `${pct((d.economia / d.contaProjetada) * 100)} da conta projetada` : undefined}
+                                                                valor={brl(d.economia)}
+                                                                cor="#16a34a"
+                                                                forte
+                                                            />
+                                                            {!d.tarifa && (
+                                                                <span style={{ fontSize: '0.72rem', color: '#b45309' }}>
+                                                                    Tarifa da UC zerada no cadastro — projeção e energia aparecem zeradas.
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </>
+                                                );
+                                            })()}
+
+                                            <div style={{
+                                                marginTop: '0.5rem', padding: '1.25rem', borderRadius: '12px',
                                                 background: '#f0fdf4', border: '1px solid #bbf7d0',
                                                 display: 'flex', justifyContent: 'space-between', alignItems: 'center'
                                             }}>
