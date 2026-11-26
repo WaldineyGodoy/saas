@@ -58,6 +58,15 @@ Regras:
 const ligacaoDoFornecimento = (tipo: string) =>
     /mono/i.test(tipo) ? 'monofasico' : /bif/i.test(tipo) ? 'bifasico' : /trif/i.test(tipo) ? 'trifasico' : ''
 
+// Mediana dos kWh > 0, arredondada: a regra do dono para a franquia (um mes
+// fora da curva nao arrasta). Mesma conta de src/lib/historicoConsumo.js.
+const medianaDoHistorico = (historico: { kwh: number }[]) => {
+    const v = historico.map((h) => Number(h.kwh)).filter((n) => Number.isFinite(n) && n > 0).sort((a, b) => a - b)
+    if (!v.length) return 0
+    const m = Math.floor(v.length / 2)
+    return Math.round(v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2)
+}
+
 // deno-lint-ignore no-explicit-any
 export const completarLeitura = (lido: any) => {
     const historico: { kwh: number }[] = lido.historico || []
@@ -73,6 +82,7 @@ export const completarLeitura = (lido: any) => {
         } : null,
         ligacao: ligacaoDoFornecimento(lido.tipoFornecimento || ''),
         mediaKwh: comConsumo.length ? Math.round(comConsumo.reduce((s, h) => s + h.kwh, 0) / comConsumo.length) : 0,
+        medianaKwh: medianaDoHistorico(historico),
     }
 }
 

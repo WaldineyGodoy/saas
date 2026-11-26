@@ -192,7 +192,9 @@ export default function PublicConsumerUnitForm({
                     })))
                     .catch(() => {});
             }
-            setContaLida({ arquivo, numeroUc: campos.numero_uc });
+            // O histórico da conta segue com a UC: a RPC grava o perfil de 12 meses
+            // e a mediana (franquia) a partir dele.
+            setContaLida({ arquivo, numeroUc: campos.numero_uc, historico: Array.isArray(pedido.historico) && pedido.historico.length ? pedido.historico : null });
         } catch (err) {
             console.error('Leitura da conta na adesão:', err);
             showAlert(err.message || 'Não foi possível ler a conta. Preencha os dados à mão.', 'error');
@@ -235,7 +237,8 @@ export default function PublicConsumerUnitForm({
             numero_uc: numeroUc,
             cpf_cnpj_fatura: formData.cpf_cnpj_fatura.replace(/\D/g, ''),
             // Vira o documento da UC depois do cadastro (SubscriberSignup).
-            arquivo_conta: contaLida?.arquivo || null
+            arquivo_conta: contaLida?.arquivo || null,
+            historico: contaLida?.historico || (Array.isArray(ucDefault?.historico) && ucDefault.historico.length ? ucDefault.historico : null)
         });
         onClose();
     };

@@ -98,7 +98,9 @@ export function parametrosAssinante(a: EntradaAssinante): Record<string, unknown
         p_originator_id: a.originatorId, p_lead_id: a.leadId,
         p_ucs: [{
             numero_uc: a.conta.numeroUc, titular_conta: a.conta.titular.trim(), cpf_cnpj_fatura: cpf,
-            tipo_ligacao: a.conta.ligacao, concessionaria: a.conta.concessionaria, franquia: String(a.conta.mediaKwh || 0),
+            tipo_ligacao: a.conta.ligacao, concessionaria: a.conta.concessionaria, franquia: String(a.conta.medianaKwh || a.conta.mediaKwh || 0),
+            // O historico da conta vira o perfil de 12 meses e a mediana da UC (RPC).
+            ...(Array.isArray(a.conta.historico) && a.conta.historico.length ? { historico: a.conta.historico } : {}),
             ibge: a.ibge, cep, rua, numero, bairro: e.bairro, cidade: e.cidade, uf, complemento,
         }],
         p_dia_vencimento: 5, p_representante_nome: null, p_representante_cpf: null,
