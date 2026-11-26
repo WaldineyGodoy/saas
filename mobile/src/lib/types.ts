@@ -41,6 +41,15 @@ export type Fatura = {
   economia_reais: number | null;
   valor_a_pagar: number | null;
   desconto_aplicado: number | null;
+  // Composicao da fatura (app_uc_detalhe, migracao 20261126a)
+  te_apurado?: number | null;
+  tusd_apurado?: number | null;
+  iluminacao_publica?: number | null;
+  outros_lancamentos?: number | null;
+  parcelamento?: number | null;
+  parcelamento_repassado?: boolean | null;
+  tarifa_minima?: number | null;
+  consumo_reais?: number | null;
   asaas_boleto_url: string | null;
   asaas_pdf_storage_url: string | null;
   linha_digitavel: string | null;
@@ -48,7 +57,7 @@ export type Fatura = {
 };
 
 export type UcDetalhe = {
-  uc: UcResumo & { tipo_ligacao?: string | null; modalidade?: string | null };
+  uc: UcResumo & { tipo_ligacao?: string | null; modalidade?: string | null; tarifa_concessionaria?: number | null };
   faturas: Fatura[];
 };
 

@@ -30,14 +30,27 @@ const ucs: UcResumo[] = [
 ];
 
 const meses = ['2024-10-01', '2024-11-01', '2024-12-01', '2025-01-01', '2025-02-01', '2025-03-01'];
-const faturas: Fatura[] = meses.map((m, i) => ({
-  id: `f${i}`, mes_referencia: m, vencimento: m.replace(/-01$/, '-15'), status: i === meses.length - 1 ? 'a_vencer' : 'pago',
-  consumo_kwh: [1720, 1810, 2010, 2150, 2014, 1845][i]!, consumo_compensado: [1300, 1390, 1560, 1640, 1530, 1420][i]!,
-  energia_injetada: null, valor_concessionaria: [1530, 1610, 1790, 1910, 1790, 1648][i]!, economia_reais: [349, 367, 408, 435, 408, 375][i]!,
-  valor_a_pagar: [1181, 1243, 1382, 1475, 1382, 1273][i]!, desconto_aplicado: 22.8,
-  asaas_boleto_url: 'https://b2wenergia.com.br', asaas_pdf_storage_url: null,
-  linha_digitavel: '34191.79001 01043.510047 91020.150008 8 10270000127300', pix_string: '00020126580014br.gov.bcb.pix0136b2w-demo',
-})).reverse();
+// Composicao coerente com o resumo do CRM: tarifa da conta 0,38951 + 0,64028,
+// desconto de 20%, CIP fixa. Os valores fecham com resumoFatura().
+const TE = 0.38951, TUSD = 0.64028, CIP = 55.27;
+const r2 = (v: number) => Math.round(v * 100) / 100;
+const faturas: Fatura[] = meses.map((m, i) => {
+  const consumo = [1720, 1810, 2010, 2150, 2014, 1845][i]!;
+  const comp = [1300, 1390, 1560, 1640, 1530, 1420][i]!;
+  const t = TE + TUSD;
+  const naoComp = r2((consumo - comp) * t);
+  const comDesc = r2(comp * t * 0.8);
+  return {
+    id: `f${i}`, mes_referencia: m, vencimento: m.replace(/-01$/, '-15'), status: i === meses.length - 1 ? 'a_vencer' : 'pago',
+    consumo_kwh: consumo, consumo_compensado: comp, energia_injetada: null,
+    valor_concessionaria: r2(naoComp + CIP), economia_reais: r2(comp * t * 0.2),
+    valor_a_pagar: r2(comDesc + naoComp + CIP), desconto_aplicado: 20,
+    te_apurado: TE, tusd_apurado: TUSD, iluminacao_publica: CIP, outros_lancamentos: 0, parcelamento: 0,
+    parcelamento_repassado: true, tarifa_minima: naoComp, consumo_reais: r2(comDesc + naoComp),
+    asaas_boleto_url: 'https://b2wenergia.com.br', asaas_pdf_storage_url: null,
+    linha_digitavel: '34191.79001 01043.510047 91020.150008 8 10270000127300', pix_string: '00020126580014br.gov.bcb.pix0136b2w-demo',
+  };
+}).reverse();
 
 const usinas: UsinaResumo[] = [
   { id: 'u1', name: 'UFV - São Thomé', address: end('BR-304', 'Km 115', '', 'Mossoró', 'RN'), status: 'gerando', potencia_kwp: 75, valor_investido: 330000, geracao_estimada_kwh: 14375, geracao_mes_kwh: 14145, receita_mes: 7072.5, mes_referencia: '2025-03-01' },
