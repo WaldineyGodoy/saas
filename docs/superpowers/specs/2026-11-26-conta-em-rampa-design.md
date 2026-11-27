@@ -38,7 +38,7 @@ Para cada mês `i` do histórico lido: `c_i = kwh_i / dias_i × 30` (consumo nor
 | Regime | Condição |
 |---|---|
 | `insuficiente` | `n < 2` |
-| `em_rampa` | `n ≤ 6` **e** `c_ult ≥ 2 × mediana(c anteriores)` **e** `c_ult > c_penúltimo` |
+| `em_rampa` | `n ≤ 6` **e** `c_ult ≥ 2 × mediana(c anteriores)` **e** `c_ult > 1,25 × c_penúltimo` |
 | `em_queda` | `n ≥ 3` e `c_ult ≤ 0,5 × mediana(c anteriores)` |
 | `estavel` | demais casos |
 
