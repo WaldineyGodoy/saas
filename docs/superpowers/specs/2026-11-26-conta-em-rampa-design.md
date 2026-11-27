@@ -65,7 +65,7 @@ Novas colunas em `consumer_units`: `regime_consumo text` (`estavel | em_rampa | 
 
 A cada conta nova (`fn_gravar_historico_consumo`, que já sobrescreve o mês do perfil com `origem = 'conta'`):
 1. recalcula o regime e a franquia sugerida;
-2. **não altera `franquia` vigente depois da assinatura do contrato**: grava `franquia_sugerida` e mostra no modal com botão "Aplicar" (a franquia consta no termo; mudar exige o aditivo). Antes da assinatura (UC em ativação sem contrato enviado), aplica sozinha;
+2. **não altera `franquia` vigente depois da assinatura do contrato**: grava `franquia_sugerida` e mostra no modal com botão "Aplicar" (a franquia consta no termo; mudar exige o aditivo). Na primeira carga do histórico (cadastro) a franquia é aplicada sozinha; nas cargas seguintes só é sugerida.
 3. trava de variação: sugestão fora de ±30 % da vigente gera alerta para o time.
 
 **Saída da rampa**: `n ≥ 6` e os últimos 3 ciclos com `0,75 ≤ c_i / c_(i-1) ≤ 1,25`. A UC passa a `estavel`; a franquia sugerida volta a ser a **mediana dos ciclos da janela estável** (os 3+ últimos), não do histórico inteiro, que ainda carrega a subida.
