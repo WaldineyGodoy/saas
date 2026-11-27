@@ -188,3 +188,142 @@ BEGIN
     RETURN v_h;
 END;
 $function$;
+
+-- fn_historico_consumo_gravar_uc: grava dias por mes, regime, franquia sugerida e
+-- a base do Start (em rampa, congela a franquia de rampa). Assinatura inalterada.
+CREATE OR REPLACE FUNCTION public.fn_historico_consumo_gravar_uc(
+    p_uc uuid, p_historico jsonb, p_origem text DEFAULT 'cadastro')
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+DECLARE
+    v_cu      record;
+    v_h       jsonb;
+    v_e       jsonb;
+    v_mes     text;
+    v_k       text;
+    v_med     numeric;
+    v_base    numeric;
+    v_reg     jsonb;
+    v_regime  text;
+    v_primeira boolean;
+    v_franq   numeric;
+    v_sug     numeric;
+BEGIN
+    IF p_origem IS NULL OR p_origem NOT IN ('cadastro', 'conta') THEN
+        RAISE EXCEPTION 'fn_gravar_historico_consumo: origem "%" invalida (cadastro | conta)', p_origem
+            USING ERRCODE = '22023';
+    END IF;
+    IF jsonb_typeof(p_historico) IS DISTINCT FROM 'array' THEN
+        RAISE EXCEPTION 'fn_gravar_historico_consumo: p_historico precisa ser o array do leitor [{"mes":"AAAA-MM","kwh":N}]'
+            USING ERRCODE = '22023';
+    END IF;
+
+    SELECT cu.id, cu.historico_consumo, cu.start_base_kwh, cu.franquia, cu.regime_consumo, cu.regime_desde INTO v_cu
+      FROM public.consumer_units cu WHERE cu.id = p_uc FOR UPDATE;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'fn_gravar_historico_consumo: UC % inexistente', p_uc USING ERRCODE = 'P0002';
+    END IF;
+
+    v_primeira := v_cu.historico_consumo IS NULL OR v_cu.historico_consumo = '{}'::jsonb;
+    v_h := COALESCE(v_cu.historico_consumo, '{}'::jsonb);
+    -- historico real chegou: o preenchimento por franquia (backfill sem dado) sai
+    IF public.fn_mediana_kwh(p_historico) IS NOT NULL THEN
+        SELECT COALESCE(jsonb_object_agg(m.key, m.value), '{}'::jsonb) INTO v_h
+          FROM jsonb_each(v_h) m
+         WHERE COALESCE(m.value ->> 'origem', '') <> 'franquia';
+    END IF;
+    -- kwh ilegivel conta como 0 (o mes fica e recebe o preenchimento)
+    FOR v_e IN SELECT e FROM jsonb_array_elements(p_historico) e
+                WHERE jsonb_typeof(e) = 'object'
+                  AND (e ->> 'mes') ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'
+                ORDER BY e ->> 'mes' LOOP
+        v_mes := v_e ->> 'mes';
+        v_h := public.fn_historico_consumo_aplicar(v_h, v_mes,
+                   CASE WHEN (v_e ->> 'kwh') ~ '^[0-9]+(\.[0-9]+)?$' THEN (v_e ->> 'kwh')::numeric ELSE 0 END,
+                   p_origem);
+        -- dias do ciclo: so quando a leitura entrou no perfil (ref igual)
+        v_k := right(v_mes, 2);
+        IF (v_e ->> 'dias') ~ '^[0-9]+(\.[0-9]+)?$' AND (v_e ->> 'dias')::numeric > 0
+           AND (v_h -> v_k ->> 'ref') = v_mes THEN
+            v_h := jsonb_set(v_h, ARRAY[v_k, 'dias'], to_jsonb((v_e ->> 'dias')::numeric));
+        END IF;
+    END LOOP;
+
+    v_reg    := public.fn_regime_consumo(v_h);
+    v_regime := v_reg ->> 'regime';
+    v_h      := public.fn_historico_consumo_normalizar(v_h);
+    v_med    := public.fn_mediana_kwh(v_h);
+    IF v_h = '{}'::jsonb THEN
+        v_h := v_cu.historico_consumo;
+    END IF;
+
+    -- franquia sugerida
+    v_sug := CASE
+        WHEN v_regime = 'em_rampa' THEN (v_reg ->> 'franquia_rampa')::numeric
+        WHEN v_regime = 'em_queda' THEN (v_reg ->> 'franquia_janela')::numeric
+        WHEN v_regime = 'estavel' AND v_cu.regime_consumo = 'em_rampa' THEN (v_reg ->> 'franquia_janela')::numeric
+        ELSE NULL END;
+
+    -- primeira carga em rampa: a franquia do cadastro (derivada da mediana) e trocada
+    v_franq := v_cu.franquia;
+    IF v_primeira AND v_regime = 'em_rampa' THEN
+        v_franq := v_sug;
+    END IF;
+
+    -- base do Start: congelada uma unica vez; em rampa, com a franquia de rampa (opcao C)
+    v_base := v_cu.start_base_kwh;
+    IF v_base IS NULL AND v_med > 0 THEN
+        v_base := CASE WHEN v_regime = 'em_rampa' THEN (v_reg ->> 'franquia_rampa')::numeric ELSE v_med END;
+        UPDATE public.consumer_units
+           SET historico_consumo = v_h, consumo_mediano_kwh = v_med,
+               start_base_kwh = v_base, start_base_em = now(),
+               franquia = v_franq, franquia_sugerida = v_sug,
+               regime_consumo = v_regime,
+               regime_desde = CASE WHEN v_cu.regime_consumo IS DISTINCT FROM v_regime THEN now() ELSE v_cu.regime_desde END
+         WHERE id = p_uc;
+    ELSE
+        UPDATE public.consumer_units
+           SET historico_consumo = v_h, consumo_mediano_kwh = v_med,
+               franquia = v_franq, franquia_sugerida = v_sug,
+               regime_consumo = v_regime,
+               regime_desde = CASE WHEN v_cu.regime_consumo IS DISTINCT FROM v_regime THEN now() ELSE v_cu.regime_desde END
+         WHERE id = p_uc;
+    END IF;
+
+    RETURN jsonb_build_object('historico', v_h, 'mediana', v_med, 'start_base_kwh', v_base,
+                              'regime', v_regime, 'franquia_sugerida', v_sug);
+END;
+$function$;
+
+-- Equipe aplica a franquia sugerida (botao Aplicar). Nao mexe na base do Start.
+CREATE OR REPLACE FUNCTION public.fn_aplicar_franquia_sugerida(p_uc uuid)
+ RETURNS numeric
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+DECLARE
+    v_sug numeric;
+BEGIN
+    IF NOT (COALESCE(auth.role(), '') = 'service_role'
+            OR COALESCE(public.fn_papel_interno(), false)
+            OR session_user = 'postgres') THEN
+        RAISE EXCEPTION 'fn_aplicar_franquia_sugerida: sem permissao' USING ERRCODE = '42501';
+    END IF;
+    SELECT franquia_sugerida INTO v_sug FROM public.consumer_units WHERE id = p_uc FOR UPDATE;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'fn_aplicar_franquia_sugerida: UC % inexistente', p_uc USING ERRCODE = 'P0002';
+    END IF;
+    IF v_sug IS NULL THEN
+        RAISE EXCEPTION 'fn_aplicar_franquia_sugerida: UC sem franquia sugerida' USING ERRCODE = '22023';
+    END IF;
+    UPDATE public.consumer_units SET franquia = v_sug WHERE id = p_uc;
+    RETURN v_sug;
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.fn_aplicar_franquia_sugerida(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.fn_aplicar_franquia_sugerida(uuid) TO authenticated, service_role;
