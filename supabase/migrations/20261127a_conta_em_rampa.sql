@@ -221,7 +221,7 @@ BEGIN
             USING ERRCODE = '22023';
     END IF;
 
-    SELECT cu.id, cu.historico_consumo, cu.start_base_kwh, cu.franquia, cu.regime_consumo, cu.regime_desde INTO v_cu
+    SELECT cu.id, cu.historico_consumo, cu.start_base_kwh, cu.franquia, cu.regime_consumo, cu.regime_desde, cu.franquia_sugerida INTO v_cu
       FROM public.consumer_units cu WHERE cu.id = p_uc FOR UPDATE;
     IF NOT FOUND THEN
         RAISE EXCEPTION 'fn_gravar_historico_consumo: UC % inexistente', p_uc USING ERRCODE = 'P0002';
@@ -265,7 +265,7 @@ BEGIN
         WHEN v_regime = 'em_rampa' THEN (v_reg ->> 'franquia_rampa')::numeric
         WHEN v_regime = 'em_queda' THEN (v_reg ->> 'franquia_janela')::numeric
         WHEN v_regime = 'estavel' AND v_cu.regime_consumo = 'em_rampa' THEN (v_reg ->> 'franquia_janela')::numeric
-        ELSE NULL END;
+        ELSE v_cu.franquia_sugerida END;
 
     -- primeira carga em rampa: a franquia do cadastro (derivada da mediana) e trocada
     v_franq := v_cu.franquia;
@@ -320,7 +320,7 @@ BEGIN
     IF v_sug IS NULL THEN
         RAISE EXCEPTION 'fn_aplicar_franquia_sugerida: UC sem franquia sugerida' USING ERRCODE = '22023';
     END IF;
-    UPDATE public.consumer_units SET franquia = v_sug WHERE id = p_uc;
+    UPDATE public.consumer_units SET franquia = v_sug, franquia_sugerida = NULL WHERE id = p_uc;
     RETURN v_sug;
 END;
 $function$;
