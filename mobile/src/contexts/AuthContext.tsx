@@ -39,6 +39,16 @@ type AuthValue = {
 const AuthContext = createContext<AuthValue | null>(null);
 
 /**
+ * Para onde o link dos e-mails de cadastro e de senha leva. Sem isto o
+ * Supabase usa a Site URL do projeto (app.b2wenergia.com.br, o portal antigo,
+ * que ficou com o certificado vencido e o Chrome bloqueava, 27/11/2026). O
+ * app confirma pelo código de 6 dígitos; o link é o caminho alternativo e
+ * cai no webapp do próprio app. A URL precisa estar em Authentication ->
+ * URL Configuration -> Redirect URLs do Supabase.
+ */
+const URL_RETORNO_EMAIL = 'https://apps.b2wenergia.com.br/login';
+
+/**
  * Tira a sessao do aparelho sem revoga-la no servidor. O supabase-js nao tem
  * API publica para isso; _removeSession apaga a sessao guardada e avisa
  * SIGNED_OUT, o mesmo que o signOut faz depois de chamar o servidor.
@@ -102,7 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return error ? traduzErro(error.message) : null;
       },
       async resetPassword(email) {
-        const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase());
+        const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), { redirectTo: URL_RETORNO_EMAIL });
         return error ? traduzErro(error.message) : null;
       },
       async redefinirSenha(email, codigo, senha) {
@@ -143,7 +153,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const { data, error } = await supabase.auth.signUp({
           email: email.trim().toLowerCase(),
           password: senha,
-          options: { data: { name: nome.trim(), phone: celular } },
+          options: { data: { name: nome.trim(), phone: celular }, emailRedirectTo: URL_RETORNO_EMAIL },
         });
         if (error) return traduzErro(error.message);
         // E-mail já confirmado em outra conta: o Supabase responde sem erro e
@@ -160,7 +170,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
       async reenviarCodigoCadastro(email) {
         if (DEMO) return null;
-        const { error } = await supabase.auth.resend({ type: 'signup', email: email.trim().toLowerCase() });
+        const { error } = await supabase.auth.resend({ type: 'signup', email: email.trim().toLowerCase(), options: { emailRedirectTo: URL_RETORNO_EMAIL } });
         return error ? traduzErro(error.message) : null;
       },
       async entrarSeConfirmado(email, senha) {
