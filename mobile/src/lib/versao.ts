@@ -10,4 +10,4 @@
  * Vale o maior nível que a versão tiver (layout + correção = X). Subir um
  * nível zera os da direita: 1.6.1 -> 2.0.0 (X), 1.7.0 (Y) ou 1.6.2 (Z).
  */
-export const NOVIDADES_DA_VERSAO = 'Adesão: a UC nova já nasce com o histórico de consumo da conta de luz, e a franquia passa a usar a mediana dos meses, mais fiel ao consumo real.';
+export const NOVIDADES_DA_VERSAO = 'Correção: o link de confirmação de cadastro e de troca de senha que chega por e-mail volta a abrir sem aviso de segurança no navegador.';
