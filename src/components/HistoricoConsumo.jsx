@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { useUI } from '../contexts/UIContext';
 import { parseEnergyBill } from '../lib/energyBillParser';
 import { parseEnergyBillImage } from '../lib/energyBillImage';
+import { classificarRegime } from '../lib/regimeConsumo';
 import { ORIGENS_HISTORICO, montarPerfil, medianaDoPerfil, perfilParaLista, perfilTemDados, ehErroBancoDesatualizado, gravarHistoricoConsumo } from '../lib/historicoConsumo';
 
 const CORES_ORIGEM = {
@@ -11,6 +12,7 @@ const CORES_ORIGEM = {
     conta: { fundo: '#f0fdf4', borda: '#bbf7d0', texto: '#15803d', barra: '#22c55e' },
     mediana: { fundo: '#fffbeb', borda: '#fde68a', texto: '#b45309', barra: '#f59e0b' },
     franquia: { fundo: '#f1f5f9', borda: '#cbd5e1', texto: '#475569', barra: '#94a3b8' },
+    rampa: { fundo: '#f5f3ff', borda: '#ddd6fe', texto: '#6d28d9', barra: '#8b5cf6' },
 };
 
 const fmtKwh = (v) => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v)))
@@ -62,6 +64,23 @@ export default function HistoricoConsumo({ ucId, numerosUc = [], podeImportar = 
     const [erro, setErro] = useState('');
     const [dados, setDados] = useState(null);
     const [importando, setImportando] = useState(false);
+    const [aplicando, setAplicando] = useState(false);
+
+    const aplicarSugestao = async () => {
+        const ok = await showConfirm(
+            `Aplicar a franquia sugerida de ${fmtKwh(dados?.franquia_sugerida)} (hoje ${fmtKwh(dados?.franquia)})? Se o contrato já foi assinado, a mudança da franquia exige aditivo.`,
+            'Aplicar franquia sugerida',
+            'Aplicar',
+            'Cancelar'
+        );
+        if (!ok) return;
+        setAplicando(true);
+        const { error } = await supabase.rpc('fn_aplicar_franquia_sugerida', { p_uc: ucId });
+        setAplicando(false);
+        if (error) { showAlert(error.message || 'Falha ao aplicar a franquia.', 'error'); return; }
+        showAlert('Franquia atualizada.', 'success');
+        await carregar();
+    };
 
     const carregar = useCallback(async () => {
         if (!ucId) return;
@@ -70,7 +89,7 @@ export default function HistoricoConsumo({ ucId, numerosUc = [], podeImportar = 
         try {
             const { data, error } = await supabase
                 .from('consumer_units')
-                .select('historico_consumo, consumo_mediano_kwh, start_base_kwh, start_base_em')
+                .select('historico_consumo, consumo_mediano_kwh, start_base_kwh, start_base_em, regime_consumo, franquia_sugerida, franquia')
                 .eq('id', ucId)
                 .maybeSingle();
             if (error) {
@@ -110,8 +129,12 @@ export default function HistoricoConsumo({ ucId, numerosUc = [], podeImportar = 
 
             const perfil = montarPerfil(historico, 'cadastro');
             const mediana = medianaDoPerfil(perfil);
+            const reg = classificarRegime(historico);
+            const aviso = reg.regime === 'em_rampa'
+                ? ` Consumo em crescimento: a UC entra em rampa, com franquia de ${fmtKwh(reg.franquiaRampa)} e base do Start nesse valor (se ainda não estiver fixada).`
+                : ` A base do Start fica fixada nessa mediana, se ainda não estiver.`;
             const ok = await showConfirm(
-                `A conta traz ${historico.length} mês(es) de histórico, mediana de ${fmtKwh(mediana)}. Gravar como histórico de consumo desta UC? A base do Start fica fixada nessa mediana, se ainda não estiver.`,
+                `A conta traz ${historico.length} mês(es) de histórico, mediana de ${fmtKwh(mediana)}.${aviso} Gravar como histórico de consumo desta UC?`,
                 'Importar histórico de consumo',
                 'Gravar histórico',
                 'Cancelar'
@@ -196,7 +219,36 @@ export default function HistoricoConsumo({ ucId, numerosUc = [], podeImportar = 
                                 ? (dados?.start_base_em ? `Fixada em ${fmtData(dados.start_base_em)}` : 'Fixada no cadastro')
                                 : 'Ainda não fixada'}
                         />
+                        {dados?.regime_consumo && (
+                            <Cartao
+                                titulo="Regime do consumo"
+                                valor={{ em_rampa: 'Em rampa', em_queda: 'Em queda', estavel: 'Estável', insuficiente: 'Histórico curto' }[dados.regime_consumo] || dados.regime_consumo}
+                                nota={dados.regime_consumo === 'em_rampa'
+                                    ? 'Consumo crescendo: a franquia segue o consumo recente'
+                                    : dados.regime_consumo === 'em_queda' ? 'Consumo caindo: revise a franquia' : null}
+                            />
+                        )}
+                        {dados?.franquia_sugerida != null && Number(dados.franquia_sugerida) !== Number(dados.franquia) && (
+                            <Cartao
+                                titulo="Franquia sugerida"
+                                valor={fmtKwh(dados.franquia_sugerida)}
+                                nota={`Franquia atual: ${fmtKwh(dados.franquia)}`}
+                            />
+                        )}
                     </div>
+                    {podeImportar && dados?.franquia_sugerida != null && Number(dados.franquia_sugerida) !== Number(dados.franquia) && (
+                        <div>
+                            <button
+                                type="button"
+                                disabled={aplicando}
+                                onClick={aplicarSugestao}
+                                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', padding: '0.55rem 1rem', background: '#7c3aed', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 600, fontSize: '0.85rem', cursor: aplicando ? 'wait' : 'pointer' }}
+                            >
+                                {aplicando ? <RefreshCw size={15} className="animate-spin" /> : null}
+                                Aplicar franquia sugerida ({fmtKwh(dados.franquia_sugerida)})
+                            </button>
+                        </div>
+                    )}
 
                     {/* Gráfico de barras simples, um mês do calendário por coluna */}
                     <div role="img" aria-label="Consumo por mês do calendário" style={{ display: 'grid', gridTemplateColumns: 'repeat(12, minmax(0, 1fr))', gap: '0.4rem', alignItems: 'end', height: 140, padding: '0 0.25rem' }}>
@@ -205,7 +257,7 @@ export default function HistoricoConsumo({ ucId, numerosUc = [], podeImportar = 
                             const altura = l.kwh ? Math.max(4, Math.round((Number(l.kwh) / maximo) * 110)) : 0;
                             return (
                                 <div key={l.mes} title={`${l.nome}${l.ref ? ` (${fmtRef(l.ref)})` : ''}: ${fmtKwh(l.kwh)}`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%', gap: '0.25rem' }}>
-                                    <div style={{ width: '100%', maxWidth: 28, height: altura, background: l.kwh ? c.barra : 'transparent', opacity: l.origem === 'mediana' || l.origem === 'franquia' ? 0.55 : 1, borderRadius: '4px 4px 0 0', border: l.kwh ? 'none' : '1px dashed #cbd5e1' }} />
+                                    <div style={{ width: '100%', maxWidth: 28, height: altura, background: l.kwh ? c.barra : 'transparent', opacity: ['mediana', 'franquia', 'rampa'].includes(l.origem) ? 0.55 : 1, borderRadius: '4px 4px 0 0', border: l.kwh ? 'none' : '1px dashed #cbd5e1' }} />
                                     <span style={{ fontSize: '0.68rem', color: '#64748b', fontWeight: 600 }}>{l.nome}</span>
                                 </div>
                             );
@@ -235,7 +287,7 @@ export default function HistoricoConsumo({ ucId, numerosUc = [], podeImportar = 
                         </table>
                     </div>
                     <p style={{ margin: 0, fontSize: '0.75rem', color: '#64748b', lineHeight: 1.5 }}>
-                        Meses zerados ou ausentes recebem a mediana dos meses com consumo. A base do Start não muda depois de fixada;
+                        Meses zerados ou ausentes recebem a mediana dos meses com consumo (ou, em rampa, a franquia de rampa). A base do Start não muda depois de fixada;
                         o teto do Start do parceiro é o multiplicador do plano vezes essa base.
                     </p>
                 </>

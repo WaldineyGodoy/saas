@@ -221,8 +221,9 @@ BEGIN
     IF (SELECT count(*) FROM jsonb_object_keys(v_r -> 'historico')) <> 12
        OR v_r #> '{historico,11}' <> '{"kwh": 1000, "ref": "2025-11", "origem": "mediana"}'::jsonb
        OR v_r #> '{historico,03}' <> '{"kwh": 1000, "ref": "2026-03", "origem": "mediana"}'::jsonb
-       OR v_r #> '{historico,10}' <> '{"kwh": 1000, "ref": "2026-10", "origem": "cadastro"}'::jsonb
-       OR v_r #> '{historico,12}' <> '{"kwh": 900, "ref": "2025-12", "origem": "cadastro"}'::jsonb THEN
+       -- 20261127a: o mes lido guarda os dias do ciclo
+       OR v_r #> '{historico,10}' <> '{"kwh": 1000, "ref": "2026-10", "origem": "cadastro", "dias": 30}'::jsonb
+       OR v_r #> '{historico,12}' <> '{"kwh": 900, "ref": "2025-12", "origem": "cadastro", "dias": 30}'::jsonb THEN
         RAISE EXCEPTION 'FALHA (a): perfil gravado %', v_r -> 'historico';
     END IF;
     IF (SELECT (consumo_mediano_kwh, start_base_kwh) FROM public.consumer_units WHERE id = v_uc)
@@ -251,23 +252,24 @@ BEGIN
     INSERT INTO public.subscribers (status, short_url) VALUES ('ativo', 'sandbox://ene/b') RETURNING id INTO v_sub;
     INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address, plano_assinatura_id)
     VALUES (v_sub, v_usina, 'consumidora', 'ativo', 'SANDBOX ENE conc', '{"uf": "RN"}', v_pa_2x) RETURNING id INTO v_uc;
+    -- 20261127a: perfil fora da rampa (100/200/300 e rampa; ver conta_em_rampa.test.sql)
     v_r := public.fn_gravar_historico_consumo(v_uc,
-        '[{"mes":"2026-01","kwh":100},{"mes":"2026-02","kwh":200},{"mes":"2026-03","kwh":300}]');
-    IF (v_r ->> 'start_base_kwh')::numeric <> 200 OR v_r #>> '{historico,07,origem}' <> 'mediana' THEN
+        '[{"mes":"2026-01","kwh":100},{"mes":"2026-02","kwh":200},{"mes":"2026-03","kwh":150}]');
+    IF (v_r ->> 'start_base_kwh')::numeric <> 150 OR v_r #>> '{historico,07,origem}' <> 'mediana' THEN
         RAISE EXCEPTION 'FALHA (b): perfil inicial %', v_r;
     END IF;
     INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento, consumo_compensado, consumo_kwh, mes_referencia)
-    VALUES (v_uc, 'a_vencer', 0, 0, CURRENT_DATE + 5, 0, 1000, DATE '2026-04-01');
+    VALUES (v_uc, 'a_vencer', 0, 0, CURRENT_DATE + 5, 0, 250, DATE '2026-04-01');
     -- conta mais ANTIGA que o perfil nao sobrescreve
     INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento, consumo_compensado, consumo_kwh, mes_referencia)
     VALUES (v_uc, 'a_vencer', 0, 0, CURRENT_DATE + 5, 0, 999, DATE '2025-01-01');
     SELECT jsonb_build_object('h', historico_consumo, 'med', consumo_mediano_kwh, 'base', start_base_kwh)
       INTO v_r FROM public.consumer_units WHERE id = v_uc;
-    IF v_r #> '{h,04}' <> '{"kwh": 1000, "ref": "2026-04", "origem": "conta"}'::jsonb
+    IF v_r #> '{h,04}' <> '{"kwh": 250, "ref": "2026-04", "origem": "conta"}'::jsonb
        OR v_r #> '{h,01}' <> '{"kwh": 100, "ref": "2026-01", "origem": "cadastro"}'::jsonb
-       OR (v_r ->> 'med')::numeric <> 250
-       OR (v_r #>> '{h,07,kwh}')::numeric <> 250
-       OR (v_r ->> 'base')::numeric <> 200 THEN
+       OR (v_r ->> 'med')::numeric <> 175
+       OR (v_r #>> '{h,07,kwh}')::numeric <> 175
+       OR (v_r ->> 'base')::numeric <> 150 THEN
         RAISE EXCEPTION 'FALHA (b): autoatualizacao %', v_r;
     END IF;
 

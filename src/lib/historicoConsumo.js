@@ -6,7 +6,8 @@
 // Formato do perfil:
 //   { "01": { kwh: 980, ref: "2026-01", origem: "cadastro" }, ..., "12": {...} }
 // origem: 'cadastro' (lido no upload), 'conta' (sobrescrito por conta nova),
-//         'mediana' (mês zerado/ausente preenchido), 'franquia' (backfill sem dado).
+//         'mediana' (mês zerado/ausente preenchido), 'franquia' (backfill sem dado),
+//         'rampa' (mês sem leitura de conta em rampa).
 
 export const MESES_CALENDARIO = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
 const NOMES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -16,6 +17,7 @@ export const ORIGENS_HISTORICO = {
     conta: 'Atualizado pela conta',
     mediana: 'Preenchido pela mediana',
     franquia: 'Preenchido pela franquia',
+    rampa: 'Preenchido pela rampa',
 };
 
 const numero = (v) => {
