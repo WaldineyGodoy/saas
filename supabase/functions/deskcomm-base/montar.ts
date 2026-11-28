@@ -275,9 +275,7 @@ export interface PlanoGestora {
     desconto_assinante_pct: number
     dia_corte: number
     dia_repasse: number
-    setup_pct: number | null
-    setup_base: string | null
-    carencia_dias: number | null
+    setup_reais: number | null
     prazo_primeiro_repasse_dias: number | null
 }
 
@@ -289,18 +287,20 @@ const percentual = (v: number) => `${Number(v).toLocaleString('pt-BR', { maximum
 const dias = (v: number) => `${v} ${v === 1 ? 'dia' : 'dias'}`
 
 function blocoPlanoGestora(p: PlanoGestora): string {
-    const setup = p.setup_pct != null && p.setup_base
-        ? `${percentual(p.setup_pct)} sobre ${p.setup_base}`
+    const setup = p.setup_reais != null && Number(p.setup_reais) > 0
+        ? `${reais(p.setup_reais)}; dá prioridade na captação de assinantes (campanhas de marketing e tráfego pago exclusivos para a usina); quem não paga fica em segunda prioridade`
         : `existe, mas o valor ainda não está definido; ${ESPECIALISTA_CONFIRMA}`
+    const prazo = p.prazo_primeiro_repasse_dias != null
+        ? dias(p.prazo_primeiro_repasse_dias)
+        : `ainda não definido; ${ESPECIALISTA_CONFIRMA}`
     return [
         `## ${p.nome}`,
         `- Taxa de gestão: ${percentual(p.taxa_gestao_pct)}`,
         `- Desconto do assinante: ${percentual(p.desconto_assinante_pct)}`,
         `- Repasse ao dono: todo dia ${p.dia_repasse}`,
         `- Dia de corte: dia ${p.dia_corte} (fechamento da apuração das faturas pagas pelo assinante que entram no repasse do dia ${p.dia_repasse})`,
-        `- Custo de setup: ${setup}`,
-        `- Carência: ${p.carencia_dias != null ? dias(p.carencia_dias) : `ainda não definida; ${ESPECIALISTA_CONFIRMA}`}`,
-        `- Prazo até o primeiro repasse: ${p.prazo_primeiro_repasse_dias != null ? dias(p.prazo_primeiro_repasse_dias) : `ainda não definido; ${ESPECIALISTA_CONFIRMA}`}`,
+        `- Custo de setup (opcional): ${setup}`,
+        `- Prazo até o primeiro repasse (carência dos pagamentos ao dono): ${prazo}`,
     ].join('\n')
 }
 
@@ -309,7 +309,7 @@ export function montarGestoraPlanos(planos: PlanoGestora[]): string {
     return [
         '# Gestora: planos vigentes',
         '',
-        'Valores do plano vigente para o dono de usina. Explique a fórmula do repasse e só cite a taxa de gestão e o desconto se o fornecedor perguntar, sempre dizendo que o especialista confirma o plano e o valor da usina dele. Custo de setup, carência e prazo até o primeiro repasse devem ser mencionados antes de passar ao especialista; o que estiver "ainda não definido" nunca é estimado.',
+        'Valores do plano vigente para o dono de usina. Com os dados básicos da usina, apresente as condições (taxa de gestão, desconto do assinante, repasse, prazo até o primeiro repasse e a opção de setup) e pergunte se o fornecedor aceita, sempre dizendo que o especialista confirma o plano e o valor da usina dele. O que estiver "ainda não definido" nunca é estimado.',
         '',
         planos.length === 0 ? SEM_PLANOS_GESTORA : planos.map(blocoPlanoGestora).join('\n\n') + '\n',
     ].join('\n')
