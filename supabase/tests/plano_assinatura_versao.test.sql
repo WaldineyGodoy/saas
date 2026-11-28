@@ -309,9 +309,10 @@ BEGIN
        OR (SELECT plano_assinatura_id FROM public.consumer_units WHERE numero_uc = 'SBX-PV-PUB-7772') IS DISTINCT FROM v_v3 THEN
         RAISE EXCEPTION 'FALHA V15: adesao publica com plano antigo devia cair na versao vigente %: %', v_v3, v_r;
     END IF;
-    -- 20261112b: a adesao publica grava o historico de cada UC (zero vira mediana)
-    IF (SELECT (consumo_mediano_kwh, start_base_kwh, historico_consumo #>> '{09,origem}') FROM public.consumer_units WHERE numero_uc = 'SBX-PV-PUB-7772')
-       IS DISTINCT FROM (200::numeric, 200::numeric, 'mediana'::text) THEN
+    -- 20261112b: a adesao publica grava o historico de cada UC (zero vira preenchimento)
+    -- 20261127a: 100 -> 300 e rampa: base = franquia de rampa max(0,8 x 300, 200) = 240, preenchimento 'rampa'
+    IF (SELECT (consumo_mediano_kwh, start_base_kwh, historico_consumo #>> '{09,origem}', franquia) FROM public.consumer_units WHERE numero_uc = 'SBX-PV-PUB-7772')
+       IS DISTINCT FROM (200::numeric, 240::numeric, 'rampa'::text, 240::numeric) THEN
         RAISE EXCEPTION 'FALHA V15b: adesao publica nao gravou o historico: %', (SELECT historico_consumo FROM public.consumer_units WHERE numero_uc = 'SBX-PV-PUB-7772');
     END IF;
 

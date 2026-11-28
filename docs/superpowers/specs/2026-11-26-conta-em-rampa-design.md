@@ -63,10 +63,18 @@ F_rampa = mín(F_rampa, teto físico)                     # se houver
 
 Novas colunas em `consumer_units`: `regime_consumo text` (`estavel | em_rampa | em_queda | insuficiente`), `regime_desde timestamptz`, `franquia_sugerida numeric`.
 
-A cada conta nova (`fn_gravar_historico_consumo`, que já sobrescreve o mês do perfil com `origem = 'conta'`):
+O regime é recalculado por um bloco único, `fn_historico_consumo_recalcular`, chamado por dois caminhos:
+- **gravação do histórico** (`fn_historico_consumo_gravar_uc`: importação manual, cadastro de UC nova, adesão pública, termo aditivo);
+- **conta mensal**: o gatilho `tr_invoice_historico_consumo` (`fn_historico_consumo_da_conta`) sobrescreve o mês do perfil com `origem = 'conta'` e passa pelo mesmo bloco. É o caminho normal do dia a dia; a conta mensal **não** passa por `fn_gravar_historico_consumo`. Os dias do ciclo vêm de `invoices.data_leitura − data_leitura_anterior` quando as duas datas existem (1 a 90 dias). A conta nunca troca a franquia e nunca congela a base do Start. Uma falha nesse bloco não impede a gravação da conta (aviso no log).
+
+Em cada recálculo:
 1. recalcula o regime e a franquia sugerida;
-2. **não altera `franquia` vigente depois da assinatura do contrato**: grava `franquia_sugerida` e mostra no modal com botão "Aplicar" (a franquia consta no termo; mudar exige o aditivo). Na primeira carga do histórico (cadastro) a franquia é aplicada sozinha; nas cargas seguintes só é sugerida.
-3. trava de variação: sugestão fora de ±30 % da vigente gera alerta para o time.
+2. **não altera `franquia` vigente depois da assinatura do contrato**: grava `franquia_sugerida` e mostra no modal com botão "Aplicar" (a franquia consta no termo; mudar exige o aditivo). Na primeira carga do histórico (cadastro, adesão) a franquia é aplicada sozinha; nas cargas seguintes só é sugerida. "Primeira carga" = `historico_consumo` nulo ou vazio; uma UC cujo perfil só tem o preenchimento `'franquia'` (backfill digitado pela equipe) **não** conta como primeira carga, e a franquia digitada fica.
+3. **Termo aditivo** (decisão do dono, 28/11/2026): a UC nasce com o contrato já assinado, então em rampa a franquia **não muda**; só `franquia_sugerida` é gravada.
+4. A sugestão de saída da rampa fica pendente até a equipe aplicar. A sugestão de **queda** some quando o consumo volta a `estavel`.
+5. trava de variação: sugestão fora de ±30 % da vigente gera alerta para o time.
+
+**Normalização mista**: meses gravados antes de 20261127a não têm `dias` e entram com o kWh bruto (`c = kwh`); os novos entram normalizados a 30 dias. Só faz diferença para ciclos longe de 30 dias.
 
 **Saída da rampa**: `n ≥ 6` e os últimos 3 ciclos com `0,75 ≤ c_i / c_(i-1) ≤ 1,25`. A UC passa a `estavel`; a franquia sugerida volta a ser a **mediana dos ciclos da janela estável** (os 3+ últimos), não do histórico inteiro, que ainda carrega a subida.
 

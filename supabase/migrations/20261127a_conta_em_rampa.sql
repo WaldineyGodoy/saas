@@ -13,9 +13,9 @@ ALTER TABLE public.consumer_units
         CHECK (regime_consumo IS NULL OR regime_consumo IN ('insuficiente', 'em_rampa', 'em_queda', 'estavel'));
 
 COMMENT ON COLUMN public.consumer_units.regime_consumo IS
-  'Regime do consumo (fn_regime_consumo): insuficiente | em_rampa | em_queda | estavel. Recalculado a cada conta gravada.';
+  'Regime do consumo (fn_regime_consumo): insuficiente | em_rampa | em_queda | estavel. Recalculado a cada gravacao do historico e a cada conta lida (gatilho tr_invoice_historico_consumo), por fn_historico_consumo_recalcular.';
 COMMENT ON COLUMN public.consumer_units.franquia_sugerida IS
-  'Franquia sugerida pelo regime. Nao altera franquia sozinha, exceto na primeira carga do historico em rampa (fn_historico_consumo_gravar_uc).';
+  'Franquia sugerida pelo regime. Nao altera franquia sozinha, exceto na primeira carga do historico em rampa (fn_historico_consumo_gravar_uc), e nunca na UC criada por termo aditivo assinado.';
 
 CREATE OR REPLACE FUNCTION public.fn_regime_consumo(
     p_perfil jsonb,
@@ -189,10 +189,90 @@ BEGIN
 END;
 $function$;
 
--- fn_historico_consumo_gravar_uc: grava dias por mes, regime, franquia sugerida e
--- a base do Start (em rampa, congela a franquia de rampa). Assinatura inalterada.
+-- fn_historico_consumo_recalcular: bloco UNICO de regime, franquia sugerida,
+-- franquia e base do Start. Chamado pela gravacao do historico (cadastro,
+-- importacao, adesao, aditivo) e pela conta mensal (gatilho em invoices), para
+-- que o regime e o perfil nunca saiam de sincronia.
+--   p_h               perfil ja mesclado (antes do preenchimento)
+--   p_aplicar_franquia troca a franquia pela de rampa quando em rampa
+--   p_congelar_base    congela start_base_kwh se ainda nulo (a conta mensal nao congela)
+CREATE OR REPLACE FUNCTION public.fn_historico_consumo_recalcular(
+    p_uc uuid, p_h jsonb, p_aplicar_franquia boolean, p_congelar_base boolean)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+DECLARE
+    v_cu      record;
+    v_h       jsonb;
+    v_med     numeric;
+    v_base    numeric;
+    v_reg     jsonb;
+    v_regime  text;
+    v_franq   numeric;
+    v_sug     numeric;
+BEGIN
+    SELECT cu.historico_consumo, cu.start_base_kwh, cu.franquia, cu.regime_consumo, cu.franquia_sugerida INTO v_cu
+      FROM public.consumer_units cu WHERE cu.id = p_uc FOR UPDATE;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'fn_historico_consumo_recalcular: UC % inexistente', p_uc USING ERRCODE = 'P0002';
+    END IF;
+
+    v_reg    := public.fn_regime_consumo(p_h);
+    v_regime := v_reg ->> 'regime';
+    v_h      := public.fn_historico_consumo_normalizar(p_h);
+    v_med    := public.fn_mediana_kwh(v_h);
+    IF v_h = '{}'::jsonb THEN
+        v_h := v_cu.historico_consumo;
+    END IF;
+
+    -- franquia sugerida. A sugestao de saida da rampa fica pendente ate a equipe
+    -- aplicar; a de queda some quando o consumo volta ao estavel.
+    v_sug := CASE
+        WHEN v_regime = 'em_rampa' THEN (v_reg ->> 'franquia_rampa')::numeric
+        WHEN v_regime = 'em_queda' THEN (v_reg ->> 'franquia_janela')::numeric
+        WHEN v_regime = 'estavel' AND v_cu.regime_consumo = 'em_rampa' THEN (v_reg ->> 'franquia_janela')::numeric
+        WHEN v_regime = 'estavel' AND v_cu.regime_consumo = 'em_queda' THEN NULL
+        ELSE v_cu.franquia_sugerida END;
+
+    v_franq := v_cu.franquia;
+    IF p_aplicar_franquia AND v_regime = 'em_rampa' THEN
+        v_franq := v_sug;
+    END IF;
+
+    -- base do Start: congelada uma unica vez; em rampa, com a franquia de rampa (opcao C)
+    v_base := v_cu.start_base_kwh;
+    IF p_congelar_base AND v_base IS NULL AND v_med > 0 THEN
+        v_base := CASE WHEN v_regime = 'em_rampa' THEN (v_reg ->> 'franquia_rampa')::numeric ELSE v_med END;
+    END IF;
+
+    UPDATE public.consumer_units
+       SET historico_consumo   = v_h,
+           consumo_mediano_kwh = v_med,
+           start_base_kwh      = v_base,
+           start_base_em       = CASE WHEN v_base IS DISTINCT FROM v_cu.start_base_kwh THEN now() ELSE start_base_em END,
+           franquia            = v_franq,
+           franquia_sugerida   = v_sug,
+           regime_consumo      = v_regime,
+           regime_desde        = CASE WHEN v_cu.regime_consumo IS DISTINCT FROM v_regime THEN now() ELSE regime_desde END
+     WHERE id = p_uc
+       AND (historico_consumo, consumo_mediano_kwh, start_base_kwh, franquia, franquia_sugerida, regime_consumo)
+           IS DISTINCT FROM (v_h, v_med, v_base, v_franq, v_sug, v_regime);
+
+    RETURN jsonb_build_object('historico', v_h, 'mediana', v_med, 'start_base_kwh', v_base,
+                              'regime', v_regime, 'franquia_sugerida', v_sug, 'franquia', v_franq);
+END;
+$function$;
+
+ALTER FUNCTION public.fn_historico_consumo_recalcular(uuid, jsonb, boolean, boolean) OWNER TO postgres;
+REVOKE ALL ON FUNCTION public.fn_historico_consumo_recalcular(uuid, jsonb, boolean, boolean) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.fn_historico_consumo_recalcular(uuid, jsonb, boolean, boolean) TO service_role;
+
+-- fn_historico_consumo_gravar_uc (4 argumentos): mescla o array do leitor no
+-- perfil (com dias por mes) e delega ao bloco unico.
 CREATE OR REPLACE FUNCTION public.fn_historico_consumo_gravar_uc(
-    p_uc uuid, p_historico jsonb, p_origem text DEFAULT 'cadastro')
+    p_uc uuid, p_historico jsonb, p_origem text, p_aplicar_franquia boolean)
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -204,13 +284,7 @@ DECLARE
     v_e       jsonb;
     v_mes     text;
     v_k       text;
-    v_med     numeric;
-    v_base    numeric;
-    v_reg     jsonb;
-    v_regime  text;
     v_primeira boolean;
-    v_franq   numeric;
-    v_sug     numeric;
 BEGIN
     IF p_origem IS NULL OR p_origem NOT IN ('cadastro', 'conta') THEN
         RAISE EXCEPTION 'fn_gravar_historico_consumo: origem "%" invalida (cadastro | conta)', p_origem
@@ -252,49 +326,28 @@ BEGIN
         END IF;
     END LOOP;
 
-    v_reg    := public.fn_regime_consumo(v_h);
-    v_regime := v_reg ->> 'regime';
-    v_h      := public.fn_historico_consumo_normalizar(v_h);
-    v_med    := public.fn_mediana_kwh(v_h);
-    IF v_h = '{}'::jsonb THEN
-        v_h := v_cu.historico_consumo;
-    END IF;
+    -- primeira carga em rampa: a franquia do cadastro e trocada, exceto quando o
+    -- chamador ja tem contrato assinado com ela (termo aditivo: p_aplicar_franquia = false)
+    RETURN public.fn_historico_consumo_recalcular(p_uc, v_h, p_aplicar_franquia AND v_primeira, true);
+END;
+$function$;
 
-    -- franquia sugerida
-    v_sug := CASE
-        WHEN v_regime = 'em_rampa' THEN (v_reg ->> 'franquia_rampa')::numeric
-        WHEN v_regime = 'em_queda' THEN (v_reg ->> 'franquia_janela')::numeric
-        WHEN v_regime = 'estavel' AND v_cu.regime_consumo = 'em_rampa' THEN (v_reg ->> 'franquia_janela')::numeric
-        ELSE v_cu.franquia_sugerida END;
+ALTER FUNCTION public.fn_historico_consumo_gravar_uc(uuid, jsonb, text, boolean) OWNER TO postgres;
+REVOKE ALL ON FUNCTION public.fn_historico_consumo_gravar_uc(uuid, jsonb, text, boolean) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.fn_historico_consumo_gravar_uc(uuid, jsonb, text, boolean) TO service_role;
 
-    -- primeira carga em rampa: a franquia do cadastro (derivada da mediana) e trocada
-    v_franq := v_cu.franquia;
-    IF v_primeira AND v_regime = 'em_rampa' THEN
-        v_franq := v_sug;
-    END IF;
-
-    -- base do Start: congelada uma unica vez; em rampa, com a franquia de rampa (opcao C)
-    v_base := v_cu.start_base_kwh;
-    IF v_base IS NULL AND v_med > 0 THEN
-        v_base := CASE WHEN v_regime = 'em_rampa' THEN (v_reg ->> 'franquia_rampa')::numeric ELSE v_med END;
-        UPDATE public.consumer_units
-           SET historico_consumo = v_h, consumo_mediano_kwh = v_med,
-               start_base_kwh = v_base, start_base_em = now(),
-               franquia = v_franq, franquia_sugerida = v_sug,
-               regime_consumo = v_regime,
-               regime_desde = CASE WHEN v_cu.regime_consumo IS DISTINCT FROM v_regime THEN now() ELSE v_cu.regime_desde END
-         WHERE id = p_uc;
-    ELSE
-        UPDATE public.consumer_units
-           SET historico_consumo = v_h, consumo_mediano_kwh = v_med,
-               franquia = v_franq, franquia_sugerida = v_sug,
-               regime_consumo = v_regime,
-               regime_desde = CASE WHEN v_cu.regime_consumo IS DISTINCT FROM v_regime THEN now() ELSE v_cu.regime_desde END
-         WHERE id = p_uc;
-    END IF;
-
-    RETURN jsonb_build_object('historico', v_h, 'mediana', v_med, 'start_base_kwh', v_base,
-                              'regime', v_regime, 'franquia_sugerida', v_sug);
+-- Assinatura antiga (3 argumentos) mantida para os chamadores existentes
+-- (fn_gravar_historico_consumo, fn_criar_assinante_publico): aplica a franquia
+-- na primeira carga em rampa.
+CREATE OR REPLACE FUNCTION public.fn_historico_consumo_gravar_uc(
+    p_uc uuid, p_historico jsonb, p_origem text DEFAULT 'cadastro')
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+BEGIN
+    RETURN public.fn_historico_consumo_gravar_uc(p_uc, p_historico, p_origem, true);
 END;
 $function$;
 
@@ -327,3 +380,163 @@ $function$;
 
 REVOKE ALL ON FUNCTION public.fn_aplicar_franquia_sugerida(uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.fn_aplicar_franquia_sugerida(uuid) TO authenticated, service_role;
+
+-- Conta mensal (gatilho tr_invoice_historico_consumo, inalterado): a conta lida
+-- sobrescreve o mes do perfil e passa pelo MESMO bloco de regime da gravacao do
+-- historico. Nao troca a franquia (so sugere) e nao congela a base do Start.
+-- Dias do ciclo = data_leitura - data_leitura_anterior, quando ambas vieram.
+-- Uma falha aqui nao derruba a gravacao da conta (aviso no log).
+CREATE OR REPLACE FUNCTION public.fn_historico_consumo_da_conta()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $function$
+DECLARE
+    v_h    jsonb;
+    v_novo jsonb;
+    v_ref  text;
+    v_k    text;
+    v_dias int;
+BEGIN
+    IF NEW.uc_id IS NULL OR NEW.mes_referencia IS NULL OR COALESCE(NEW.consumo_kwh, 0) <= 0
+       OR NEW.status::text IN ('cancelado', 'cancelada', 'erro') THEN
+        RETURN NEW;
+    END IF;
+    IF TG_OP = 'UPDATE'
+       AND NEW.consumo_kwh IS NOT DISTINCT FROM OLD.consumo_kwh
+       AND NEW.mes_referencia IS NOT DISTINCT FROM OLD.mes_referencia
+       AND NEW.uc_id IS NOT DISTINCT FROM OLD.uc_id
+       AND OLD.status::text NOT IN ('cancelado', 'cancelada', 'erro') THEN
+        RETURN NEW;
+    END IF;
+
+    BEGIN
+        SELECT cu.historico_consumo INTO v_h FROM public.consumer_units cu WHERE cu.id = NEW.uc_id FOR UPDATE;
+        IF NOT FOUND THEN
+            RETURN NEW;
+        END IF;
+        v_ref  := to_char(NEW.mes_referencia, 'YYYY-MM');
+        v_k    := right(v_ref, 2);
+        v_novo := public.fn_historico_consumo_aplicar(COALESCE(v_h, '{}'::jsonb), v_ref, NEW.consumo_kwh, 'conta');
+        v_dias := NEW.data_leitura - NEW.data_leitura_anterior;
+        IF v_dias BETWEEN 1 AND 90
+           AND (v_novo -> v_k ->> 'ref') = v_ref AND (v_novo -> v_k ->> 'origem') = 'conta' THEN
+            v_novo := jsonb_set(v_novo, ARRAY[v_k, 'dias'], to_jsonb(v_dias));
+        END IF;
+        PERFORM public.fn_historico_consumo_recalcular(NEW.uc_id, v_novo, false, false);
+    EXCEPTION WHEN OTHERS THEN
+        RAISE WARNING 'fn_historico_consumo_da_conta: perfil da UC % nao atualizado pela conta %: %', NEW.uc_id, NEW.id, SQLERRM;
+    END;
+    RETURN NEW;
+END;
+$function$;
+ALTER FUNCTION public.fn_historico_consumo_da_conta() OWNER TO postgres;
+REVOKE ALL ON FUNCTION public.fn_historico_consumo_da_conta() FROM PUBLIC, anon, authenticated;
+
+-- Termo aditivo: a UC nasce com o contrato ja assinado (franquia = media lida).
+-- Decisao do dono (28/11/2026): em rampa a franquia NAO muda, so a sugestao.
+-- Copia da definicao de producao; unica mudanca: p_aplicar_franquia = false.
+CREATE OR REPLACE FUNCTION public.fn_criar_uc_do_aditivo(p_lead uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+declare
+    v_lead public.leads%rowtype;
+    v_sub public.subscribers%rowtype;
+    v_plano public.planos_assinatura_energia%rowtype;
+    v_conta jsonb;
+    v_end jsonb;
+    v_num text;
+    v_uc uuid;
+    v_partes text[];
+    v_dia int;
+    v_media text;
+begin
+    select * into v_lead from public.leads where id = p_lead for update;
+    if not found or v_lead.solicitante_assinante_id is null or v_lead.conta_lida is null then
+        return jsonb_build_object('ok', false, 'motivo', 'pedido_invalido');
+    end if;
+    select * into v_sub from public.subscribers where id = v_lead.solicitante_assinante_id;
+    select * into v_plano from public.planos_assinatura_energia
+     where id = coalesce(public.fn_plano_assinatura_vigente(v_lead.plano_id), v_lead.plano_id);
+
+    v_conta := v_lead.conta_lida;
+    v_num := btrim(coalesce(v_conta ->> 'numeroUc', ''));
+    if v_num = '' then
+        return jsonb_build_object('ok', false, 'motivo', 'sem_numero_uc');
+    end if;
+
+    select c.id into v_uc from public.consumer_units c
+     where c.subscriber_id = v_sub.id
+       and public.fn_uc_normalizada(c.numero_uc) = public.fn_uc_normalizada(v_num)
+     limit 1;
+    if v_uc is not null then
+        return jsonb_build_object('ok', true, 'uc_id', v_uc, 'ja_existia', true);
+    end if;
+
+    if public.fn_uc_ja_cadastrada(v_num) then
+        insert into public.crm_history (entity_type, entity_id, content, metadata)
+        values ('lead', v_lead.id,
+                format('Termo aditivo assinado, mas a UC %s ja esta em outro cadastro ativo. UC nao criada.', v_num),
+                jsonb_build_object('origem', 'fn_criar_uc_do_aditivo'));
+        return jsonb_build_object('ok', false, 'motivo', 'uc_em_outro_cadastro');
+    end if;
+
+    v_end := case when jsonb_typeof(v_conta -> 'endereco') = 'object' then v_conta -> 'endereco' else '{}'::jsonb end;
+    v_partes := regexp_match(btrim(coalesce(v_end ->> 'logradouro', '')), '^(.*\D)[\s,]+(\d+[A-Z]?)$');
+    v_dia := coalesce(
+        v_sub.consolidated_due_day,
+        (select c.dia_vencimento from public.consumer_units c
+          where c.subscriber_id = v_sub.id and c.dia_vencimento is not null
+          order by c.created_at limit 1));
+    v_media := v_conta ->> 'mediaKwh';
+
+    insert into public.consumer_units (
+        subscriber_id, numero_uc, titular_conta, titular_fatura_id, tipo_ligacao, concessionaria,
+        status, modalidade, franquia, plano_assinatura_id, desconto_assinante, dia_vencimento, address
+    ) values (
+        v_sub.id, v_num,
+        nullif(btrim(coalesce(v_conta ->> 'titular', '')), ''),
+        case when public.fn_nome_comparavel(v_conta ->> 'titular') = public.fn_nome_comparavel(v_sub.name) then v_sub.id end,
+        case when v_conta ->> 'ligacao' in ('monofasico', 'bifasico', 'trifasico')
+             then (v_conta ->> 'ligacao')::public.uc_tipo_ligacao end,
+        coalesce(nullif(v_conta ->> 'concessionaria', ''), 'Neoenergia Cosern'),
+        'em_ativacao',
+        case when v_plano.modalidade in ('auto_consumo_remoto', 'geracao_compartilhada')
+             then v_plano.modalidade::public.uc_modalidade else 'geracao_compartilhada' end,
+        case when v_media ~ '^\d+(\.\d+)?$' then v_media::numeric end,
+        v_plano.id, v_plano.desconto_assinante, v_dia,
+        jsonb_build_object(
+            'cep', public.fn_so_digitos(v_end ->> 'cep'),
+            'rua', coalesce(v_partes[1], v_end ->> 'logradouro'),
+            'numero', v_partes[2],
+            'complemento', v_end ->> 'complemento',
+            'bairro', v_end ->> 'bairro',
+            'cidade', v_end ->> 'cidade',
+            'uf', upper(v_end ->> 'uf'))
+    )
+    returning id into v_uc;
+
+    -- 20261112b: perfil de consumo e teto do Start a partir do historico lido
+    -- 20261127a: contrato ja assinado -> em rampa a franquia nao muda, so a sugestao
+    if jsonb_typeof(v_conta -> 'historico') = 'array' then
+        begin
+            perform public.fn_historico_consumo_gravar_uc(v_uc, v_conta -> 'historico', 'cadastro', false);
+        exception when others then
+            raise warning 'fn_criar_uc_do_aditivo: historico de consumo da UC % nao gravado: %', v_num, sqlerrm;
+        end;
+    end if;
+
+    update public.leads set status = 'ativacao', updated_at = now() where id = v_lead.id;
+
+    insert into public.crm_history (entity_type, entity_id, content, metadata)
+    values ('subscriber', v_sub.id,
+            format('Termo aditivo assinado: UC %s incluida em ativacao (plano %s).', v_num, coalesce(v_plano.nome, '-')),
+            jsonb_build_object('origem', 'fn_criar_uc_do_aditivo', 'lead_id', v_lead.id, 'uc_id', v_uc));
+
+    return jsonb_build_object('ok', true, 'uc_id', v_uc, 'ja_existia', false);
+end;
+$function$;
